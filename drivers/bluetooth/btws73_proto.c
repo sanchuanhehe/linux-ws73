@@ -75,3 +75,69 @@ int btws73_hcc_encode(u8 *out, size_t capacity, const u8 *h4, size_t len)
 	memcpy(out + BTWS73_HCC_HEADER_SIZE, h4, len);
 	return size;
 }
+
+void btws73_h4_reset(struct btws73_h4 *stream)
+{
+	memset(stream, 0, sizeof(*stream));
+}
+
+int btws73_h4_feed(struct btws73_h4 *stream, const u8 *data, size_t len,
+		   size_t *consumed, const u8 **packet, size_t *packet_len)
+{
+	size_t used = 0, target, copy;
+	int ret;
+
+	if (!stream || (!data && len) || !consumed || !packet || !packet_len)
+		return -EINVAL;
+	*consumed = 0;
+	if (stream->failed)
+		return -ESHUTDOWN;
+
+	for (;;) {
+		target = 1;
+		if (stream->len) {
+			switch (stream->data[0]) {
+			case HCI_EVENT_PKT:
+				target = 1 + HCI_EVENT_HDR_SIZE;
+				if (stream->len >= target)
+					target += stream->data[2];
+				break;
+			case HCI_ACLDATA_PKT:
+				target = 1 + HCI_ACL_HDR_SIZE;
+				if (stream->len >= target)
+					target += get_unaligned_le16(stream->data + 3);
+				break;
+			default:
+				ret = -EOPNOTSUPP;
+				goto fail;
+			}
+		}
+		if (target > sizeof(stream->data)) {
+			ret = -EMSGSIZE;
+			goto fail;
+		}
+		if (stream->len == target) {
+			ret = btws73_hci_validate(stream->data, target, false);
+			if (ret)
+				goto fail;
+			*packet = stream->data;
+			*packet_len = target;
+			stream->len = 0;
+			*consumed = used;
+			return 1;
+		}
+		if (used == len) {
+			*consumed = used;
+			return 0;
+		}
+		copy = min(target - stream->len, len - used);
+		memcpy(stream->data + stream->len, data + used, copy);
+		stream->len += copy;
+		used += copy;
+	}
+
+fail:
+	stream->failed = true;
+	*consumed = used;
+	return ret;
+}

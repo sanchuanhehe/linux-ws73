@@ -143,6 +143,7 @@ def main():
                 "btws73_hci_lengths", "btws73_tx_bytes", "btws73_tx_limits",
                 "btws73_null_args",
                 "btws73_chip_query", "btws73_chip_reply", "btws73_chip_invalid",
+                "btws73_h4_splits", "btws73_h4_coalesced", "btws73_h4_errors",
             }
             expected_groups = {
                 "btws73-proto": expected,

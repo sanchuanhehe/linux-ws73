@@ -314,6 +314,143 @@ static void btws73_chip_invalid(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, identity.package, 2);
 }
 
+static void btws73_h4_splits(struct kunit *test)
+{
+	struct btws73_h4 *stream = kunit_kzalloc(test, sizeof(*stream), GFP_KERNEL);
+	u8 *input = kunit_kzalloc(test, BTWS73_H4_MAX_SIZE, GFP_KERNEL);
+	const u8 *packet;
+	size_t split, size, consumed, packet_len;
+	unsigned int kind;
+
+	KUNIT_ASSERT_NOT_NULL(test, stream);
+	KUNIT_ASSERT_NOT_NULL(test, input);
+	/* Maximum event and ACL: split at every byte, including both headers. */
+	for (kind = 0; kind < 2; kind++) {
+		memset(input, 0xa5, BTWS73_H4_MAX_SIZE);
+		if (!kind) {
+			input[0] = 4;
+			input[1] = 0xff;
+			input[2] = 255;
+			size = 258;
+		} else {
+			input[0] = 2;
+			put_unaligned_le16(BTWS73_H4_MAX_SIZE - 5, input + 3);
+			size = BTWS73_H4_MAX_SIZE;
+		}
+		for (split = 0; split < size; split++) {
+			btws73_h4_reset(stream);
+			packet = reset_event;
+			packet_len = 123;
+			KUNIT_ASSERT_EQ(test, btws73_h4_feed(stream, input, split,
+							     &consumed, &packet, &packet_len), 0);
+			KUNIT_EXPECT_EQ(test, consumed, split);
+			KUNIT_EXPECT_PTR_EQ(test, packet, &reset_event[0]);
+			KUNIT_EXPECT_EQ(test, packet_len, 123);
+			KUNIT_ASSERT_EQ(test, btws73_h4_feed(stream, input + split,
+							     size - split,
+							     &consumed, &packet, &packet_len), 1);
+			KUNIT_EXPECT_EQ(test, consumed, size - split);
+			KUNIT_EXPECT_EQ(test, packet_len, size);
+			KUNIT_EXPECT_MEMEQ(test, packet, input, size);
+			KUNIT_EXPECT_EQ(test, stream->len, 0);
+		}
+	}
+}
+
+static void btws73_h4_coalesced(struct kunit *test)
+{
+	static const u8 input[] = {
+		4, 0x0e, 4, 1, 3, 0x0c, 0, /* command complete fixture */
+		2, 1, 0, 0, 0, /* zero-length ACL */
+		4, 0xff, 0, /* zero-length event */
+	};
+	static const size_t lengths[] = { 7, 5, 3 };
+	struct btws73_h4 *stream = kunit_kzalloc(test, sizeof(*stream), GFP_KERNEL);
+	const u8 *packet = NULL;
+	size_t offset, consumed, packet_len = 0;
+	unsigned int count, i;
+
+	KUNIT_ASSERT_NOT_NULL(test, stream);
+	for (offset = 0, i = 0; i < ARRAY_SIZE(lengths); i++) {
+		KUNIT_ASSERT_EQ(test, btws73_h4_feed(stream, input + offset,
+						     sizeof(input) - offset,
+						     &consumed, &packet, &packet_len), 1);
+		KUNIT_EXPECT_EQ(test, consumed, lengths[i]);
+		KUNIT_EXPECT_EQ(test, packet_len, lengths[i]);
+		KUNIT_EXPECT_MEMEQ(test, packet, input + offset, lengths[i]);
+		offset += consumed;
+	}
+	KUNIT_EXPECT_EQ(test, offset, sizeof(input));
+	btws73_h4_reset(stream);
+	for (offset = 0, count = 0, i = 0; i < sizeof(input); i++) {
+		int ret = btws73_h4_feed(stream, input + i, 1,
+					 &consumed, &packet, &packet_len);
+
+		KUNIT_ASSERT_GE(test, ret, 0);
+		KUNIT_EXPECT_EQ(test, consumed, 1);
+		if (ret) {
+			KUNIT_ASSERT_LT(test, count, ARRAY_SIZE(lengths));
+			KUNIT_EXPECT_EQ(test, packet_len, lengths[count]);
+			KUNIT_EXPECT_MEMEQ(test, packet, input + offset, lengths[count]);
+			offset += lengths[count++];
+		}
+	}
+	KUNIT_EXPECT_EQ(test, count, ARRAY_SIZE(lengths));
+}
+
+static void btws73_h4_errors(struct kunit *test)
+{
+	struct btws73_h4 *stream = kunit_kzalloc(test, sizeof(*stream), GFP_KERNEL);
+	const u8 *packet = reset_event;
+	size_t consumed, packet_len = 123;
+	u8 input[5] = { 2, 0, 0, 0, 0 };
+	unsigned int i;
+
+	KUNIT_ASSERT_NOT_NULL(test, stream);
+	for (i = 0; i <= 255; i++) {
+		if (i == 2 || i == 4)
+			continue;
+		btws73_h4_reset(stream);
+		input[0] = i;
+		KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, input, 1,
+						     &consumed, &packet, &packet_len), -EOPNOTSUPP);
+		KUNIT_EXPECT_EQ(test, consumed, 1);
+		/* A valid next packet cannot cause guessed byte-scan recovery. */
+		KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, reset_event, sizeof(reset_event),
+						     &consumed, &packet, &packet_len), -ESHUTDOWN);
+		KUNIT_EXPECT_EQ(test, consumed, 0);
+		KUNIT_EXPECT_PTR_EQ(test, packet, &reset_event[0]);
+		KUNIT_EXPECT_EQ(test, packet_len, 123);
+	}
+	input[0] = 2;
+	for (i = 0; i <= U16_MAX; i++) {
+		btws73_h4_reset(stream);
+		put_unaligned_le16(i, input + 3);
+		KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, input, sizeof(input),
+						     &consumed, &packet, &packet_len),
+				i > BTWS73_H4_MAX_SIZE - 5 ? -EMSGSIZE : (i ? 0 : 1));
+		KUNIT_EXPECT_EQ(test, consumed, sizeof(input));
+		KUNIT_EXPECT_EQ(test, stream->failed, i > BTWS73_H4_MAX_SIZE - 5);
+	}
+	btws73_h4_reset(stream);
+	KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, NULL, 0,
+					     &consumed, &packet, &packet_len), 0);
+	KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, NULL, 1,
+					     &consumed, &packet, &packet_len), -EINVAL);
+	KUNIT_EXPECT_EQ(test, btws73_h4_feed(NULL, input, 1,
+					     &consumed, &packet, &packet_len), -EINVAL);
+	KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, input, 1,
+					     NULL, &packet, &packet_len), -EINVAL);
+	KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, input, 1,
+					     &consumed, NULL, &packet_len), -EINVAL);
+	KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, input, 1,
+					     &consumed, &packet, NULL), -EINVAL);
+	KUNIT_EXPECT_EQ(test, stream->len, 0);
+	KUNIT_EXPECT_EQ(test, btws73_h4_feed(stream, reset_event, sizeof(reset_event),
+					     &consumed, &packet, &packet_len), 1);
+	KUNIT_EXPECT_MEMEQ(test, packet, reset_event, sizeof(reset_event));
+}
+
 static struct kunit_case btws73_cases[] = {
 	KUNIT_CASE(btws73_rx_valid),
 	KUNIT_CASE(btws73_rx_truncated),
@@ -328,6 +465,9 @@ static struct kunit_case btws73_cases[] = {
 	KUNIT_CASE(btws73_chip_query),
 	KUNIT_CASE(btws73_chip_reply),
 	KUNIT_CASE(btws73_chip_invalid),
+	KUNIT_CASE(btws73_h4_splits),
+	KUNIT_CASE(btws73_h4_coalesced),
+	KUNIT_CASE(btws73_h4_errors),
 	{}
 };
 

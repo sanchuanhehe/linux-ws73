@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* WS73 boot identity observation. Firmware loading remains gated. */
+/* WS73 boot/runtime identity observations. Firmware loading remains gated. */
 #include <linux/completion.h>
 #include <linux/jiffies.h>
 #include <linux/ktime.h>
@@ -10,17 +10,50 @@
 #include <linux/workqueue.h>
 
 #include "boot.h"
+#include "runtime.h"
 
 struct ws73_usb {
 	struct usb_device *udev;
 	struct usb_interface *interface;
 	struct usb_anchor submitted;
 	struct work_struct initialize;
+	struct work_struct stop;
+	struct ws73_usb_tx tx;
+	struct ws73_identity_request identity;
+	struct urb *rx_urb;
+	u8 *rx_buffer;
 	spinlock_t lock; /* Serialize submission admission with disconnect. */
 	bool disconnected;
+	bool runtime;
+	int error;
 	u8 in;
 	u8 out;
 };
+
+static void ws73_usb_stop(struct work_struct *work)
+{
+	struct ws73_usb *ws = container_of(work, struct ws73_usb, stop);
+
+	usb_kill_anchored_urbs(&ws->submitted);
+	/* The RX completion can already have left the anchor. Join it too. */
+	usb_kill_urb(ws->rx_urb);
+}
+
+static void ws73_usb_fail(struct ws73_usb *ws, int error)
+{
+	unsigned long flags;
+	bool first = false;
+
+	spin_lock_irqsave(&ws->lock, flags);
+	if (!ws->error && !ws->disconnected) {
+		WRITE_ONCE(ws->error, error);
+		first = true;
+	}
+	spin_unlock_irqrestore(&ws->lock, flags);
+	ws73_identity_abort(&ws->identity, error);
+	if (first)
+		schedule_work(&ws->stop);
+}
 
 struct ws73_usb_request {
 	struct completion done;
@@ -46,7 +79,8 @@ static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
 	u8 *buffer;
 	int ret;
 
-	if (!size || size > 512 || !timeout_ms || timeout_ms > 2000)
+	if (!size || size > (ws->runtime ? WS73_USB_TX_MAX : 512) ||
+	    !timeout_ms || timeout_ms > 2000)
 		return -EINVAL;
 	urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!urb)
@@ -65,10 +99,12 @@ static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
 			  receive ? usb_rcvbulkpipe(ws->udev, ws->in) :
 			 usb_sndbulkpipe(ws->udev, ws->out),
 			 buffer, size, ws73_usb_complete, &request);
+	if (ws->runtime && !receive)
+		urb->transfer_flags |= URB_ZERO_PACKET;
 
 	spin_lock_irqsave(&ws->lock, flags);
-	if (ws->disconnected) {
-		ret = -ENODEV;
+	if (ws->disconnected || ws->error) {
+		ret = ws->disconnected ? -ENODEV : ws->error;
 	} else {
 		usb_anchor_urb(urb, &ws->submitted);
 		ret = usb_submit_urb(urb, GFP_ATOMIC);
@@ -108,7 +144,59 @@ static bool ws73_usb_cancelled(void *context)
 {
 	struct ws73_usb *ws = context;
 
-	return READ_ONCE(ws->disconnected);
+	return READ_ONCE(ws->disconnected) || READ_ONCE(ws->error);
+}
+
+static int ws73_usb_submit_rx(struct ws73_usb *ws)
+{
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&ws->lock, flags);
+	if (ws->disconnected || ws->error) {
+		ret = ws->disconnected ? -ENODEV : ws->error;
+	} else {
+		usb_anchor_urb(ws->rx_urb, &ws->submitted);
+		ret = usb_submit_urb(ws->rx_urb, GFP_ATOMIC);
+		if (ret)
+			usb_unanchor_urb(ws->rx_urb);
+	}
+	spin_unlock_irqrestore(&ws->lock, flags);
+	return ret;
+}
+
+static void ws73_usb_rx_complete(struct urb *urb)
+{
+	struct ws73_usb *ws = urb->context;
+	struct ws73_usb_rx rx;
+	unsigned int i;
+	int ret;
+
+	if (ws73_usb_cancelled(ws))
+		return;
+	if (urb->status) {
+		ws73_usb_fail(ws, urb->status);
+		return;
+	}
+	ret = ws73_usb_aggregate_decode(ws->rx_buffer, urb->actual_length, &rx);
+	if (ret && ret != -EOPNOTSUPP) {
+		ws73_usb_fail(ws, ret);
+		return;
+	}
+	if (!ret && rx.queue == 9) {
+		for (i = 0; i < rx.count; i++) {
+			ret = ws73_identity_receive(&ws->identity, rx.record[i].data,
+						    rx.record[i].len, ws73_usb_now(ws));
+			if (ret && ret != -ENOENT && ret != -EALREADY) {
+				ws73_usb_fail(ws, ret);
+				return;
+			}
+		}
+	}
+	/* No function consumers yet. No borrowed URB storage escapes this call. */
+	ret = ws73_usb_submit_rx(ws);
+	if (ret && !ws73_usb_cancelled(ws))
+		ws73_usb_fail(ws, ret);
 }
 
 static int ws73_usb_send(void *context, const u8 *data, size_t size, unsigned int timeout)
@@ -125,6 +213,13 @@ static void ws73_usb_initialize(struct work_struct *work)
 {
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	struct ws73_chip_observation observation;
+	struct btws73_chip_identity identity;
+	const struct ws73_usb_tx_io runtime_io = {
+		.context = ws,
+		.now_ms = ws73_usb_now,
+		.cancelled = ws73_usb_cancelled,
+		.send = ws73_usb_send,
+	};
 	const struct ws73_boot_io io = {
 		.context = ws,
 		.now_ms = ws73_usb_now,
@@ -134,6 +229,22 @@ static void ws73_usb_initialize(struct work_struct *work)
 	};
 	int ret;
 
+	if (ws->runtime) {
+		ret = ws73_usb_submit_rx(ws);
+		if (!ret)
+			ret = ws73_identity_query(&ws->identity, &ws->tx, &runtime_io,
+						  ws73_usb_now(ws) + 4000, &identity);
+		if (ret) {
+			ws73_usb_fail(ws, ret);
+			dev_err(&ws->interface->dev, "runtime chip observation failed: %d\n", ret);
+			return;
+		}
+		if (!ws73_usb_cancelled(ws))
+			dev_info(&ws->interface->dev,
+				 "runtime chip observation: package %u bus %u; firmware compatibility unverified\n",
+				 identity.package, identity.bus);
+		return;
+	}
 	ret = ws73_boot_read_chip(&io, ws73_usb_now(ws) + 4000, &observation);
 	if (ret) {
 		dev_err(&ws->interface->dev, "boot chip observation failed: %d\n", ret);
@@ -152,15 +263,26 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	struct usb_host_interface *alt = interface->cur_altsetting;
 	struct usb_device *udev = interface_to_usbdev(interface);
 	struct ws73_usb *ws;
+	unsigned int i;
+	bool runtime = alt->desc.bNumEndpoints == 5;
 
 	/* Match the SDK boot endpoint roles as well as the interface protocol. */
 	if (interface->num_altsetting != 1 || alt->desc.bInterfaceNumber ||
-	    alt->desc.bAlternateSetting || alt->desc.bNumEndpoints != 2 ||
+	    alt->desc.bAlternateSetting || (!runtime && alt->desc.bNumEndpoints != 2) ||
 	    alt->desc.bInterfaceClass != 0xe0 || alt->desc.bInterfaceSubClass != 0x02 ||
 	    alt->desc.bInterfaceProtocol != 0x02 ||
 	    !usb_endpoint_is_bulk_in(&alt->endpoint[0].desc) ||
 	    !usb_endpoint_is_bulk_out(&alt->endpoint[1].desc))
 		return -ENODEV;
+	if (runtime && (!usb_endpoint_is_int_in(&alt->endpoint[2].desc) ||
+			!usb_endpoint_is_bulk_out(&alt->endpoint[3].desc) ||
+			!usb_endpoint_is_bulk_in(&alt->endpoint[4].desc) ||
+			usb_endpoint_maxp(&alt->endpoint[2].desc) < 8 ||
+			!alt->endpoint[2].desc.bInterval))
+		return -ENODEV;
+	for (i = 0; i < alt->desc.bNumEndpoints; i++)
+		if (!usb_endpoint_maxp(&alt->endpoint[i].desc))
+			return -ENODEV;
 	if ((udev->speed != USB_SPEED_FULL && udev->speed != USB_SPEED_HIGH) ||
 	    !usb_endpoint_maxp(&alt->endpoint[0].desc) ||
 	    !usb_endpoint_maxp(&alt->endpoint[1].desc))
@@ -171,11 +293,28 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 		return -ENOMEM;
 	ws->udev = usb_get_dev(udev);
 	ws->interface = interface;
+	ws->runtime = runtime;
 	ws->in = alt->endpoint[0].desc.bEndpointAddress;
 	ws->out = alt->endpoint[1].desc.bEndpointAddress;
 	spin_lock_init(&ws->lock);
 	init_usb_anchor(&ws->submitted);
 	INIT_WORK(&ws->initialize, ws73_usb_initialize);
+	INIT_WORK(&ws->stop, ws73_usb_stop);
+	ws73_usb_tx_init(&ws->tx);
+	ws73_identity_init(&ws->identity);
+	if (runtime) {
+		ws->rx_urb = usb_alloc_urb(0, GFP_KERNEL);
+		ws->rx_buffer = kmalloc(BTWS73_RX_MAX_SIZE, GFP_KERNEL);
+		if (!ws->rx_urb || !ws->rx_buffer) {
+			usb_free_urb(ws->rx_urb);
+			kfree(ws->rx_buffer);
+			usb_put_dev(ws->udev);
+			kfree(ws);
+			return -ENOMEM;
+		}
+		usb_fill_bulk_urb(ws->rx_urb, ws->udev, usb_rcvbulkpipe(ws->udev, ws->in),
+				  ws->rx_buffer, BTWS73_RX_MAX_SIZE, ws73_usb_rx_complete, ws);
+	}
 	usb_set_intfdata(interface, ws);
 	schedule_work(&ws->initialize);
 	return 0;
@@ -190,8 +329,13 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	spin_lock_irqsave(&ws->lock, flags);
 	WRITE_ONCE(ws->disconnected, true);
 	spin_unlock_irqrestore(&ws->lock, flags);
+	ws73_identity_abort(&ws->identity, -ENODEV);
 	usb_kill_anchored_urbs(&ws->submitted);
+	usb_kill_urb(ws->rx_urb);
 	cancel_work_sync(&ws->initialize);
+	cancel_work_sync(&ws->stop);
+	usb_free_urb(ws->rx_urb);
+	kfree(ws->rx_buffer);
 	usb_put_dev(ws->udev);
 	kfree(ws);
 }
@@ -210,6 +354,6 @@ static struct usb_driver ws73_usb_driver = {
 };
 module_usb_driver(ws73_usb_driver);
 
-MODULE_DESCRIPTION("WS73 USB boot identity observation");
+MODULE_DESCRIPTION("WS73 USB boot and runtime identity observations");
 MODULE_LICENSE("GPL");
 MODULE_IMPORT_NS("WS73");

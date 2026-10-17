@@ -22,11 +22,12 @@ config WS73_KUNIT_TEST
 	  Success does not establish boot identity or firmware execution.
 
 config WS73_USB
-	tristate "WS73 USB boot identity observation"
+	tristate "WS73 USB boot and runtime identity observations"
 	depends on USB
 	select WS73_CORE
 	help
-	  Probe a WS73 boot interface and issue the fixed HCC READM chip
-	  observation. This development path does not select firmware or
-	  enable Bluetooth/Wi-Fi: cold-start read validity is unqualified.
+	  Issue fixed HCC READM on a boot interface, or a one-shot HCC chip
+	  query with independent RX on a five-endpoint runtime interface.
+	  This development path does not select firmware or enable
+	  Bluetooth/Wi-Fi: boot/runtime compatibility remains unqualified.
 	  No register write, generic register interface or reset is provided.

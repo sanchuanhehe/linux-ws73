@@ -10,8 +10,9 @@ This branch is a development series based on Linux
 70dd4ee72eb2d5793c62e71c14e3aba78e5a4e56. The initial codec is executable
 kernel code consumed by its KUnit tests. The shared module also contains
 firmware validation and a bounded download executor with injectable I/O.
-The USB parent can now issue one fixed boot READM chip observation and
-drain its requests on disconnect. It does not select/download firmware,
+The USB parent can issue one fixed boot READM chip observation, or a
+one-shot runtime HCC identity query with independent RX, and drain its
+requests on disconnect. It does not select/download firmware,
 register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
 Synthetic HCI event fixtures are parser inputs, never generated completions
 for an HCI device. No hardware or SparkLink qualification is inherited.
@@ -19,7 +20,9 @@ for an HCI device. No hardware or SparkLink qualification is inherited.
 Runtime USB wire helpers now encode a single HCC record and queue-control
 descriptors and validate bounded receive aggregates for BLE (queue 7) and
 platform messages (queue 9). They are exercised with synthetic inputs;
-the boot-only USB parent does not send these frames to hardware yet.
+the runtime USB path now consumes these helpers. The new runtime path has
+not been exercised on physical hardware; it does not establish firmware
+compatibility, version or boot/runtime identity agreement.
 
 .. toctree::
    :maxdepth: 1
@@ -66,7 +69,38 @@ any I/O. The caller retains its immutable record throughout this synchronous
 call; no skb is consumed. The owner must stop admission, cancel I/O and join
 callers before releasing the instance. These are tested sequencing contracts,
 not qualification of asynchronous USB teardown, firmware credit or runtime
-communication. The physical USB driver remains boot-observation-only.
+communication.
+
+One-shot runtime identity
+-------------------------
+
+``runtime.c`` arms GET_CHIP_TYPE before TX and completes it from a separate
+RX entry point. The request permits one use per instance, with no reset API.
+It publishes identity only after the local TX completes successfully and a
+valid matching reply arrives within the deadline. Unrelated reply IDs do not
+complete it; duplicate matching replies before consumption, malformed replies,
+failed TX, timeout and removal enter a terminal error. RX never waits for the
+sleeping query. Abort wakes its waiter and prevents further request transfers.
+An expired request cannot accept a late reply or issue a replacement query.
+
+The USB parent distinguishes two- and five-endpoint interfaces and validates
+bulk IN/OUT, interrupt IN and register OUT/IN roles for runtime. It starts one
+bounded RX URB before the initialization worker sends the query. Runtime OUT
+URBs use URB_ZERO_PACKET for maximum-packet boundary semantics. Completion
+only validates/dispatches the bounded aggregate and requeues RX; fault work
+performs blocking URB cancellation. Disconnect closes submission admission,
+wakes the query, joins anchored and already-unanchored RX/TX callbacks, then
+joins initialization/fault work before releasing buffers and the USB reference.
+Interrupt and register endpoints are validated but not yet activated.
+
+Runtime identification remains an **observation**, including when the device
+was started by another host. Without a verified firmware epoch, tokenless HCC
+cannot distinguish a stale device-generated reply from a fresh reply with the
+same ID. This implementation does not use such an observation to register a
+function or bypass the boot/cold-start and firmware-version gates. Boot and
+runtime objects do not share requests, callbacks or identity cache. Unknown
+services are dropped; malformed supported aggregates terminate the observation.
+BLE frames have no consumer yet and are not presented as HCI events.
 
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.

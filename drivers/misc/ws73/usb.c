@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* WS73 boot/runtime identity observations. Firmware loading remains gated. */
 #include <linux/completion.h>
+#include <linux/delay.h>
 #include <linux/jiffies.h>
 #include <linux/ktime.h>
 #include <linux/module.h>
@@ -24,6 +25,7 @@ struct ws73_usb {
 	struct ws73_platform_request identity;
 	struct ws73_startup startup;
 	struct ws73_ble_control_io ble_io;
+	struct ws73_boot_io boot_io;
 	struct urb *rx_urb;
 	struct urb *interrupt_urb;
 	u8 *rx_buffer;
@@ -85,12 +87,14 @@ static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
 {
 	struct ws73_usb_request request;
 	struct usb_ctrlrequest *setup = NULL;
+	size_t limit = ws->runtime ? WS73_USB_TX_MAX :
+		       receive ? 512 : WS73_BOOT_CHUNK_SIZE;
 	struct urb *urb;
 	unsigned long flags;
 	u8 *buffer;
 	int ret;
 
-	if (!size || size > (ws->runtime ? WS73_USB_TX_MAX : 512) ||
+	if (!data || !size || size > limit ||
 	    !timeout_ms || timeout_ms > 2000)
 		return -EINVAL;
 	if (control && (!ws->runtime || receive || size != 4))
@@ -216,7 +220,7 @@ static void ws73_usb_interrupt_complete(struct urb *urb)
 		ret = -ENOBUFS;
 		goto fail;
 	}
-	ret = ws73_startup_interrupt(&ws->startup, &notification, ktime_to_ms(ktime_get()));
+	ret = ws73_startup_interrupt(&ws->startup, &notification, ws73_usb_now(ws));
 	if (ret && ret != -ENOENT)
 		dev_dbg_ratelimited(&ws->interface->dev, "startup BSP rejected: %d\n", ret);
 	if ((notification.events & WS73_INTERRUPT_BSP_READY) && !ws->bsp_seen) {
@@ -308,6 +312,13 @@ static int ws73_usb_ble_send(void *context, const u8 command[4], unsigned int ti
 	return ws73_usb_transfer(context, (void *)command, 4, timeout, false, true);
 }
 
+static void ws73_usb_wait_ready(void *context)
+{
+	/* SDK requires at least 5 ms between READY and the payload submission. */
+	usleep_range(5000, 6000);
+	/* The boot executor rechecks cancellation/deadline before sending. */
+}
+
 static void ws73_usb_initialize(struct work_struct *work)
 {
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
@@ -319,13 +330,6 @@ static void ws73_usb_initialize(struct work_struct *work)
 		.now_ms = ws73_usb_now,
 		.cancelled = ws73_usb_cancelled,
 		.send = ws73_usb_send,
-	};
-	const struct ws73_boot_io io = {
-		.context = ws,
-		.now_ms = ws73_usb_now,
-		.cancelled = ws73_usb_cancelled,
-		.send = ws73_usb_send,
-		.receive = ws73_usb_receive,
 	};
 	int ret;
 
@@ -359,7 +363,7 @@ static void ws73_usb_initialize(struct work_struct *work)
 		}
 		return;
 	}
-	ret = ws73_boot_read_chip(&io, ws73_usb_now(ws) + 4000, &observation);
+	ret = ws73_boot_read_chip(&ws->boot_io, ws73_usb_now(ws) + 4000, &observation);
 	if (ret) {
 		dev_err(&ws->interface->dev, "boot chip observation failed: %d\n", ret);
 		return;
@@ -417,6 +421,14 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	ws73_usb_tx_init(&ws->tx);
 	ws73_platform_init(&ws->identity);
 	ws73_startup_init(&ws->startup);
+	ws->boot_io = (struct ws73_boot_io) {
+		.context = ws,
+		.now_ms = ws73_usb_now,
+		.cancelled = ws73_usb_cancelled,
+		.send = ws73_usb_send,
+		.receive = ws73_usb_receive,
+		.wait_ready = ws73_usb_wait_ready,
+	};
 	ws->ble_io = (struct ws73_ble_control_io) {
 		.context = ws,
 		.now_ms = ws73_usb_now,

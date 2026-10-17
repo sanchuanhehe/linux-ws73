@@ -282,6 +282,21 @@ sequencing and an independent RX thread, not a physical customization exchange.
 Board preparation and three-file execution
 ------------------------------------------
 
+The USB parent's persistent boot IO object now includes the SDK's minimum
+5-ms READY-to-payload delay. Its synchronous transport admits boot TX up to
+32768 bytes, matching the executor's chunk limit, while boot RX remains capped
+at 512 bytes. Runtime transfers keep their existing bounds. All memory is
+allocated separately from borrowed inputs, and completion is joined before
+freeing it; the larger TX capacity does not change submission/cancellation
+ownership. No new user-triggerable entry point is added. The current parent
+uses this object only for the fixed identity observation, so the larger TX and
+READY-delay paths are prepared but have not yet executed through USB.
+
+Every USB deadline and BSP/function timestamp uses ``ws73_usb_now`` and its
+boottime clock. The earlier BSP path used ``ktime_get`` instead; those domains
+differ by suspended time and must not be mixed. This correction is not a
+suspend/resume qualification or authorization to enable autosuspend.
+
 ``ws73_boot_load`` adds the fixed SDK110 USB preparation sequence before the
 existing FILES/QUIT executor. It checks every image range and explicit XO trim
 before the first write. Ten fixed RAM2/3/4 writes are followed by one XO write

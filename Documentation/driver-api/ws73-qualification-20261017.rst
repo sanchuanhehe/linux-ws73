@@ -2966,3 +2966,39 @@ Records and manifest SHA-256:
 
 Independent audit ``cross-current-audit-20261017T1643.json``, SHA-256
 ``4b166d19ca07f4fb2097a9bb7e8a97d92866e98295dd75a4fc17ce7d536c9231``.
+
+
+Archived KCSAN startup report: exact field mapping (2026-10-18 SGT)
+-----------------------------------------------------------------
+
+The existing failed diagnostic VM ``20261017T144617.720728Z`` was analyzed
+without another VM run or instrumentation change. Its original vmlinux,
+config and log hashes were rechecked. Disassembly resolves the reported
+``kthread_is_per_cpu+0x1b / worker_thread+0x5c`` accesses to the same four-byte
+``task_struct.flags`` at offset 0x2c in this binary, not to the flags in the
+separate struct kthread or to a WS73 object:
+
+* The reader's return address 0xffffffff8130fc2b follows the read4 check at
+  0xffffffff8130fc26 on task+0x2c. The following test of byte task+0x2e mask
+  0x20 corresponds to the inlined tsk_is_kthread PF_KTHREAD (0x00200000) test.
+* The writer's return address 0xffffffff8130707c follows the read_write4 check
+  at 0xffffffff81307077. Surrounding instructions read task+0x2c, OR 0x20
+  and write it back under wq_pool_attach_mutex: inlined set_pf_worker(true)
+  setting PF_WQ_WORKER. The reader does not take that mutex.
+
+kernel/kthread.c, kernel/workqueue.c, include/linux/kthread.h and
+include/linux/sched.h were byte-compared across the original diagnostic HEAD,
+current review HEAD 68ec2e603404 and base 70dd4ee72eb2; all are unchanged.
+The line resolver could not provide exact source lines from this artifact;
+the mapping instead uses the captured offsets, instructions and source.
+The report occurred before KTAP and contains no WS73 stack frame. This
+narrows its accessed object and operations, but is not a separate no-WS73
+baseline reproduction or proof of complete causal independence. The original
+VM also had temporary fair-scheduler instrumentation, whose timing effects
+remain a limit. No kernel fix, KCSAN suppression or external report is added.
+
+The startup access is now located, not fixed or classified as harmless.
+Overall KCSAN qualification and the separate release_task/blake2s unknown-writer
+report remain unresolved. No driver success is inferred from this analysis.
+Record ``kcsan-worker-field-analysis-20261017/manifest.json``, SHA-256
+``1a2f004db3ea4760edc06a30303370b3340d07fec5a559f6bb912344e01f32b2``.

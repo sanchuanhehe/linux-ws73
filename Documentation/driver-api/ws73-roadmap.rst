@@ -172,13 +172,17 @@ URBs/worker. USB cancellation does not establish device-side reply flushing.
 Rebinding or QMP reattachment is not a cold-power test or proof of stale
 response removal. Automatic loading remains disabled.
 
-On this project's allocated U, the instrumented VM captured a successful
-19-byte OUT and four-byte ``00000000`` IN, decoded U/USB, followed by normal
-device removal and VM exit. This is independent observation evidence with
-unknown power history, not inherited qualification or cold-start success.
-Other-project U/E software-reset reports remain references only. True U/E
-cold starts, additional samples, runtime identity agreement after this
-project's own downloads and full lifecycle fault injection remain open.
+The first allocated-U observation had unknown power history. Subsequent
+user-confirmed power cycles on the same allocated U also produced successful
+19-byte OUT and four-byte ``00000000`` IN, decoded U/USB, before preparation
+writes. These are this project's same-sample cold-read observations, without
+independent power instrumentation. The latest original-file trial verified
+all eleven preparation ACKs but stopped at the first READY reply before any
+payload or QUIT. See :doc:`ws73-qualification-20261017` for each attempt and
+its consumed confirmation. Other-project U/E software-reset reports remain
+references only. E cold starts, additional samples, runtime identity agreement
+after this project's own downloads and full physical lifecycle qualification
+remain open.
 
 Validation and resources
 ------------------------
@@ -245,8 +249,12 @@ caller completes board preparation. It uses 32 KiB chunks, SDK start/middle/
 end/single flags, READY, a minimum 5 ms wait, and FILES OK. I/O shares an
 absolute deadline, with at most 2000 ms for each operation. Short I/O,
 malformed replies, cancellation or errors stop immediately; ambiguous writes
-are not replayed. Replies currently accept exact tokens plus optional NUL
-padding, pending real 110 capture confirmation.
+are not replayed. In addition to bare tokens with optional NUL padding,
+WRITEM accepts a colon and the exact issued command, and READY accepts the
+observed ``:FILE01:`` tag and exact current FILES command. Complete allocated-U
+captures establish these two echo forms. FILES OK retains its strict token
+rule pending physical observation. Acknowledged preparation is not evidence
+of firmware execution or final RF calibration.
 
 One further SDK correction: MSG_FROM_DEV_QUIT_OK is the EMPTY string. USB
 firmware_send_quit_func waits for hcc_usb_reload instead of a text ACK.

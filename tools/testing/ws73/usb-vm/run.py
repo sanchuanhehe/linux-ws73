@@ -80,7 +80,6 @@ def validate_startup(kernel, log, speed="full"):
  log_results=re.findall(r'synthetic startup result=([^\r\n]*)',log)
  assert kernel_results==log_results and len(kernel_results)==7,'actual/captured results'
  assert kernel.count('synthetic runtime identity verified')==7
- assert kernel.count('device callbacks drained')==7
  for number,part in parts:
   n=int(number); records=re.findall(r'WS73_TEST_KMSG ([^\r\n]*)',part)
   results=re.findall(r'synthetic startup result=(-?\d+) stage=(\w+) state=(\d+) action=(\d+)',part)

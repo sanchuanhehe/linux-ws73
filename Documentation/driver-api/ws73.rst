@@ -758,6 +758,10 @@ unknown, so cold-start read validity remains OPEN. Do not guess firmware
 or equate a decoded observation with qualified automatic selection.
 Runtime identity must also be checked after loading and before registering
 consumers; no firmware was downloaded in this observation.
+A fresh physical run at source ``517bc7a13ebd`` also validates the current
+shared USB IO path and normal disconnect drain with SMP and lock checking.
+It again returned exactly four zero bytes; it remains explicitly non-cold.
+The qualification record preserves its failed log-capture attempt and retry.
 The current runtime transaction owner validates the outer USB queue, permits
 one pending platform query, enforces a deadline, and invalidates pending state
 at disconnect. Functional action callers must remain behind that initialization

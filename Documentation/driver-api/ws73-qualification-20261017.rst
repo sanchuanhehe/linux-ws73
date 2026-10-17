@@ -1605,3 +1605,69 @@ subjected to deterministic cancellation/latency injection here. No host module
 load, physical device operation or external submission occurred. Unchanged
 runtime/boot USB and native HCI-model results keep their earlier source identities.
 Documentation/help-only changes do not replace the exact tested source above.
+
+Current shared USB IO on the assigned physical U
+------------------------------------------------
+
+Clean compiled source **517bc7a13ebda6225f3b0bf329ed7988bebf6e20** was tested
+on this project's assigned physical WS73U at ``1-1.1.1``. This requalifies the
+boot observation after the shared USB IO extraction and current owner changes;
+it is separate from dummy_hcd/FunctionFS results. The fixed observation build
+uses LLVM/W=1, four jobs, SMP, KASAN, UBSAN, PROVE_LOCKING,
+DEBUG_ATOMIC_SLEEP, DYNAMIC_DEBUG and usbmon. NET, KUnit and USB gadget support
+are disabled. The private KVM has two vCPUs and 1 GiB, with no disk or NIC.
+The previously recorded initramfs observer is unchanged; the kernel and all
+WS73 build objects are newly bound to the source above and archived with hashes.
+
+Before each attachment, physical topology, parent hub, exact descriptors,
+serial, VID/PID, driver absence and usbfs ownership were checked. Only the
+allocated device was passed through. The successful attempt records:
+
+* OUT endpoint 1: exactly 19 bytes ``READM 0x40019000 4 ``, successful completion.
+* IN endpoint 0x81: capacity 512, successful completion of exactly four bytes
+  ``00000000``; production decoding reports package 0, bus 0 (U/USB).
+* QMP device removal, guest disconnect and exactly one production
+  ``device callbacks drained`` record, followed by QEMU exit 0.
+* Post-exit device identity, descriptors and topology match; no host driver
+  or usbfs owner remains. No KASAN, UBSAN, lockdep, atomic-sleep or kernel
+  warning is present in the captured log.
+
+Result: **OBSERVATION_PASS_NOT_COLD**. The device was not power-cycled.
+These transactions exercise the physical USB controller and current driver;
+they do not qualify cold register accessibility, firmware loading, runtime
+identity agreement, BLE/HCI communication or Wi-Fi. No WRITEM, FILES, QUIT,
+calibration data, firmware payload or HCI command was sent. QMP removal is
+an injected disconnect, not proof of natural recovery or a power cycle.
+
+All attempts remain recorded. The first build failed because ccache attempted
+to write outside the sandbox; compiler feature detection also lost KASAN.
+The next build explicitly disabled ccache, restored required configuration,
+and verified it. A no-device VM boot then passed. The first hardware attempt
+completed READM and removed the device, but the runner failed waiting for the
+debug-level drain message: default console level 7 excluded it. The next
+attempt changed only the VM command line to ``loglevel=8``, captured the
+message and passed. Neither failure is overwritten or called a complete pass.
+The trace verifier accepted two fixtures and rejected all 13 negative controls;
+this tests the verifier only and is not a hardware qualification count.
+
+Local records under ``.dev/ws73-upstream/records`` and manifest SHA-256:
+
+* ``observe-build-20261017T113457.405789Z`` (FAIL),
+  ``8cbec0f88bcf578a8ab120bbfe35231f477182ef8eaac5e143265d9991407fdb``.
+* ``observe-build-20261017T113551.523302Z`` (PASS),
+  ``bc3cac0e6de71fb7ab5d656ae8209bb9864be72d4f83d0409db47b57dcdff3a5``.
+* ``usb-observe-20261017T113900.231488Z`` (VM_BOOT_PASS_NO_DEVICE),
+  ``08b7cfbce137fe9a3560beabd9aa2bacf5f72509e50b766df172990a65963eb4``.
+* ``usb-observe-20261017T113914.952426Z`` (FAIL),
+  ``8b6e1bf06db7922563c18241e5c0381376adc883a228929f8e1d44a68389d8b7``.
+* ``usb-observe-20261017T114006.401592Z`` (OBSERVATION_PASS_NOT_COLD),
+  ``d77efcd9efcf31b27c6b2edc57f8d0af1878a3ff5dbdb46d9ff050ae6c66fdbd``.
+
+The final trace-verifier receipt is ``observer-trace-negative-current-v3.json``,
+SHA-256 ``b59db61b0db126867e2d467169777bc66d80bc67b4c0e3b1a8081e9df7b4c31e``.
+Runner, initramfs, build proof, configuration, tool identities, kernel/objects,
+QMP exchange, all raw USB records and kernel/QEMU output are retained locally.
+Unchanged codec, synthetic USB and native HCI-model tests retain their previous
+source qualifications; they were not rerun for this documentation update.
+The next physical gate is a confirmed power-cycle observation, followed by
+qualified board/trim inputs and this project's own firmware/runtime path.

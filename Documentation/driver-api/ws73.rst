@@ -560,13 +560,26 @@ Startup handshake coordinator
 -----------------------------
 
 ``startup.c`` sequences the actual customization and BLE action engines:
-BSP_READY, customization TX/acknowledgement, BLE open TX/action, then BOOT_FINISH.
+BSP_READY, platform PM configuration TX, customization TX/acknowledgement,
+BLE open TX/action, then BOOT_FINISH.
 It holds independent BSP and BOOT completions. A one-shot arm operation captures
 notifications before RX starts; the sleepable run follows identity/firmware and
 board qualification. BOOT received after arm but before its wait is retained.
 Unarmed notifications cannot satisfy a later session. Repeated BSP/BOOT are
 idempotent status observations, unlike duplicate transaction acknowledgements.
 An IRQ panic or high-priority loss overrides BSP in the same interrupt word.
+
+``platform-config.c`` encodes platform request 0 with a four-byte PM word in
+one zero-padded 32-byte HCC record. Wake GPIO occupies bits 1..8, its active
+level bit 9 and USB link checking bit 10. The caller supplies these fields;
+GPIO values above 255 fail before any I/O. Device-sleep bit 0 and all reserved
+bits stay clear: this initial Linux policy requests that the device stay awake
+and does not claim working suspend/resume. The SDK reference INI instead has
+sleep enabled; this difference is deliberate, not an inferred board default.
+The send uses the shared bounded USB queue and actual-length checks. There is
+no PM acknowledgement in this contract; local TX success is not proof that
+the device applied the policy. A failed PM transfer prevents customization
+and BLE enable, and no automatic replay is attempted.
 
 The arm operation fixes an absolute deadline capped to 12000 ms; stages cannot
 extend it. BSP waiting is additionally bounded to 6000 ms and BOOT waiting to
@@ -580,9 +593,9 @@ The coordinator never holds its state spinlock across a transaction or callback.
 Abort wakes both status waiters and aborts both transaction engines outside that
 lock. Missing status, cancellation, transfer failure or contradiction prevents
 later stages and retains a terminal failure. There is no automatic disable,
-reset or retry after an uncertain startup. DONE means only these four handshakes
-completed; address setup, HCI command completion and native consumer registration
-are separate requirements. Tokenless notifications cannot establish firmware
+reset or retry after an uncertain startup. DONE means only platform TX and
+these four handshakes completed; address setup, HCI command completion and
+native consumer registration are separate requirements. Tokenless notifications cannot establish firmware
 epoch or board validity.
 
 The USB parent owns this coordinator, routes validated notifications and aborts

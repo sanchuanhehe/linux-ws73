@@ -3220,3 +3220,103 @@ Records and manifest SHA-256 (private evidence root; raw padding stays private):
   ``79df1465d543ba0504b421008fa2af35df05f2ac044160ccfa0b18f917f4d2a2``.
 * ``ram-trial-20261017T173923.371584Z``,
   ``ef342d3b12022fd91209f5229aee087253fecbc0ab65d80326345c0f23dea612``.
+
+Platform PM prerequisite in BLE startup (2026-10-18 SGT)
+-------------------------------------------------------
+
+The next physical BLE preparation audit found a missing shared startup step:
+``ws73_board_service_enter`` sends platform PM configuration before the BSLE
+customization/enable path. Signed daaee4b511ccd9d5a6bdb176c064d0721a55bf38
+adds its independent encoder and bounded send, and makes it mandatory between
+BSP and customization. Request 0 carries four PM bytes in a 32-byte HCC
+record. Wake GPIO, active level and USB-link checking are explicit caller
+inputs. Sleep and reserved bits stay zero. The sleep policy deliberately
+differs from the SDK default INI's enabled sleep because Linux device PM is
+not qualified. Success reports local transfer only, with no invented PM ACK.
+Short/error/cancelled TX prevents customization and enable; the one-shot
+startup still shares the original absolute 12-second budget.
+
+Source audit also distinguished the UART-only platform eFuse message path
+from the USB register path. SDK address initialization can fall back to a
+random base and derive BLE from it; get_dev_addr or READ_BD_ADDR success alone
+does not establish a provisioned public address. No eFuse operations, address
+fallback or public HCI setup bypass were added. Temperature compensation is
+off in the pinned INI. Default/light Host configurations disable heartbeat,
+whereas USB-light omits its symbol; its conditional Host no-op implementation
+is not evidence that every firmware has no heartbeat requirement.
+
+A private 140-byte reference customization candidate was prepared from the
+pinned INI with exporter provenance. Its PM candidate keeps GPIO10/high but
+clears sleep (0x215 -> 0x214), with USB-link checking off. These inputs were
+not sent to any device and remain NOT_BOARD_QUALIFIED. No calibration blob,
+SDK code or private raw capture was added to the public branch. Physical
+publication stays gated on the remaining platform/address prerequisites.
+
+Clean daaee4b511cc passed 94 core KUnit cases and the separate 31-case native
+HCI configuration with KASAN/UBSAN. Tests cover output preservation/capacity,
+independent PM byte vectors, range rejection before I/O, each short-transfer
+stage, cancellation/deadline, terminal transport state, startup ordering and
+failure preventing action. The first core attempt built but QEMU could not
+bind its QMP socket under the sandbox: zero KTAP tests ran and FAIL remains.
+The independent permitted KVM run passed without weakening the checks.
+
+At 0eee3af3937b, full/high-speed USB startup each passed seven cases and
+52 bulk OUT/30 bulk IN; native HCI each passed three cases and 57 bulk OUT,
+101 bulk IN, 27 HCI commands/26 synthetic replies and three drains. Both
+positive HCI instances completed standard management-info reads and auto-off;
+Reset cancellation retained the one-second drain requirement. Firmware and
+HCI replies in these runs are solely the explicit FunctionFS fixture, not
+physical WS73 behavior. The production parent remains observation-only.
+Startup and HCI supervisors rejected 29/34 log mutations respectively and
+five artifact mutations each, including missing/short/reordered PM records.
+The current all-module Clang W=1 build passed, including cross-module startup
+and HCI symbol linkage.
+
+Two verification-tool failures are retained: after adding platform-config.o
+to archived build artifacts, the USB consumer's exact required set initially
+omitted it and rejected before VM launch (fixed by 0eee3af3937b). The first
+HCI negative-control run then refused its own unchanged wrong-opcode mutant:
+PM TX moves the first HCI command from sequence 9 to 10. 01b06c8b743e updates
+both sequence/opcode mutations and verifies all 34 controls. Neither failure
+was converted into a pass or removed. 5edc6d449eca only adds artifact retention,
+ordering assertions and source formatting relative to the tested core change.
+The kernel delta has zero checkpatch errors and the new-file MAINTAINERS
+advisory; development fixture formatting still follows its existing style.
+
+There was no new physical trial in this increment. Previous allocated-U
+binary runtime identity/version evidence remains bound to its own source;
+it does not qualify the new PM path, BLE actions, addresses, E, a peer or RF.
+The original U/E joint submission and external-review gates remain open.
+
+Records and manifest SHA-256 (private evidence root):
+
+* ``platform-startup-audit-20261017``,
+  ``cc34a926aa5a7a3ad0974cb6eddc1628434bbc0676109d71da00ff515a03ab37``.
+* ``ble-reference-input-20261017``,
+  ``7b3facb8ad73c70644a44dd3e1e4038eaf89a89b2f97c0ced6873e0bdde97317``.
+* ``20261017T174848.118693Z``,
+  ``5d2ea5e21528c8fa09fb4decc6945a2b5d945239c23f469e01459dd70646a07a``.
+* ``20261017T175000.305750Z``,
+  ``8020cab43d87afebc18f97d887f0fd2f489a98e1121d73cd86e63f2f47ce16b3``.
+* ``20261017T175049.275788Z``,
+  ``a32824129ff9f94df21d36e4218bd94b8b10780963903ff3c8013fa7a94cedff``.
+* ``platform-artifact-rejection-20261017``,
+  ``5d2c12f3a829cd4446e2940a981d774670de56f9a46174189a88fc91db58f484``.
+* ``virtual-usb-build-20261017T175533.063208Z``,
+  ``1188c0801afa30cf6977109f4067b106dcc435e028cd6409036024bbce6898c0``.
+* ``virtual-usb-20261017T175555.026494Z``,
+  ``e7f8543f307d3b4fc13ee715a2eaf7e254c76665b3ccd1703ec9702fed133d26``.
+* ``virtual-usb-20261017T175619.303652Z``,
+  ``d0aba3c43aef42b2c5c007aa488238b57c9e3544b7b725b096f4db1d808f306b``.
+* ``virtual-usb-negative-20261017T175617.124563Z``,
+  ``daac2cee27ea0b9517c2f6fa1140afa84f4908b4ef6911316320774b576074ee``.
+* ``virtual-usb-20261017T175651.575217Z``,
+  ``f319805adfdb332b2b7a19b9eb676792702c6f5e3b7e0125240ed39f2e43bad8``.
+* ``virtual-usb-20261017T175715.066900Z``,
+  ``5dbe26153a373faf7a77a03b4657c50f5670479d56b388e44c3ac25aa06bbab8``.
+* ``platform-hci-negative-rejection-20261017``,
+  ``743e4f49befbfdfd818f9d0be47ea6681a99885c1d6c7014de07e0206877abec``.
+* ``virtual-usb-negative-20261017T175744.542427Z``,
+  ``e730d73e0600ffdcc974dd49f02edf131d6b4bf68e73071da5482abaa154f248``.
+* ``hci-build-module-20261017T175749.474079Z``,
+  ``592dd2b5301090b64069ef789dd2f3ceb23ad62931a3b8145cae1609684d1c1d``.

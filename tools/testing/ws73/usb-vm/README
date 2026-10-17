@@ -152,7 +152,7 @@ is pending, followed by a fresh successful instance. These tests supplement
 physical boot observations; they do not qualify physical HCI, BlueZ scanning,
 connections, L2CAP, security, ACL traffic or a real peer.
 
-The startup and HCI supervisors reject respectively 26 and 31 log mutations,
+The startup and HCI supervisors reject respectively 29 and 34 log mutations,
 each with five artifact mutations. All-module compilation also includes the
 startup/HCI test consumer and its USB-owner dependency. Bluetooth is enabled
 in the virtual fixture configuration; it has no NIC or physical USB connection.
@@ -161,3 +161,10 @@ Pending Reset cancellation must drain within one second of the kernel USB
 disconnect timestamp (below HCI_CMD_TIMEOUT of two seconds), without an HCI
 command timeout in the kernel log. Late-drain and timeout negative controls
 are rejected explicitly; teardown completion alone is insufficient.
+
+The startup/HCI fixture now requires a complete 128-byte platform PM USB
+message after identity/version and BSP, before customization. Its PM word is
+an explicit zero fixture (sleep disabled, no physical wiring claim). Startup
+has 52 bulk OUT per speed; HCI has 57. The PM message has no synthetic ACK.
+Missing, short and reordered PM records fail supervision. These counts and
+byte checks do not establish physical device PM behavior.

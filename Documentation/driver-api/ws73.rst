@@ -14,8 +14,10 @@ The USB parent can issue one fixed boot READM chip observation, or a
 serialized runtime HCC identity/version queries with independent RX, and drain its
 requests on disconnect. It does not select/download firmware,
 register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
-Synthetic HCI event fixtures are parser inputs, never generated completions
-for an HCI device. No hardware or SparkLink qualification is inherited.
+Production code never generates controller completions. An explicit KUnit-only
+controller model now replies to two setup commands through the native HCI stack;
+its synthetic replies are not physical evidence. No hardware or SparkLink
+qualification is inherited.
 
 A failed boot observation now enters the same parent terminal/fault-work path
 as a runtime failure: admission closes, outstanding transfers are cancelled,
@@ -69,24 +71,32 @@ per-device ``hci_dev``, sets HCI_USB and the auxiliary parent, and implements
 setup/open/close/flush/send. Setup requests real Local Supported Features and
 BD_ADDR through the native HCI command engine. It requires LE-only features
 and a nonzero/non-FF public address; no fixed address, invented capabilities,
-SCO/ISO support or speculative quirk is supplied. These setup commands have not
-yet been exercised against a successful virtual or physical controller.
+SCO/ISO support or speculative quirk is supplied. Both queries now complete
+against the explicit KUnit controller model. That model withholds the subsequent
+Reset reply, so it does not qualify full HCI initialization or a physical controller.
 
 TX accepts command/ACL packets only. It validates a copied H4 packet before
 admission and limits the queue plus the active worker packet to 64 packets and
-96000 H4 bytes. On success the adapter consumes the caller's skb; on error the
+65536 H4 bytes. On success the adapter consumes the caller's skb; on error the
 caller retains it. One worker encodes HCC into bounded storage and submits a
 borrowed record to the shared backend. Local TX completion is not HCI command
 success or controller credit. HCI command/data credits remain in the native
-stack. Flush stops TX admission and drains/purges its worker/queue while leaving
-RX active; close separately stops receive admission and requests BLE disable.
+stack. Native ACL scheduling does not recover credits on a driver send error,
+so any rejection during an active session latches a terminal error and withdraws
+HCI. Flush stops TX admission and joins the worker. Purging accepted queued
+packets during an active session is terminal too; an empty flush preserves RX.
+Close separately stops receive admission and requests BLE disable.
 
 RX uses the bounded H4 reassembler and copies complete event/ACL packets into
 owned skbs before ``hci_recv_frame``. No borrowed URB storage escapes. Transport
 or parse failure schedules HCI withdrawal in a separate worker; no fabricated
-Command Complete or Hardware Error event is sent. Removal unbinds callbacks,
-drains TX and fault work, unregisters HCI and releases its state. Normal TX/RX,
-queue saturation, active flush and physical enable/disable remain unqualified.
+Command Complete or Hardware Error event is sent. Withdrawal cancels pending
+native synchronous commands before unregistering HCI. Removal preserves any
+existing local error in the shared endpoint, unbinds callbacks, drains TX and
+fault work, unregisters HCI and releases its state. The explicit model verifies
+ACL TX, fragmented event RX ownership after an empty flush, packet/byte quotas
+and invalid ACL rejection. Full HCI initialization, ACL RX, queued active flush,
+allocation-failure injection and physical enable/disable remain unqualified.
 
 The codec is built once as a hidden shared component, with its own BTWS73
 namespace, avoiding duplicate definitions when both the consumer and codec

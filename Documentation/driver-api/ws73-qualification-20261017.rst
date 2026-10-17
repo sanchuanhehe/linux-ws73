@@ -1194,3 +1194,65 @@ boot/firmware/board initialization integration, cold U/E evidence, peer/AP
 resources, Wi-Fi, firmware delivery and upstream review remain open. No new
 physical operation, RFC or formal submission occurred. Documentation commits
 do not replace the exact compiled source identities above.
+
+Native HCI setup queries, data ownership and bounded admission
+------------------------------------------------------------
+
+Final tested source ``a511afc8f138c17ec5157bb5947d4af7f2679f93`` adds an explicit
+KUnit controller model attached to the real auxiliary endpoint and HCI consumer.
+The model validates exact outgoing HCC commands, supplies synthetic Features and
+BD_ADDR completions in fragments, then deliberately withholds Reset completion.
+Both driver setup queries complete through the native command engine. This is
+not full HCI initialization, real firmware behavior or peer qualification.
+No response generator is included in the production driver or USB fallback.
+
+Four new cases cover a valid ACL encoded into an exact HCC record; an empty TX
+flush followed by fragmented event RX whose owned skb survives overwriting the
+borrowed input; independent packet and byte limits including the in-flight
+packet; and invalid ACL length with retained caller skb ownership. The blocked
+Reset holds one slot: 63 further packets fit the 64-packet limit. Separately,
+43 maximum-size H4 packets plus Reset fit 64 KiB and the next is rejected.
+Rejected admission latches the first error, prevents queued ACL transmission,
+withdraws HCI and leaves the shared endpoint terminal. Cancellation wakes the
+pending native Reset request without manufacturing its completion.
+
+The production policy follows native hci_sched_acl_pkt behavior: it charges
+credits even when the driver's send callback fails. Returning a transient queue
+error alone would leave accepted controller-credit accounting stranded. Active
+send rejection now withdraws the instance. Flushing accepted queued packets in
+an active session is also terminal; normal close gates the session first.
+The byte cap is now 65536 H4 bytes, independently reachable before the packet
+cap. These are software resource bounds, not device credits.
+
+The HCI-only VM passes 21 cases: 16 existing codec cases, the earlier failed-enable
+lifecycle case and four new model cases. SMP, KASAN, UBSAN, PROVE_LOCKING and
+DEBUG_ATOMIC_SLEEP are enabled. The same source passes the public all-module
+compile/link check with Clang and W=1. No module is loaded on the host.
+Earlier regular 72/core-only 56/virtual USB results retain their earlier source
+identities; they were not rerun or counted as new evidence in this increment.
+
+Two initial compilation failures are retained: source
+``e13847c34832176e1e6a436ba64f263c826f9b68`` used a bool device-match callback where
+this kernel requires int; source ``f41754fea034896a281a8ac339ddede95953884c``
+included unguarded hci_sync.h twice, directly and through hci_core.h. Both were
+fixed before the passing VM run. Neither failed attempt executed a VM.
+
+Evidence manifests, including failed attempts (SHA-256):
+
+* ``20261017T095913.430674Z`` (FAIL, callback signature),
+  ``13e0bacec996d3c704517c75383db44986fb0ff24e4b35baab066f5ba6d66b0c``.
+* ``20261017T100213.923492Z`` (FAIL, duplicate header),
+  ``820394e1447913e31c856b7f883f36369591f53901f0d4b89ccbf93354650445``.
+* ``20261017T100417.059062Z`` (21 HCI/codec KUnit PASS),
+  ``d06ab204f051dec44fb6430428e477717b548e74d35e4299a9f01c79ffce95b3``.
+* ``hci-build-module-20261017T100727.675893Z`` (all-module compile/link PASS),
+  ``c0773de9a820087a0aa3f11138f62714b1513827bf9769583ec45fe6464c5c06``.
+
+The model calls the actual driver's send callback without establishing an L2CAP
+connection; it does not execute native connection/ACL-credit scheduling. ACL RX,
+queued active flush, allocation-failure injection, full HCI initialization,
+BlueZ and real enable/disable remain open. The USB observer still does not
+publish a BLE endpoint. Cold U/E identity, trusted board/trim inputs, parent
+firmware/startup integration, BLE peer and AP resources, Wi-Fi and upstream
+review remain open. No physical device operation or external submission occurred.
+The later documentation commit is not a replacement tested-source identity.

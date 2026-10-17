@@ -929,3 +929,47 @@ No physical device, firmware download, BLE peer exchange or external submission
 was performed. Cold U evidence, E/peer/AP resources, board preparation/three-file
 loader integration, auxiliary/HCI, Wi-Fi and upstream acceptance remain open.
 The following documentation commit is not the compiled source identity.
+
+Fixed board preparation before original image execution
+-------------------------------------------------------
+
+Source ``90b75a6d7d0ea6a7186e2a610fc7eb9cf97d04c4`` adds ``ws73_boot_load``. All three
+image ranges and the explicit XO coarse/fine bounds are checked before any
+write. The fixed RAM2/3/4 sequence and XO trim produce eleven WRITEM transactions,
+each requiring exact successful TX and WRITEM OK (optional NUL padding only).
+Only after all acknowledgements does it call the existing separate-image
+FILES/QUIT executor. One caller-supplied absolute deadline covers the entire
+sequence; per-transfer caps remain 2000 ms. Preparation acknowledgement count
+is separate from image byte progress. Failure stops without retry, rollback or
+continuation; the caller must discard that session. No generic register ABI,
+board-default trim or firmware fallback was added.
+
+The SDK supplies symbolic RAM operations/order/values, the boot WRITEM dialect,
+XO address/width and configuration dependencies. Both inspected USB light configs
+enable BTC EM-buffer calibration; the Linux platform Makefile defines the RAM2/3
+preparation condition. Numeric RAM addresses match the pinned libws73 preload
+implementation. The SDK checkout lacks the referenced generated CLDO offset
+header, and a local corresponding object was not found. This mapping therefore
+has reference-implementation evidence, not independently verified vendor headers
+or project U/E hardware qualification. Static input hashes are retained in
+``board-preparation-provenance.json``. Local firmware/board use remains distinct
+from eventual redistribution and actual compatibility qualification.
+
+The KASAN/UBSAN x86-64 VM passes all 69 KUnit in ``20261017T083953.234653Z``;
+manifest SHA-256 ``fed131f81e51fe500ae950d698ea6e1625bcd41ca9e828af6b66bb5187f992e9``.
+The three new cases verify a fixed 35-operation preparation/download transcript,
+175 fault placements (five fault modes at every send/receive), and admission
+rejection before side effects for invalid trim, wrong final image address,
+missing final image, overlapping range, cancellation and expired deadline.
+Progress is unchanged on invalid input; failed preparation never reaches FILES.
+The existing hash/parser/chunk/startup tests also pass. New test source and the
+boot implementation diff are strict-checkpatch clean.
+
+These are synthetic immutable image views and a synthetic explicit trim, not
+qualified board data or downloaded firmware. Full image/header hashing belongs
+to the prerequisite firmware-request layer; range validity cannot replace it.
+No USB parent invocation was added, and no physical operation or new USB fixture
+run occurred. Firmware selection remains gated by live HCC/cold-read evidence,
+board applicability and runtime identity/version checks. Runtime XO temperature
+compensation, address provenance, native consumers and the remaining plan are
+still open. The documentation commit does not replace the compiled source.

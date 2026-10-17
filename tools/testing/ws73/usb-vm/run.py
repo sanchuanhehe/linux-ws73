@@ -71,6 +71,7 @@ def validate_hci(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL|SKIP',kernel+'\n'+log)
  assert not bad,bad.group(0) if bad else ''
  assert len(re.findall(r'new '+speed+r'-speed USB device',kernel))==3
+ assert not re.search(r'Bluetooth:.*(?:timeout|timed out)',kernel,re.I),'HCI command expired instead of cancellation'
  assert log.count('WS73_VIRTUAL_USB_PASS')==1
  assert re.findall(r'WS73_HCI_CASE (\d+) BEGIN',log)==['0','1','2']
  assert re.findall(r'WS73_HCI_CASE (\d+) PASS',log)==['0','1','2']
@@ -114,7 +115,13 @@ def validate_hci(kernel, log, speed="full"):
   assert part.index('synthetic startup result=')<part.index('synthetic auxiliary result=')<part.index('WS73_HCI_QUEUE')
   assert part.index('WS73_TEST_REMOVE')<part.index('device callbacks drained')
   if good:assert part.index('WS73_HCI_MGMT_INFO')<part.index('WS73_HCI_AUTO_OFF_ACK')<part.index('WS73_STARTUP_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE')
-  else:assert part.index('WS73_HCI_WITHHOLD_RESET')<part.index('WS73_TEST_REMOVE')
+  else:
+   assert part.index('WS73_HCI_WITHHOLD_RESET')<part.index('WS73_TEST_REMOVE')
+   # kmsg timestamps are microseconds; HCI_CMD_TIMEOUT is two seconds.
+   detached=re.findall(r'WS73_TEST_KMSG \d+,\d+,(\d+),[^;]*;[^\n]*USB disconnect',part)
+   drained=re.findall(r'WS73_TEST_KMSG \d+,\d+,(\d+),[^;]*;[^\n]*device callbacks drained',part)
+   assert len(detached)==len(drained)==1
+   assert 0<=int(drained[0])-int(detached[0])<1000000,'Reset cancellation did not drain before timeout'
   errors=re.findall(r'interrupt observation failed: (-\d+)',part)
   assert len(errors)<=1 and all(e in ('-19','-108','-71') for e in errors)
   if errors:assert part.index('WS73_TEST_REMOVE')<part.index('interrupt observation failed:')

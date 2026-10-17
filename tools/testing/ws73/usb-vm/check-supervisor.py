@@ -210,7 +210,12 @@ if proof.get('phase')=='startup':
  }
 
 if proof.get('phase')=='hci':
+ pending=re.search(r'WS73_HCI_CASE 1 BEGIN(.*?)WS73_HCI_CASE 1 PASS',s,re.S)[1]
+ detached=int(re.search(r'WS73_TEST_KMSG \d+,\d+,(\d+),[^;]*;[^\n]*USB disconnect',pending)[1])
+ late=re.sub(r'(WS73_TEST_KMSG \d+,\d+,)\d+(,[^;]*;[^\n]*device callbacks drained)',lambda m:m[1]+str(detached+1000000)+m[2],pending)
  trials={
+  'late_reset_drain':(k,s.replace(pending,late)),
+  'hci_command_timeout':(k+'\nBluetooth: hci0: command 0x0c03 tx timeout\n',s),
   'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
   'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
   'missing_case':(k,s.replace('WS73_HCI_CASE 1 PASS','')),

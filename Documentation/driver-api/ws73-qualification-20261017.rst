@@ -717,10 +717,14 @@ fail with the expected error. The two runs record respectively six and five
 allowed interrupt errors during injected removal, consistent with competing
 USB completion/disconnect ordering. All original cases continue to pass.
 
-The updated supervisor rejects 31 negative controls in
-``virtual-usb-supervisor-negative-v6.json``. Its exact checker source is retained
-as ``virtual-usb-supervisor-negative-v6.py`` alongside hashes and the corrected
-positive fixture. New controls remove the drain/removal marker or interrupt,
+The updated supervisor first rejects 31 controls in
+``virtual-usb-supervisor-negative-v6.json``. Final supervision also requires
+the drain to be the last captured driver event in each case and rejects 32
+controls in ``virtual-usb-supervisor-negative-v7.json``. Its checker and verifier
+sources are retained as ``virtual-usb-supervisor-negative-v7.py`` and
+``virtual-usb-verifier-v7.py``. ``virtual-usb-revalidation-v7.json`` binds both
+original VM log hashes to the final verifier; this is log revalidation, not
+an additional VM run. The original run manifests and verifier remain intact. New controls remove the drain/removal marker or interrupt,
 alter pool/interrupt bits/fault status, or inject false BSP success on panic.
 No sanitizer, lockdep or atomic-sleep failure was reported. These observations
 do not exhaust all interleavings, allocation failures or native USB PM behavior.

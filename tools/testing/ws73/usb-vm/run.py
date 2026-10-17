@@ -122,6 +122,7 @@ def validate_download(kernel, log, speed="full"):
  payload_count=0
  for number,part in parts:
   n=int(number);success=n in (0,6)
+  assert re.findall(r"WS73_DOWNLOAD_PACKET_SIZE (\d+)",part)==["64" if speed=="full" else "512"],number
   records=re.findall(r'WS73_TEST_KMSG ([^\r\n]*)',part)
   assert len(records)==(4 if n==5 else 3),number
   results=re.findall(r'synthetic download result=(-?\d+) stage=(\d+) image=(\d+) ack=(\d+)',part)

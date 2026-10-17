@@ -100,6 +100,7 @@ if proof.get('phase')=='download':
   'short_command':(k,s.replace('chunk=0 actual=28 verified','chunk=0 actual=27 verified',1)),
   'short_payload':(k,s.replace('actual=32768 delay_us','actual=32767 delay_us',1)),
   'missing_payload':(k,s.replace('WS73_DOWNLOAD_PAYLOAD','MISSING_PAYLOAD',1)),
+  'wrong_packet_size':(k,s.replace('WS73_DOWNLOAD_PACKET_SIZE 64','WS73_DOWNLOAD_PACKET_SIZE 512',1)),
   'short_helper_wait':(re.sub(r'synthetic READY wait ns=\d+','synthetic READY wait ns=4999999',k,count=1),s),
   'missing_helper_wait':(k.replace('synthetic READY wait ns=','missing wait ns=',1),s),
   'short_ready_wait':(k,re.sub(r'delay_us=\d+','delay_us=4999',s,count=1)),

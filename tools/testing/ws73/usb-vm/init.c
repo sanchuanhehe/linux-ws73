@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/reboot.h>
 #include <sys/stat.h>
@@ -268,6 +269,12 @@ static void download_trials(int control, int *eps, int log, const char *udc)
    trial == 3 ? "synthetic download result=-110 stage=2 image=0 ack=0" : "synthetic download result=";
   printf("WS73_DOWNLOAD_CASE %u BEGIN\n", trial); disconnected = 0;
   setting(G "UDC", udc); enabled(control);
+  struct usb_endpoint_descriptor endpoint;
+  if (ioctl(eps[1], FUNCTIONFS_ENDPOINT_DESC, &endpoint)) die("download endpoint descriptor");
+  const unsigned char *raw = (const unsigned char *)&endpoint;
+  unsigned int packet_size = (raw[4] | raw[5] << 8) & 0x7ff;
+  if (packet_size != 64 && packet_size != 512) die("download packet size");
+  printf("WS73_DOWNLOAD_PACKET_SIZE %u\n", packet_size);
   for (unsigned int chunk = 0; chunk < 4; chunk++) {
    ssize_t n = read(eps[1], got, sizeof(got));
    if (n != (ssize_t)strlen(commands[chunk]) || memcmp(got, commands[chunk], n)) die("FILES wire");
@@ -284,7 +291,7 @@ static void download_trials(int control, int *eps, int log, const char *udc)
     wait_kernel(log, "synthetic payload admission");
     puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); break;
    }
-   unsigned int first_size = sizes[chunk] > 64 ? 64 : sizes[chunk];
+   unsigned int first_size = sizes[chunk] > packet_size ? packet_size : sizes[chunk];
    n = read(eps[1], got, first_size);
    clock_gettime(CLOCK_MONOTONIC, &first);
    if (n != first_size) die("first payload length");

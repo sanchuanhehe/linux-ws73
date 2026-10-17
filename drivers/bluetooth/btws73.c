@@ -339,6 +339,7 @@ static int btws73_probe(struct auxiliary_device *adev,
 	ws73_ble_unbind(adev);
 	cancel_work_sync(&bt->fault_work);
 free:
+	auxiliary_set_drvdata(adev, NULL);
 	hci_free_dev(bt->hdev);
 	kfree(bt);
 	return ret;
@@ -358,6 +359,7 @@ static void btws73_remove(struct auxiliary_device *adev)
 	cancel_work_sync(&bt->fault_work);
 	if (bt->registered)
 		hci_unregister_dev(bt->hdev);
+	auxiliary_set_drvdata(adev, NULL);
 	hci_free_dev(bt->hdev);
 	kfree(bt);
 }

@@ -21,14 +21,24 @@ a shared build.lock excludes the other WS73 build/test scripts. Observation
 hardware kernels in build-observe are not touched. The accepted build record
 pointer and timestamped artifacts live under ../.dev/ws73-upstream.
 
+The runner requires the build's clean source commit to match the current
+worktree, including tools and documentation. Rebuild after committing changes.
+It checks the exact required artifact set and hashes before starting QEMU.
+ACPI and PCI are required for this Q35 guest to power off: ACPI's default
+PCI_Config region handler depends on PCI. Guest shutdown must terminate QEMU
+successfully; a fixture PASS line followed by a process timeout is a failure.
+This shutdown configuration is not WS73 device PM qualification.
+
 The VM has no host USB, disk or network connection. It uses FunctionFS and
 dummy_hcd to enumerate synthetic runtime devices, with separate kernel and
 fixture serial logs. Each speed exercises 17 cases covering identity/version,
 notifications, IRQ faults, injected disconnect and callback drain. A process
 timeout kills only the VM started by the runner. Source, configuration,
 tool, runtime library, kernel and fixture hashes accompany each attempt.
-The negative checker corrupts a verified full-speed log in 32 ways and requires
-every corruption to be rejected. It does not exercise a device.
+The negative checker corrupts a verified full-speed log in 32 ways and checks
+five invalid build manifests (stale source, failed build, missing/extra artifact
+and wrong hash). Every corruption must be rejected. It does not exercise a
+device.
 
 These tests do not execute boot firmware download, 32-KiB boot TX, the READY
 delay, armed startup/customization, BLE class-control, HCI or Wi-Fi. They are

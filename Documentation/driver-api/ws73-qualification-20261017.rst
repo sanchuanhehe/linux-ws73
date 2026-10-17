@@ -973,3 +973,77 @@ run occurred. Firmware selection remains gated by live HCC/cold-read evidence,
 board applicability and runtime identity/version checks. Runtime XO temperature
 compensation, address provenance, native consumers and the remaining plan are
 still open. The documentation commit does not replace the compiled source.
+
+Bounded boot USB backend and reproducible virtual USB tools
+---------------------------------------------------------
+
+Functional source ``b2e1f7ee3c8da0834d3d43e05f7955bfd60846d2`` prepares a
+persistent boot IO backend on the USB parent. Boot TX accepts at most 32768
+bytes, boot RX at most 512, while runtime retains its 4160-byte envelope and
+ZLP policy. Anchored synchronous transfers still check actual lengths and join
+completion before releasing memory. READY delay is 5000--6000 microseconds;
+the executor rechecks its absolute deadline and cancellation before payload TX.
+The parent still only observes boot identity: it does not call the loader.
+The new 32-KiB payload and READY delay paths are therefore prepared, not executed
+by the USB regression. BSP timestamps now use the same boottime clock as the
+other parent/coordinator timestamps, removing a mixed-clock deadline input.
+This change does not establish suspend/resume support.
+
+All 69 KUnit pass for this functional source in the instrumented x86-64 VM.
+The hardware-free USB build, runner, fixture, negative checker and configuration
+are now available under ``tools/testing/ws73/usb-vm/``. They build from an explicit
+allnoconfig fragment without a private baseline archive, reserve four build jobs,
+and run two-CPU Q35 guests with no host USB, disk or network. Clean source commit,
+configuration, tool candidates (including the actual compiler behind ccache),
+runtime libraries and artifacts are fingerprinted. Exact source/artifact checks
+reject stale builds before launching a VM. Python optimization is rejected by
+all three Python entry points because assertions are part of verification.
+
+Two full-speed attempts failed and remain FAIL. The first guest completed all
+fixture cases but lacked ACPI poweroff; the second enabled ACPI without PCI,
+causing AE_BAD_PARAMETER during default region initialization and again leaving
+poweroff unavailable. Each runner hit its 45-second deadline and killed/joined
+only its own guest. Neither fixture PASS text was accepted as successful VM
+completion. Source inspection identified the default PCI_Config region handler's
+PCI dependency; adding PCI allowed normal guest shutdown. These are VM harness
+configuration failures, not physical-device failures or PM qualification.
+
+Final USB/tool source ``4031cc80f65295074c4ea192c50d25b2525828a7`` passes both
+full- and high-speed runs under KASAN, UBSAN, lockdep and DEBUG_ATOMIC_SLEEP.
+Each run checks 17 cases, 65 bulk OUT, 30 bulk IN, eight interrupt IN and 17
+removals/drains, with normal QEMU exit. The fresh negative run rejects all 32
+log corruptions and five invalid build manifests. Additional local receipts
+``usb-stale-build-rejection.json`` and
+``usb-tools-optimization-rejection-final.json`` retain the pre-launch rejection
+and three optimized-entry-point rejection results.
+
+All attempts below are retained; hashes refer to their manifest.json files:
+
+* ``20261017T084611.158985Z`` (KUnit PASS),
+  ``955e78efbf97ea1a8cf3f8436e6c6cab11ab20dd3944a834c243c278fbd3bd51``.
+* ``virtual-usb-build-20261017T084947.302003Z`` (initial build PASS),
+  ``5fae25f993eeb35f9ad766de682ad9e5d20ea60796a81bb8a1e2bf426dd8476d``.
+* ``virtual-usb-build-20261017T085241.976759Z`` (provenance build PASS),
+  ``125ded6f7f4a97be469ff4a8f2b992941bac8a0c42304a19ecc30f2e1124adcb``.
+* ``virtual-usb-20261017T085312.790556Z`` (full-speed FAIL, no ACPI poweroff),
+  ``617f4295477cde7d64a3059a26d9081215af408895bb8c55bc5a5c72f254e931``.
+* ``virtual-usb-build-20261017T085424.628780Z`` (ACPI build PASS),
+  ``1b1e2197d82a810a3dc9134856822ec6799ab48d1b37b350d32bda2391f50372``.
+* ``virtual-usb-20261017T085624.601998Z`` (full-speed FAIL, missing PCI region handler),
+  ``d332d6041ead82798b69841f7304b50c4e6f6d284341b547b018089ea6f96c8c``.
+* ``virtual-usb-build-20261017T085758.617240Z`` (ACPI/PCI build PASS),
+  ``ac26dffe9fe313dac7fd853ca931bd8c176d658727689325c892b5a0ea1ea875``.
+* ``virtual-usb-20261017T090241.333881Z`` (full-speed PASS),
+  ``10a50cf819d0f2e6d494cef98753d2acd6978ebc046180f33de8d345a52ae78c``.
+* ``virtual-usb-20261017T090259.564553Z`` (high-speed PASS),
+  ``5302138b2bc97aa48ef30724f5948fd2813876ffee1f483222f5098b05a77d6e``.
+* ``virtual-usb-negative-20261017T090300.648508Z`` (32 log and five artifact controls PASS),
+  ``6e0252f5dc3a65a3df99b3b52ca3e382d57aae2dab5f1ce2c27b2b1d75944915``.
+
+The USB fixture still uses synthetic runtime devices and unarmed startup. No
+physical operation, boot payload download, armed customization/startup, USB
+class-control, HCI or Wi-Fi exchange occurred. The 69 KUnit and USB results bind
+the distinct source commits above; subsequent documentation is not a newly
+compiled source. Cold-start U/E evidence, trusted board/trim inputs, parent
+loader integration, native consumers, peer/AP resources and upstream review
+remain open. The goal and existing tracking issues remain active.

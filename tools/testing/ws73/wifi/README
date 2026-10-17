@@ -105,7 +105,8 @@ abort closes the instance. Old tuples cannot complete a subsequent command.
 Shutdown aborts and joins the admitted caller; the owner still has to cancel its
 transport and stop/join RX and every other entry point before freeing storage.
 Already admitted send work can overlap abort; the transport must enforce its own
-disconnect admission and cancellation. No mutex is held across an RX callback.
+disconnect admission and cancellation. RX never takes the command mutex;
+the state spinlock is released before transport.send and reply waiting.
 Inputs/result must not alias the transaction's storage or each other.
 
 The nine transaction cases add early reply with failed/short/long send, duplicate

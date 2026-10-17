@@ -279,10 +279,47 @@ The 1024-byte control payload limit is an initial local policy. HCC/USB padding
 and routing are outside these pure functions. Exact reply flags, reserved
 fields and payload/envelope length conventions are a deliberately restricted
 candidate profile: actual SDK110 U/E firmware compatibility is still unproven.
-The codec does not allocate sequences or track active requests/timeouts/epochs;
-those belong to the upcoming actual consumer and must be implemented before
-commands can be issued. Reusing a tuple after reset cannot be made safe by
+The stateless codec itself does not allocate sequences or track requests.
+The transaction component below supplies local correlation and deadlines;
+device epoch validation and a real transport consumer remain prerequisites
+before issuing physical commands. Reusing a tuple after reset cannot be made safe by
 this stateless parser. The existing RF, key and first-STA gates are unchanged.
 
 See ``tools/testing/ws73/wifi/README`` for the eight-case VM suite and precise
 ownership, scope and reproduction contracts.
+
+
+Bounded configuration transaction component
+------------------------------------------
+
+``frw-transaction.c`` supplies one admitted synchronous command per instance,
+independent atomic-safe RX and owned reply storage. A concurrent command gets
+EBUSY. A monotonic deadline covers send and reply waiting, bounded locally to
+two seconds. A non-wrapping sequence allocator consumes each value at most
+once and closes permanently after U32_MAX. Each instance must belong to an
+independently established device lifetime; creating an object does not prove
+that uncertain firmware state or old transfers have been cleared.
+
+Both exact local send completion and a valid matching response are required.
+A reply can arrive before send returns, but cannot override short/failed send,
+abort or deadline expiration. Accepted RX bytes are copied before returning;
+no URB buffer or device pointer is retained. Successful transaction return
+still exposes the signed device callback status separately. A nonzero device
+status is not converted into success of a key, channel or register operation.
+
+Malformed active replies, duplicates before consumption, uncertain transport,
+timeout and abort are terminal. Different tuples cannot complete the active
+request. Shutdown aborts and joins the admitted caller; its owner must also
+close/cancel transport and stop/join all RX and other entry points before
+freeing memory. Already admitted work can overlap abort, so transport-side
+disconnect admission and cancellation remain necessary. The state spinlock
+is never held while calling send or waiting for a reply.
+
+Nine transaction KUnit cases supplement the eight codec cases. They exercise
+real independent threads, copied RX data, concurrent rejection, observed
+shutdown waiting, late replies, reply-before-send-error, timely reply followed
+by late send return, sequence exhaustion and unchanged failure outputs.
+This component currently builds only in the KUnit module. It does not establish
+original-firmware response compatibility, register a mac80211/auxiliary consumer,
+route HCC records or implement a command/register whitelist. Those integration
+and physical qualification gates remain open.

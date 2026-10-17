@@ -2705,3 +2705,44 @@ Records and manifest SHA-256:
   ``c906694b1763949f8bf999ebe9599d8d1e6f7c13e4a9a55fb8cd84476e4dd424``.
 * ``wifi-frw-supervisor-20261017T154838.344250Z`` (23 corruptions rejected),
   ``3b62b75b42b2f48c2de4047909217cef5761edf67d639a94a0a9669c299c4336``.
+
+
+Bounded Wi-Fi FRW transaction VM qualification (2026-10-18 SGT)
+------------------------------------------------------------
+
+Source ``6e7665a50f711dc7d2146c265aff4abb27bec68c`` adds the independent
+transaction component and nine KUnit cases. It serializes admission, owns copied
+reply bytes, requires both exact local send completion and a matching reply,
+uses one bounded monotonic deadline and refuses sequence wrap. Errors preserve
+the caller's result. Timeout, uncertain send, malformed/duplicate active reply
+and abort are terminal. Device callback status remains separate from transport
+success. Shutdown joins the admitted command; owner-side transport/RX draining
+and device epoch validation are explicit external requirements.
+
+Both the original eight codec cases and all nine transaction cases passed in
+the hardware-free x86-64 VM with two vCPUs, KASAN, UBSAN, lockdep and
+DEBUG_ATOMIC_SLEEP. Independent kthreads exercise reply arrival while send is
+blocked and shutdown waiting until the admitted caller exits. These are actual
+kernel scheduling tests using an injected FRW transport, not USB/hardware tests.
+The final tested source ``dd594f03568c9c5cf7a97b822aa7a21fa2d4920d`` adds
+the timely-reply/late-send-return boundary and consistent JSON totals; its
+17-case VM run also passed. Strict C checkpatch reports 0 errors/warnings/checks.
+
+The final supervisor requires both ordered suites/cases, consistent JSON totals,
+raw KTAP summaries, VM reboot completion, requested configuration and tool exit.
+Forty-six corruptions were rejected, covering missing/repeated suites/cases/raw
+markers, SKIP/failure, truncated logs, reordered suites, nested/extra cases,
+inconsistent totals, missing KASAN and kernel diagnostics. Manifest evidence
+hashes for both VM attempts were rechecked. No additional physical USB access
+occurred and no RF, original-firmware FRW response or functional STA claim is
+made. The pending new single-U power-cycle confirmation, original firmware
+startup, E hardware, peer/AP, security and upstream review gates remain open.
+
+Records and manifest SHA-256:
+
+* ``wifi-frw-20261017T160030.801885Z`` (17/17 PASS, initial source),
+  ``bf02350be2b307f37f85f94eddb5d956e01e0ab5cd6212062aeefed37524f9bb``.
+* ``wifi-frw-20261017T160203.151070Z`` (17/17 PASS, final tested source),
+  ``2352b340f9652174ab02542a98600f19ae849e88c6b4c0b19bdb05e62afe2040``.
+* ``wifi-frw-supervisor-20261017T160248.853248Z`` (46 corruptions rejected),
+  ``8929c79e2b9159a30e8b7a841082b794abb03eb64217e4a52cdfd08d23334aba``.

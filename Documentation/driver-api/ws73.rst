@@ -55,6 +55,19 @@ Runtime USB framing baseline
 The existing BLE aggregate decoder remains unchanged in this increment, so
 its original regression cases can still compare behavior independently.
 
+``usb-tx.c`` serializes switch/reset/data through one per-instance mutex and
+one fixed 4160-byte buffer. Its injectable synchronous send operation must
+return actual transfer length and abort on disconnect. All steps share an
+absolute deadline, capped at 2000 ms per transfer. A short/oversized transfer,
+transport error, cancellation or expired deadline makes the instance terminal;
+clearing the external fault does not allow another submission. Queue state is
+published only after both controls complete. Invalid input is rejected before
+any I/O. The caller retains its immutable record throughout this synchronous
+call; no skb is consumed. The owner must stop admission, cancel I/O and join
+callers before releasing the instance. These are tested sequencing contracts,
+not qualification of asynchronous USB teardown, firmware credit or runtime
+communication. The physical USB driver remains boot-observation-only.
+
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.
 Its exit criteria are a reproducible build, all named codec tests passing,

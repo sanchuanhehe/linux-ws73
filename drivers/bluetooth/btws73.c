@@ -6,7 +6,6 @@
 #include <linux/ws73-ble.h>
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
-#include <net/bluetooth/hci_sync.h>
 
 #include "btws73_proto.h"
 

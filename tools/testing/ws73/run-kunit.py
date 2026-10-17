@@ -30,7 +30,7 @@ def mutation_summary(raw, usb=True, h4=True):
     }
     result = {}
     for name, (required, marker, pattern, fields) in specs.items():
-        matches = re.findall(pattern, raw)
+        matches = re.findall(pattern + r"(?=\r?$)", raw, flags=re.MULTILINE)
         if raw.count(marker) != len(matches):
             raise ValueError(f"malformed {name} mutation marker")
         if not required:

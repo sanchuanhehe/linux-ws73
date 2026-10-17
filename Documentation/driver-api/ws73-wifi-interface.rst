@@ -285,7 +285,7 @@ device epoch validation and a real transport consumer remain prerequisites
 before issuing physical commands. Reusing a tuple after reset cannot be made safe by
 this stateless parser. The existing RF, key and first-STA gates are unchanged.
 
-See ``tools/testing/ws73/wifi/README`` for the eight-case VM suite and precise
+See ``tools/testing/ws73/wifi/README`` for the codec VM suite and precise
 ownership, scope and reproduction contracts.
 
 

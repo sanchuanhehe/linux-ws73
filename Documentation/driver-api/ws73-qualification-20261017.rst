@@ -3386,3 +3386,56 @@ Private records and manifest SHA-256:
   ``fd604cd6d1ea0016813b8a739d293f31c30da73c1791b7f6f676b55a1aec8498``.
 * ``load-ble-trial-20261017T181504.963546Z``,
   ``5b602a7248de426d9347b3fbf07dce31c759616606fdff84fc921177074b96db``.
+
+
+Independent Wi-Fi RX storage bounds (2026-10-18 SGT)
+--------------------------------------------------
+
+Source ``efe8529eae50`` implements the inner receive storage boundary already
+identified by the pinned SDK audit: 32-byte control block, 36-byte reserved
+header region and body. The new parser validates actual buffer capacity before
+returning immutable header/body spans. It never uses the device header address,
+moves data, changes skb length, strips crypto bytes or creates mac80211 flags.
+Raw channel/RSSI/cipher/status remain unqualified metadata. A future consumer
+must validate HCC/FRW, VAP/epoch, 802.11 header and the firmware-specific meaning
+of these fields before delivery. No adapter or transport consumer is added.
+
+The first candidate subset is one buffer and non-AMSDU, with local 4096-byte
+allocation and at most 31 trailing padding bounds. These are explicit initial
+policy restrictions, not measured firmware limits or supported MTU claims.
+The actual device producer, security metadata and TX completion dependencies
+remain open. This increment does not change the approved mac80211 route.
+
+The hardware-free x86-64 VM passed 22 KUnit cases: eight FRW codec, nine
+transaction and five new RX cases, with KASAN, UBSAN, lockdep and
+DEBUG_ATOMIC_SLEEP. The RX cases cover exact-sized unaligned truncations,
+all six-bit header lengths, frame/header underflow, actual-body overflow,
+all accepted padding sizes and the rejected next size, unsupported buffer
+counts/AMSDU, valid input after rejection, maximum allocation, size_t extremes
+and NULL. A hostile device pointer and poisoned unused header reservation are
+not exposed as frame bytes. Rejected input preserves the output object.
+
+The runner now requires all three exact suites, ordered raw cases and JSON
+counts, clean VM termination and the two new compiled objects. Its independent
+supervisor check rejects 61 missing/duplicate/SKIP/failed/reordered cases,
+truncated logs, inconsistent totals, disabled sanitizer configuration and
+kernel diagnostics; RX suite-specific mutations are included. Every mutation
+is checked to differ from the positive. These checks verify the supervisor,
+not original-firmware compatibility.
+
+The current-source hardware trial build and its empty-VM continuous-load
+preflight also passed. No physical USB was accessed during this increment;
+the new user power-cycle confirmation remains pending. The preceding retained
+runtime trial remains FAIL. Earlier U boot/load evidence, E/peer/AP gates,
+address provenance and formal upstream submission status are unchanged.
+
+Private records and manifest SHA-256:
+
+* ``wifi-frw-20261017T182319.566522Z``,
+  ``6f9ae1e9a29f128d05f000adf133abf9ac940b53a7c93ba70721d959b3228c41``.
+* ``wifi-frw-supervisor-20261017T182412.090053Z``,
+  ``a70d2ee82d98e66225af0d845d7c5c970771aa7d66abed407ddfa249f431fb37``.
+* ``hardware-build-20261017T182412.153454Z``,
+  ``4e8df5f318b9345478b73f7901b5c55d1951c16091cf9b7c8b39361b17c5320c``.
+* ``load-ble-trial-20261017T182455.149845Z``,
+  ``45999f1e20ef1221492117d705453e03e6bad6a880cf67750c2df10b14f30eb8``.

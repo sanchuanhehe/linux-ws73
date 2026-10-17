@@ -112,7 +112,8 @@ Inputs/result must not alias the transaction's storage or each other.
 The nine transaction cases add early reply with failed/short/long send, duplicate
 and malformed replies, abort, expired and missing replies, timely reply with expired send, sequence exhaustion,
 invalid requests, copied RX bytes, concurrent admission and real kthread shutdown
-draining. Together with the eight codec cases there are 17 expected KUnit cases.
+draining. Together with the eight codec cases these are 17 FRW cases; the five RX cases
+below bring the current total to 22.
 The runner requires both suites, every ordered case, raw summaries and VM exit.
 
 This is an independently testable internal component, not an active Wi-Fi USB

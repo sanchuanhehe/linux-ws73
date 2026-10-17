@@ -3,6 +3,7 @@
 #define _WS73_USB_TX_H
 
 #include <linux/mutex.h>
+#include <linux/wait.h>
 
 #include "usb-wire.h"
 
@@ -15,7 +16,9 @@ struct ws73_usb_tx_io {
 };
 
 struct ws73_usb_tx {
+	/* Protects scratch bytes, sequence, queue state and terminal failure. */
 	struct mutex lock;
+	wait_queue_head_t available;
 	u32 sequence;
 	u8 queue;
 	bool queue_valid;
@@ -31,11 +34,14 @@ void ws73_usb_tx_init(struct ws73_usb_tx *tx);
  * queue. Serializes control/data for this device, with one fixed scratch
  * buffer and one in-flight transfer. No callback may re-enter this object.
  * Success means local transfer completion, not a device reply or credit.
- * Any transport error, cancellation or deadline expiry makes it terminal.
+ * Lock admission waits at most the remaining deadline or 2000 ms, whichever
+ * is less. Failed admission performs no I/O and cannot change another caller's
+ * queue/terminal state. Once admitted, transport errors/cancellation/deadline
+ * expiry make the session terminal. Success never extends the caller deadline.
  * Owner must stop new callers, cancel blocked I/O and join all callers before
  * freeing tx or io. An old instance must never be reused after re-enumeration.
  */
 int ws73_usb_tx_record(struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
-			const u8 *record, size_t length, u64 deadline_ms);
+		       const u8 *record, size_t length, u64 deadline_ms);
 
 #endif

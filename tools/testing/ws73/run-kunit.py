@@ -291,7 +291,8 @@ def main():
                 },
                 "ws73-usb-tx": {
                     "ws73_usb_tx_sequence_test", "ws73_usb_tx_faults_test",
-                    "ws73_usb_tx_admission_test",
+                    "ws73_usb_tx_admission_test", "ws73_usb_tx_contention_timeout_test",
+                    "ws73_usb_tx_contention_handoff_test",
                 },
                 "ws73-ble-control": {
                     "ws73_ble_lifecycle_test", "ws73_ble_tx_failure_test",

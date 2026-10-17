@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <linux/errno.h>
+#include <linux/jiffies.h>
 #include <linux/module.h>
 
 #include "usb-tx.h"
@@ -7,6 +8,7 @@
 void ws73_usb_tx_init(struct ws73_usb_tx *tx)
 {
 	mutex_init(&tx->lock);
+	init_waitqueue_head(&tx->available);
 	tx->sequence = 0;
 	tx->queue = 0;
 	tx->queue_valid = false;
@@ -24,6 +26,26 @@ static int ws73_usb_tx_remaining(const struct ws73_usb_tx_io *io, u64 deadline)
 	if (now >= deadline)
 		return -ETIMEDOUT;
 	return min_t(u64, deadline - now, 2000);
+}
+
+static int ws73_usb_tx_lock(struct ws73_usb_tx *tx,
+			    const struct ws73_usb_tx_io *io, u64 deadline)
+{
+	int remaining;
+
+	if (mutex_trylock(&tx->lock))
+		return 0;
+	remaining = ws73_usb_tx_remaining(io, deadline);
+	if (remaining < 0)
+		return remaining;
+	/* The condition acquires the mutex only when the wait succeeds. Recheck
+	 * the absolute deadline under ownership before touching shared state.
+	 * Even a non-advancing injected clock cannot cause an unbounded wait.
+	 */
+	if (!wait_event_timeout(tx->available, mutex_trylock(&tx->lock),
+				msecs_to_jiffies(remaining)))
+		return io->cancelled(io->context) ? -ENODEV : -ETIMEDOUT;
+	return 0;
 }
 
 static int ws73_usb_tx_send(struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
@@ -46,18 +68,23 @@ static int ws73_usb_tx_send(struct ws73_usb_tx *tx, const struct ws73_usb_tx_io 
 }
 
 int ws73_usb_tx_record(struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
-			const u8 *record, size_t length, u64 deadline_ms)
+		       const u8 *record, size_t length, u64 deadline_ms)
 {
 	int ret, size;
 	u8 queue;
 
 	if (!tx || !io || !io->now_ms || !io->cancelled || !io->send || !record)
 		return -EINVAL;
-	mutex_lock(&tx->lock);
+	ret = ws73_usb_tx_lock(tx, io, deadline_ms);
+	if (ret)
+		return ret;
 	if (tx->failure) {
 		ret = tx->failure;
 		goto unlock;
 	}
+	ret = ws73_usb_tx_remaining(io, deadline_ms);
+	if (ret < 0)
+		goto unlock;
 	/* Validate the whole input before any queue-control side effect. */
 	ret = ws73_usb_single_encode(tx->buffer, sizeof(tx->buffer),
 				     tx->sequence, record, length);
@@ -100,6 +127,7 @@ failed:
 	tx->queue_valid = false;
 unlock:
 	mutex_unlock(&tx->lock);
+	wake_up_all(&tx->available);
 	return ret;
 }
 EXPORT_SYMBOL_NS_GPL(ws73_usb_tx_record, "WS73");

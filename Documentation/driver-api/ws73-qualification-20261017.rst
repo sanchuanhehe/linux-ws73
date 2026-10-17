@@ -1799,3 +1799,92 @@ The board-model/INI source question remains unanswered. Generated CLDO
 register definitions and board/trim applicability still need resolution before
 physical loading; the loader/startup/native-HCI work must continue toward real
 function communication. These are open dependencies, not substituted passes.
+
+Shared USB owner, runtime startup and physical regression
+---------------------------------------------------------
+
+Production-owner extraction was signed separately as ``3599aa5ea7ec``.
+The new startup integration was first built at
+``2906946c192b070460481e2ff8585cc7f5ba8b62``. Its seven fixture cases completed,
+but the supervisor rejected the record: it expected debug-level drain messages
+in the serial console although the fixture had captured them from /dev/kmsg.
+The FAIL record is retained. The checker was corrected to require the actual
+captured kmsg drain, its ordering and uniqueness; info-level result messages
+remain cross-checked between kernel and fixture logs. This does not turn the
+old record into PASS.
+
+The corrected clean source
+``8ba42eed34b2cf2d3943ea49d20bc79b1197e2f1`` passed:
+
+* Startup USB: seven cases at each speed, including actual control requests,
+  independent action replies, STALL, timeout, malformed reply, removal, panic
+  priority and a fresh success. Per speed: 46 bulk OUT, 30 bulk IN, seven
+  interrupt transfers, seven class SETUPs, six class payloads, seven drains
+  and six bounded no-extra-OUT checks. These are synthetic runtime devices.
+* Existing runtime USB: 17 cases at each speed. Existing boot USB: 14 cases
+  at each speed. Both use the refactored production owner.
+* Startup, runtime and boot supervisors: respectively 26, 32 and 27 log
+  rejection controls, each with five build-artifact rejection controls.
+
+``97b978a49a0bdf754da06b6fd03705d1acf4de73`` then removes only three blank lines
+before exported-symbol declarations; a diff ignoring blank lines is empty.
+That exact clean source was separately compiled for physical observation and
+for the all-module build. The latter includes the new startup consumer and
+its namespace dependency on ws73-usb. No module was loaded on the host.
+KASAN, UBSAN, SMP, lockdep and DEBUG_ATOMIC_SLEEP remain enabled in the tested
+VM configurations. Checkpatch has zero errors and one generic new-file
+MAINTAINERS reminder; submission/maintainer routing is still open. The earlier
+81 KUnit and native-HCI model results retain their own source IDs and are not
+claimed as rerun by this USB-only increment.
+
+The assigned physical U was checked at 1-1.1.1, bus 1/address 116, with its
+expected serial, ancestry, exact boot descriptors, no host driver and no
+usbfs owner. A private two-vCPU, 1-GiB VM received only this device. READM OUT
+19 completed, and IN capacity 512 returned exactly ``00000000`` (four bytes).
+VERSION OUT eight completed, and IN capacity 64 returned exactly
+``424f4f545645523030310000`` (12 bytes). QMP removal produced one disconnect
+and callback drain; the VM exited 0, and the device remained unowned with
+unchanged identity/descriptors. No kernel warning or sanitizer report occurred.
+This is **OBSERVATION_PASS_NOT_COLD**; no new physical power cycle occurred.
+The earlier user-confirmed cold U result remains separate. No WRITEM, FILES,
+QUIT, firmware payload or HCI command was sent to the physical device.
+
+Physical startup/native-HCI communication is still unqualified. The fixture's
+parameters and replies do not establish board/trim applicability, firmware
+epoch or U/E compatibility. No E, BLE peer, AP, natural recovery or RF support
+is added. Issues remain open and no external submission was sent.
+
+Local records and manifest SHA-256 (all attempts retained):
+
+* ``virtual-usb-build-20261017T122551.127876Z`` (PASS),
+  ``940173477b896cf385d819c7ba846de19c7f4c7b528fac0c6303eb5fd7cf8b72``.
+* ``virtual-usb-20261017T122627.391283Z`` (FAIL),
+  ``72477f023dcdd28dde71535ed5360d0d80c06526cb3c30ee653b8ec2f5b0b0cb``.
+* ``virtual-usb-build-20261017T122704.227678Z`` (PASS),
+  ``231ac293c18d3568d02b89139cb915a6c54b139587e2f0d63f41bed741305bac``.
+* ``virtual-usb-20261017T122742.325585Z`` (PASS),
+  ``c1a20b204dbd7e7da72730d8d682b397beb1b8b3ebb6fad418f6cb63625d0c58``.
+* ``virtual-usb-20261017T122750.392961Z`` (PASS),
+  ``c7e3cdd154821bb4f0ee7a041f51143cf4990d133540928e301dfae3aaa40eea``.
+* ``virtual-usb-20261017T122758.455610Z`` (PASS),
+  ``a340cceebe2b2353356ec854732d4b27e77ba9a8c737db63064ed9c5980c7667``.
+* ``virtual-usb-20261017T122808.777964Z`` (PASS),
+  ``56149a962cd8adeb0e8bdbfb2737fe80d974f7365e6e7bb1ebad79887f264ffb``.
+* ``virtual-usb-20261017T122818.947273Z`` (PASS),
+  ``7a4dfc2b6677930fa194fa08adf762d40481bc0e1b507f762e272662948a03de``.
+* ``virtual-usb-20261017T122830.685497Z`` (PASS),
+  ``62e953ea62655a94cedcf0e4f914521bfd5c921f0eb2fcf36c91d3f954aedf8f``.
+* ``virtual-usb-negative-20261017T122828.037847Z`` (PASS),
+  ``31304a049aa66e8e4fbdc7db715ecebbd9886ce9b412fd3c12085d195788998c``.
+* ``virtual-usb-negative-20261017T122849.556250Z`` (PASS),
+  ``06f318dd0e77dac59403305f0efe8a79e8193b1eb91c9005334636e38a178393``.
+* ``virtual-usb-negative-20261017T122849.655680Z`` (PASS),
+  ``aaf16619dc42f731123d9408d2ed9c3406ec11bcb4474257a6a4571bb309c8f2``.
+* ``observe-build-20261017T122901.742470Z`` (PASS),
+  ``1d7f9c439de2c74961da7c183be0d6b6109c666913e8dec65111b5cfbef41a36``.
+* ``usb-observe-20261017T122942.101027Z`` (OBSERVATION_PASS_NOT_COLD),
+  ``eda9ce300beac0de3e76ffc1a8c0c95c63b617a033782310788f5d559cff4851``.
+* ``hci-build-module-20261017T123008.861596Z`` (PASS),
+  ``eeed7d7f27cf303321e3e1503fb32c8f078944369cb81ed7b4c8af1c3f150bfc``.
+* ``usb-startup-static-20261017`` (CHECKED),
+  ``bedb5b0d43e163c5c50956532cae5cd902c64af1bad5a1fdca05f76f6853e50b``.

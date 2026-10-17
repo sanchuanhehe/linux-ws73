@@ -11,7 +11,7 @@ This branch is a development series based on Linux
 kernel code consumed by the native HCI adapter and KUnit tests. The shared module also contains
 firmware validation, bounded download execution and a one-shot entry joining
 fresh HCC identity to original-file acquisition and board preparation.
-The USB parent can issue one fixed boot READM chip observation, or a
+The USB parent can issue fixed boot READM then VERSION observations, or
 serialized runtime HCC identity/version queries with independent RX, and drain its
 requests on disconnect. It does not select/download firmware,
 register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
@@ -797,6 +797,49 @@ The assigned U returned 12 actual bytes ``424f4f545645523030310000``
 ``6c9cffe6cac6``. This is a sample observation, not an accepted-ROM table or
 proof of compatibility with either original firmware profile.
 
+Shared USB owner and startup integration
+----------------------------------------
+
+The physical observer and the dummy_hcd startup consumer now use one owner
+implementation in ``usb.c``. Its private ``usb-owner.h`` contract provides
+bind with an initialization worker, one-time runtime RX start, terminal failure
+and unbind/drain. The ``WS73_USB_OWNER`` namespace expresses the test module's
+link dependency on the USB owner; its Kconfig dependency prevents a built-in
+test consumer from referencing a modular owner. No user ABI or general
+register interface is added. The physical ID continues to queue the observation
+worker and cannot select the test worker through a module parameter.
+
+``WS73_USB_STARTUP_TEST`` uses a separate ffff:3736 ID and additionally rejects
+controllers other than dummy_hcd. It arms startup before enabling RX, checks
+its explicit synthetic chip/version, runs the production BSP/customization/
+BLE-enable/BOOT sequence, then requires a real USB disable transaction and
+matching q10 acknowledgement. RX and interrupt URBs complete independently
+of the initialization waiter. Function-notification logs distinguish an
+unarmed observation from delivery to an armed request; delivery alone does
+not declare HCI ready.
+
+The FunctionFS peer verifies all bulk bytes, queue switches and sequence
+numbers, the 0x21 class/interface OUT setup (request/value/index zero,
+length four), and little-endian messages 25/26. Full and high speed each pass
+seven cases: successful startup with early BOOT and acknowledged disable;
+missing enable acknowledgement; control STALL; malformed customization reply;
+removal while awaiting enable; simultaneous BSP/panic; and a fresh successful
+instance. Each speed has 46 bulk OUT, 30 bulk IN, seven interrupt and seven
+class SETUP transactions (six completed class data phases). Every instance
+joins the same production disconnect path. Six cases also check a bounded
+quiet interval for additional bulk/class OUT. The supervisor rejects 26 log
+mutations and five build-artifact mutations.
+
+This is actual URB integration with an explicitly synthetic peer, not physical
+startup or BLE qualification. The test supplies no firmware, board profile,
+HCI completion, auxiliary publication or controller registration. Its all-zero
+customization is fixture input only. The physical U separately passed READM,
+VERSION and disconnect regression on the refactored owner; that observation
+does not qualify the test peer's runtime responses. Source IDs, the initial
+supervisor failure and full evidence hashes are recorded in the qualification
+page. Physical loading still requires the board/INI, preparation and firmware
+epoch inputs; E hardware, a BLE peer, an AP and upstream review remain open.
+
 USB observations and safety boundary
 ------------------------------------
 
@@ -1026,7 +1069,7 @@ No firmware/board/device claim is made for this synthetic VM run.
 
 Still required: qualified physical-parent firmware/board/startup integration,
 independent device passthrough with cold boot and runtime identity agreement,
-actual USB class-control/startup composition, complete HCI initialization,
+physical USB class-control/startup qualification, complete HCI initialization,
 BlueZ and peer communication. Implemented codecs, loader sequencing, bounded
 H4 reassembly, BLE action engine and native HCI model coverage do not by
 themselves qualify those physical paths.

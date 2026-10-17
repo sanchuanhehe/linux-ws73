@@ -85,7 +85,7 @@ if proof.get('phase')=='boot':
   'short_command':(k,s.replace('actual=19 READM','actual=18 READM',1)),
   'missing_version_query':(k,s.replace('WS73_BOOT_VERSION_OUT actual=8 verified','',1)),
   'short_version_query':(k,s.replace('WS73_BOOT_VERSION_OUT actual=8','WS73_BOOT_VERSION_OUT actual=7',1)),
-  'missing_version_reply':(k,s.replace('WS73_BOOT_VERSION_IN actual=3 hex=563100 synthetic','',1)),
+  'missing_version_reply':(k,s.replace('WS73_BOOT_VERSION_IN actual=3 synthetic','',1)),
   'wrong_version':(k,s.replace('boot version observation: 3 bytes 563100','boot version observation: 3 bytes 563200',1)),
   'missing_kernel_version':(k.replace('boot version observation: 3 bytes 563100','missing version',1),s),
   'wrong_command':(k,s.replace('READM_40019000_4','READM_40019004_4',1)),

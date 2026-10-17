@@ -123,7 +123,7 @@ int ws73_boot_read_version(const struct ws73_boot_io *io, u64 deadline_ms,
 {
 	static const u8 command[] = "VERSION ";
 	struct ws73_boot_version parsed = {};
-	u8 reply[512];
+	u8 reply[64];
 	int ret, timeout;
 
 	if (!io || !version || !io->now_ms || !io->cancelled ||

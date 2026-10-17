@@ -403,7 +403,7 @@ static int ws73_chip_receive(void *context, u8 *data, size_t capacity, unsigned 
 	struct ws73_chip_mock *mock = context;
 
 	KUNIT_EXPECT_EQ(mock->test, mock->calls, 1);
-	KUNIT_EXPECT_EQ(mock->test, capacity, 512);
+	KUNIT_EXPECT_EQ(mock->test, capacity, mock->version ? 64 : 512);
 	if (mock->version)
 		memset(data, 0x56, capacity);
 	else if (capacity >= 4)

@@ -237,9 +237,13 @@ static void boot_trials(int control, int *eps, int log, const char *udc)
    n = read(eps[1], got, sizeof(got));
    if (n != 8 || memcmp(got, "VERSION ", 8)) die("boot VERSION bytes/length");
    puts("WS73_BOOT_VERSION_OUT actual=8 verified");
-   if (write(eps[0], "V1", 3) != 3) die("boot VERSION reply");
-   puts("WS73_BOOT_VERSION_IN actual=3 hex=563100 synthetic");
-   wait_kernel(log, "boot version observation: 3 bytes 563100");
+   unsigned int version_len = trial == 0 || trial == 12 ? 64 : 3;
+   if (version_len == 64) memset(reply, 0x56, version_len);
+   else memcpy(reply, "V1", version_len);
+   if (write(eps[0], reply, version_len) != version_len) die("boot VERSION reply");
+   printf("WS73_BOOT_VERSION_IN actual=%u synthetic\n", version_len);
+   wait_kernel(log, version_len == 64 ? "boot version observation: 64 bytes " :
+               "boot version observation: 3 bytes 563100");
   }
   if (trial != 11) {
    /* FunctionFS O_NONBLOCK only governs locks/enable, not queued IO.

@@ -55,8 +55,8 @@ against their recorded identities before accepting a loader result.
 
 The boot phase enumerates two-endpoint synthetic devices in 14 cases.
 Each successful identity exchange is followed by the exact eight-byte VERSION
-query and a three-byte opaque reply, independently checked against the driver
-observation. There are seven such exchanges; failed identity never sends
+query and a three-byte or full 64-byte opaque reply, independently checked
+against the driver observation. The full-packet cases send no extra zero packet. There are seven such exchanges; failed identity never sends
 VERSION. This is a synthetic ROM reply, not firmware compatibility evidence. It checks
 the exact fixed READM command, U/USB (including zero), E/USB, S/SDIO and E/UART
 observations, replies of 0/1/3/5/512 bytes, a withheld reply timeout, removal

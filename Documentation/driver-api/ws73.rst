@@ -783,9 +783,11 @@ and a 64-byte version capacity. Its existence does not imply the inspected
 SDK default download table actually schedules it; that table starts at WRITEM.
 
 The independent helper waits at least 1 ms, checks cancellation and remaining
-time again, then receives with a 512-byte capacity to detect oversized replies.
+time again, then receives with the SDK's 64-byte capacity. Requesting 512 bytes
+could wait indefinitely for a short packet when a full-speed device returns
+exactly 64 bytes without a terminating zero-length packet.
 Only actual counts 1..64 are retained. It publishes nothing on failed, empty,
-oversized or expired transfers; the owner terminates on error without retry.
+reported-oversized or expired transfers; the owner terminates on error without retry.
 The data are opaque bytes, logged as length-bounded hex without assuming a NUL
 terminator or accepting a textual version as proof of compatibility. This adds
 no general register interface, firmware selection or function publication.

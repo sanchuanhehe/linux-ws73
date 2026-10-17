@@ -100,11 +100,12 @@ def validate_boot(kernel, log, speed="full"):
   assert re.findall(r'WS73_BOOT_IN actual=(\d+) word=([0-9a-f]+) synthetic',part)==incoming,number
   version_ok = n<5 or n>11
   assert part.count('WS73_BOOT_VERSION_OUT actual=8 verified')==int(version_ok),number
-  assert part.count('WS73_BOOT_VERSION_IN actual=3 hex=563100 synthetic')==int(version_ok),number
+  version_len=64 if n in (0,12) else 3
+  assert re.findall(r'WS73_BOOT_VERSION_IN actual=(\d+) synthetic',part)==([str(version_len)] if version_ok else []),number
   versions=[x for x in records if 'boot version observation' in x]
   assert len(versions)==int(version_ok),number
   if version_ok:
-   assert versions[0].endswith('boot version observation: 3 bytes 563100'),number
+   assert versions[0].endswith(f'boot version observation: {version_len} bytes '+('56'*64 if version_len==64 else '563100')),number
    assert part.index('boot chip observation')<part.index('WS73_BOOT_VERSION_OUT')<part.index('boot version observation')<part.index('WS73_BOOT_NO_EXTRA_OUT'),number
   assert part.count('WS73_BOOT_WITHHOLD_REPLY')==(1 if n==10 else 0),number
   assert part.count('WS73_BOOT_NO_EXTRA_OUT window_ms=100')==(0 if n==11 else 1),number
@@ -113,7 +114,8 @@ def validate_boot(kernel, log, speed="full"):
   if n==11:assert part.index('WS73_TEST_REMOVE')<part.index('boot chip observation failed:')<part.index('device callbacks drained'),number
   else:assert part.index('boot chip observation')<part.index('WS73_BOOT_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE'),number
  assert log.count('WS73_TEST_KMSG ')==49,'extra captured boot records'
- assert len(re.findall(r'boot version observation: 3 bytes 563100',kernel))==7,'version observation count'
+ assert len(re.findall(r'boot version observation: 3 bytes 563100',kernel))==5,'short version observation count'
+ assert len(re.findall('boot version observation: 64 bytes '+'56'*64,kernel))==2,'full-packet version observation count'
  assert len(re.findall(r'boot chip observation(?: failed:| 0x)',kernel))==14,'extra/missing actual boot observations'
  assert log.count('WS73_BOOT_OUT ')==14 and log.count('WS73_BOOT_IN ')==12
  assert 'runtime chip observation' not in kernel and 'WS73_TEST_CASE' not in log

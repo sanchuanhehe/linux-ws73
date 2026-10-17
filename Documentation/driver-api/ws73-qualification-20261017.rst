@@ -802,3 +802,73 @@ hardware/epoch requirement or prove boot, customization, address or HCI setup.
 There were no physical USB operations, BLE requests, firmware downloads or
 external submissions. Cold U, E/peer/AP, board inputs, actual action invocation,
 auxiliary/HCI, Wi-Fi and portable USB test tooling remain open.
+
+Explicit customization codec and one-shot acknowledgement
+--------------------------------------------------------
+
+Commits ``7e529ca4ee61`` and ``79680da45703`` add a fresh, typed SDK110
+customization encoder and strict queue-10 TX admission. Explicit fields are
+written little endian, with separately checked 800-byte HCC and 140-byte tag
+lengths. Frequency/reference and channel-boundary packing follow the audited
+SDK fields; count is bounded to 0..8. Only use_flash=0 is supported, with zero
+flash-derived fields and padding. No board defaults, MAC fallback, flash
+reader, userspace ABI or SLE adapter are installed. Structural validity does
+not establish board/RF suitability. SDK INI frequencies and the no-INI defaults
+are documented as distinct sources, not interchangeable qualified profiles.
+
+The first codec run retained in ``20261017T081225.618998Z`` failed one of 55
+cases: the older notification suite still expected all queue-10 TX/control
+encoding to return -EOPNOTSUPP. This was an obsolete admission expectation,
+not a device observation. The correction keeps RX notification records
+rejected as TX (-EMSGSIZE) while allowing queue-10 control framing. The second
+run at ``79680da45703`` passes all 55 cases. The failed run is retained.
+
+Commit ``0df10f52427efb6e3f331bb93a8f2cdf9357d61d`` adds one-shot apply:
+PREPARING during queue controls, WAITING only immediately before data submit,
+then REPLIED and DONE only after both exact TX and timely CUSTOMIZE_RECEIVED.
+Premature/duplicate/late status, failed/short/oversized TX, timeout, abort or
+cancellation is terminal. One absolute deadline is capped to 2000 ms, including
+queue controls and reply waiting. Unarmed observations are ignored, other
+notification kinds cannot complete this request, and success cannot be reused.
+The USB parent routes validated replies and shared aborts to the new object.
+
+That final functional source passes all 60 KUnit cases. The nine added tests
+cover an independent golden endian vector, every smaller output capacity,
+truncation and forbidden header/tail changes, unchanged output on error,
+strict TX admission, short transport at each stage, one-shot/reentrant behavior,
+missing/premature/duplicate/late acknowledgement, cancellation, first-error
+retention, U64_MAX deadline arithmetic and independent RX-thread completion.
+The golden fields are deliberately synthetic and unsuitable as an RF profile.
+
+Evidence manifests (SHA-256):
+
+* ``20261017T081225.618998Z`` (FAIL),
+  ``ec5ddd55c3e3b734662a44c00c0b5329ee9fe5f187d263c08ed31749674179a5``.
+* ``20261017T081329.770688Z`` (PASS),
+  ``8787513892f6f149b0b3244a1f7d7f0698e6ddcdb30ed5a8de1e16f17aec3bfe``.
+* ``20261017T081755.008739Z`` (PASS),
+  ``b37a67ed0a8ea2f5b4d7d6c95d738948a01b9846e027b6e6c8b60e77759045cb``.
+* ``virtual-usb-build-20261017T081837.516896Z`` (PASS),
+  ``4de1db981d93e95694ed97df4c536c3b51e9245401188b55b32ed6968f468f91``.
+* ``virtual-usb-20261017T081913.980387Z`` (PASS),
+  ``d02eeae5e7e3dd7d8352160a4fd6468ee79b7f4acc196e55fe8d99568823ad0b``.
+* ``virtual-usb-20261017T081944.465822Z`` (PASS),
+  ``5db8270428766feee1fbc7a92bfc80aa87014f8f205660eecbc3854643ddb5f4``.
+
+The separate USB build and both speed runs bind the same clean final functional
+source. Each speed passes the existing 17 cases: 65 bulk OUT, 30 bulk IN, eight
+interrupt IN and 17 remove/drain sequences. KASAN/UBSAN/lockdep and
+DEBUG_ATOMIC_SLEEP report no error. They cover unarmed customization status
+routing and shared failure/teardown; they do not invoke customization apply or
+the prepared BLE USB control backend. The unchanged USB verifier hash matches
+its prior 32-negative-control qualification; those controls were not rerun or
+relabeled as new executions. All six new C/header files pass strict checkpatch.
+
+No physical USB operation, firmware download, on-device customization, HCI or
+peer exchange occurred. A known firmware epoch and board-qualified parameter
+source still gate actual apply, followed by BOOT/action/address/HCI setup.
+Tokenless acknowledgements cannot authenticate an old epoch. A future caller
+must be aborted and joined before parent release. Cold U confirmation, E/peer/AP
+resources, three-file loading integration, actual auxiliary consumers, Wi-Fi,
+portable USB test tooling and formal submission remain open. The documentation
+commit does not replace the compiled source identity above.

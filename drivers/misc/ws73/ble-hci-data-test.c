@@ -95,10 +95,11 @@ static void ws73_model_cleanup(void *context)
 {
 	struct ws73_hci_model *m = context;
 
+	if (m->adev)
+		ws73_ble_fault(m->adev, -ECANCELED);
 	complete_all(&m->published);
 	complete_all(&m->release);
 	if (m->adev) {
-		ws73_ble_fault(m->adev, -ECANCELED);
 		/* Join the synchronous model call before dropping its context. */
 		ws73_ble_stop(m->adev);
 		ws73_ble_remove(m->adev);
@@ -109,7 +110,7 @@ static void ws73_model_cleanup(void *context)
 		root_device_unregister(m->parent);
 }
 
-static bool ws73_model_match(struct device *dev, const void *unused)
+static int ws73_model_match(struct device *dev, const void *unused)
 {
 	return dev->class && !strcmp(dev->class->name, "bluetooth") &&
 	       dev->type && !strcmp(dev->type->name, "host");

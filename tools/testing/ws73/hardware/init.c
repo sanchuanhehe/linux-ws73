@@ -14,6 +14,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "usbmon.h"
+
 static void fail(const char *where)
 {
  printf("WS73_RAM_TRIAL_ERROR %s errno=%d\n", where, errno);
@@ -78,6 +80,9 @@ int main(void)
  int monitor = open("/sys/kernel/debug/usb/usbmon/0u", O_RDONLY | O_NONBLOCK);
  int kmsg = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
  if (monitor < 0 || kmsg < 0) fail("capture");
+ int binary = ws73_mon_open();
+ if (binary < 0) fail("binary usbmon open");
+ puts("WS73_MON_READY capacity=512 ring=1048576");
  puts("WS73_RAM_TRIAL_GUARDS_PASS_NO_DRIVER");
  puts("WS73_RAM_TRIAL_READY_NO_DEVICE");
  struct timespec start, now;
@@ -87,6 +92,7 @@ int main(void)
  for (;;) {
   clock_gettime(CLOCK_MONOTONIC, &now);
   if (now.tv_sec - start.tv_sec >= 90) fail("absolute VM deadline");
+  if (ws73_mon_drain(binary)) fail("binary usbmon capture");
   struct pollfd fds[] = {{monitor, POLLIN, 0}, {kmsg, POLLIN, 0}};
   if (poll(fds, 2, 100) < 0 && errno != EINTR) fail("capture poll");
   for (unsigned int i = 0; i < 2; i++) {

@@ -259,7 +259,8 @@ def main():
                 "ws73-boot-loader": {"ws73_loader_preflight_test"},
                 "ws73-board-load": {
                     "ws73_board_sequence_test", "ws73_board_faults_test",
-                    "ws73_board_admission_test",
+                    "ws73_board_admission_test", "ws73_board_echo_test",
+                    "ws73_board_echo_reject_test",
                 },
                 "ws73-startup": {
                     "ws73_startup_sequence_test", "ws73_startup_missing_test",

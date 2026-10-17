@@ -315,7 +315,10 @@ def validate_loader(kernel, log, speed="full"):
   assert part.count('WS73_LOADER_READM actual=19 verified')==1,number
   assert re.findall(r'WS73_LOADER_ID actual=(\d+) word=([0-9a-f]+) synthetic',part)==([] if n==7 else [('4',f'{words[n]:08x}')]),number
   assert re.findall(r'WS73_LOADER_WRITEM step=(\d+) actual=(\d+) verified',part)==[(str(i),str(len(writes[i]))) for i in range(11 if success else 1 if n==8 else 0)],number
-  assert re.findall(r'WS73_LOADER_REPLY ([A-Z ]+) actual=(\d+)',part)==([('WRITEM OK','9')]*11 if success else [('WRITEM NO','9')] if n==8 else []),number
+  assert re.findall(r'WS73_LOADER_REPLY ([A-Z ]+) actual=(\d+)',part)==([('WRITEM OK','9')]*11 if n in (1,9) else []),number
+  echoes=writes if n==0 else ['WRITEM 4 0x40017790 51 '] if n==8 else []
+  expected_echoes=[('WRITEM OK:'+command+'\0').encode() for command in echoes]
+  assert re.findall(r'WS73_LOADER_ECHO actual=(\d+) data=([0-9a-f]+)',part)==[(str(len(b)),b.hex()) for b in expected_echoes],number
   expected=[]
   if success:
    for image,size in enumerate([137580,20996,34056] if n==1 else [143892,20980,7708]):
@@ -341,7 +344,7 @@ def validate_loader(kernel, log, speed="full"):
  waits=re.findall(r'synthetic READY wait ns=(\d+)',kernel)
  assert len(waits)==22 and all(int(x)>=5000000 for x in waits)
  assert 'runtime chip observation' not in kernel and 'synthetic download result=' not in kernel
- return {'cases':10,'identity_queries':10,'preparation_commands':34,'files_commands':22,'payloads':22,'quit_commands':3,'drains':10,'no_extra_out_checks':9,'scope':'original SDK files via kernel firmware loader to synthetic USB; no physical firmware execution'}
+ return {'cases':10,'identity_queries':10,'preparation_commands':34,'matching_echo_replies':11,'wrong_echo_rejected':1,'files_commands':22,'payloads':22,'quit_commands':3,'drains':10,'no_extra_out_checks':9,'scope':'original SDK files via kernel firmware loader to synthetic USB; no physical firmware execution'}
 
 def validate_loader_inputs(record, manifest):
  import importlib.util

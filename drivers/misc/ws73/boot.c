@@ -40,7 +40,7 @@ static int ws73_boot_send(const struct ws73_boot_io *io, const u8 *data,
 }
 
 static int ws73_boot_expect(const struct ws73_boot_io *io, const char *expected,
-			    u64 deadline)
+			    const char *echo, u64 deadline)
 {
 	u8 reply[512];
 	size_t len = strlen(expected);
@@ -54,8 +54,20 @@ static int ws73_boot_expect(const struct ws73_boot_io *io, const char *expected,
 		return ret;
 	if (ret < len || ret > sizeof(reply))
 		return -EMSGSIZE;
-	/* Permit NUL padding, not an error string sharing a success prefix. */
-	if (memcmp(reply, expected, len) || memchr_inv(reply + len, 0, ret - len))
+	if (memcmp(reply, expected, len))
+		return -EPROTO;
+	/* Some ROMs echo WRITEM after a colon. Match the entire command,
+	 * including its trailing space; never accept arbitrary success suffixes.
+	 * Bare ACKs and NUL padding remain valid. Other ACK kinds have no echo.
+	 */
+	if (echo && ret > len && reply[len] == ':') {
+		size_t echoed = strlen(echo);
+
+		if (ret - len - 1 < echoed || memcmp(reply + len + 1, echo, echoed))
+			return -EPROTO;
+		len += 1 + echoed;
+	}
+	if (memchr_inv(reply + len, 0, ret - len))
 		return -EPROTO;
 	ret = ws73_boot_remaining(io, deadline);
 	return ret < 0 ? ret : 0;
@@ -206,7 +218,7 @@ int ws73_boot_download(const struct ws73_boot_io *io,
 			if (ret)
 				return ret;
 			progress->stage = WS73_BOOT_READY;
-			ret = ws73_boot_expect(io, "READY", deadline_ms);
+			ret = ws73_boot_expect(io, "READY", NULL, deadline_ms);
 			if (ret)
 				return ret;
 			io->wait_ready(io->context);
@@ -215,7 +227,7 @@ int ws73_boot_download(const struct ws73_boot_io *io,
 			if (ret)
 				return ret;
 			progress->stage = WS73_BOOT_FILES_OK;
-			ret = ws73_boot_expect(io, "FILES OK", deadline_ms);
+			ret = ws73_boot_expect(io, "FILES OK", NULL, deadline_ms);
 			if (ret)
 				return ret;
 			offset += len;
@@ -278,7 +290,7 @@ int ws73_boot_load(const struct ws73_boot_io *io,
 		ret = ws73_boot_send(io, command, length, deadline_ms);
 		if (ret)
 			return ret;
-		ret = ws73_boot_expect(io, "WRITEM OK", deadline_ms);
+		ret = ws73_boot_expect(io, "WRITEM OK", command, deadline_ms);
 		if (ret)
 			return ret;
 		progress->preparation_writes++;

@@ -30,7 +30,9 @@ struct ws73_board_mock {
 	struct ws73_fw_view image[3];
 	u64 now;
 	unsigned int calls, waits, fail_at, fault;
-	bool cancelled;
+	bool cancelled, echo;
+	const u8 *first_ack;
+	size_t first_ack_length;
 	u8 payload;
 };
 
@@ -105,7 +107,17 @@ static int ws73_board_receive(void *context, u8 *data, size_t capacity, unsigned
 
 	KUNIT_EXPECT_EQ(mock->test, capacity, 512);
 	KUNIT_EXPECT_GT(mock->test, timeout, 0);
+	if (step == 1 && mock->first_ack) {
+		memcpy(data, mock->first_ack, mock->first_ack_length);
+		return ws73_board_result(mock, mock->first_ack_length);
+	}
 	if (step < 22 && step % 2) {
+		if (mock->echo) {
+			int length = scnprintf(data, capacity, "WRITEM OK:%s",
+					       ws73_board_commands[step / 2]);
+
+			return ws73_board_result(mock, length + 1);
+		}
 		reply = "WRITEM OK";
 	} else if (step < 34 && step % 2) {
 		reply = (step - 22) % 4 == 1 ? "READY" : "FILES OK";
@@ -187,6 +199,66 @@ static void ws73_board_faults_test(struct kunit *test)
 	}
 }
 
+static void ws73_board_echo_test(struct kunit *test)
+{
+	static const u8 ack[] = "WRITEM OK:WRITEM 4 0x40017750 51 ";
+	struct ws73_boot_progress progress;
+	struct ws73_board_mock mock;
+	u8 padded[512] = {};
+	unsigned int i;
+	int ret;
+
+	memcpy(padded, ack, sizeof(ack));
+	for (i = 0; i <= sizeof(ack); i++) {
+		ws73_board_mock_init(&mock, test);
+		mock.echo = true;
+		mock.first_ack = padded;
+		mock.first_ack_length = i;
+		ret = ws73_boot_load(&mock.io, mock.image, &mock.board, 100, &progress);
+		if (i == 9 || i >= sizeof(ack) - 1) {
+			KUNIT_EXPECT_EQ(test, ret, 0);
+			KUNIT_EXPECT_EQ(test, progress.preparation_writes, 11);
+			KUNIT_EXPECT_EQ(test, mock.calls, 35);
+		} else {
+			KUNIT_EXPECT_EQ(test, ret, i < 9 ? -EMSGSIZE : -EPROTO);
+			KUNIT_EXPECT_EQ(test, mock.calls, 2);
+			KUNIT_EXPECT_EQ(test, progress.preparation_writes, 0);
+		}
+	}
+	ws73_board_mock_init(&mock, test);
+	mock.echo = true;
+	mock.first_ack = padded;
+	mock.first_ack_length = sizeof(padded);
+	KUNIT_EXPECT_EQ(test, ws73_boot_load(&mock.io, mock.image, &mock.board,
+					  100, &progress), 0);
+}
+
+static void ws73_board_echo_reject_test(struct kunit *test)
+{
+	static const u8 ack[] = "WRITEM OK:WRITEM 4 0x40017750 51 ";
+	struct ws73_boot_progress progress;
+	struct ws73_board_mock mock;
+	u8 modified[sizeof(ack) + 1];
+	unsigned int i;
+
+	/* Every changed byte (including address/value/space and NUL suffix)
+	 * must stop before the second write. A prefix match is insufficient.
+	 */
+	for (i = 0; i < sizeof(modified); i++) {
+		memset(modified, 0, sizeof(modified));
+		memcpy(modified, ack, sizeof(ack));
+		modified[i] ^= 1;
+		ws73_board_mock_init(&mock, test);
+		mock.first_ack = modified;
+		mock.first_ack_length = sizeof(modified);
+		KUNIT_EXPECT_EQ(test, ws73_boot_load(&mock.io, mock.image, &mock.board,
+						  100, &progress), -EPROTO);
+		KUNIT_EXPECT_EQ(test, mock.calls, 2);
+		KUNIT_EXPECT_EQ(test, progress.preparation_writes, 0);
+		KUNIT_EXPECT_EQ(test, mock.waits, 0);
+	}
+}
+
 static void ws73_board_admission_test(struct kunit *test)
 {
 	struct ws73_board_mock mock;
@@ -229,6 +301,8 @@ static struct kunit_case ws73_board_cases[] = {
 	KUNIT_CASE(ws73_board_sequence_test),
 	KUNIT_CASE(ws73_board_faults_test),
 	KUNIT_CASE(ws73_board_admission_test),
+	KUNIT_CASE(ws73_board_echo_test),
+	KUNIT_CASE(ws73_board_echo_reject_test),
 	{}
 };
 

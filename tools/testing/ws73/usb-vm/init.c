@@ -430,9 +430,18 @@ static void loader_trials(int control, int *eps, int log, const char *udc)
     n = read(eps[1], got, sizeof(got));
     if (n != (ssize_t)strlen(writes[step]) || memcmp(got, writes[step], n)) die("board write bytes");
     printf("WS73_LOADER_WRITEM step=%u actual=%zd verified\n", step, n);
-    const char *ack = trial == 8 ? "WRITEM NO" : "WRITEM OK";
-    if (write(eps[0], ack, 9) != 9) die("board reply");
-    printf("WS73_LOADER_REPLY %s actual=9\n", ack);
+    if (trial == 0 || trial == 8) {
+     unsigned char ack[80];
+     const char *echo = trial == 8 ? "WRITEM 4 0x40017790 51 " : writes[step];
+     int length = snprintf((char *)ack, sizeof(ack), "WRITEM OK:%s", echo) + 1;
+     if (length <= 0 || length > (int)sizeof(ack) || write(eps[0], ack, length) != length) die("board echo");
+     printf("WS73_LOADER_ECHO actual=%d data=", length);
+     for (int i = 0; i < length; i++) printf("%02x", ack[i]);
+     puts("");
+    } else {
+     if (write(eps[0], "WRITEM OK", 9) != 9) die("board reply");
+     puts("WS73_LOADER_REPLY WRITEM OK actual=9");
+    }
     if (trial == 8) break;
    }
   }

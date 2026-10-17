@@ -16,15 +16,35 @@ module_param(devnum, uint, 0400);
 MODULE_PARM_DESC(devnum, "Guest device number from the successful observation, required");
 static atomic_t available = ATOMIC_INIT(1);
 
+/* Trial-only full reply capture: usbmon text keeps only the first 32 bytes. */
+static int ws73_trial_receive(void *context, u8 *data, size_t capacity,
+			      unsigned int timeout)
+{
+	struct ws73_usb *ws = context;
+	size_t offset;
+	int ret;
+
+	ret = ws->boot_io.receive(context, data, capacity, timeout);
+	if (ret > 0 && ret <= capacity && ret <= 512)
+		for (offset = 0; offset < ret; offset += 32)
+			dev_info(&ws->interface->dev,
+				 "RAM trial RX length=%d offset=%zu data=%*phN\n",
+				 ret, offset, (int)min_t(size_t, 32, ret - offset),
+				 data + offset);
+	return ret;
+}
+
 static void ws73_trial_load(struct work_struct *work)
 {
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	/* Explicit SDK110 USB reference INI input, not a universal board default. */
 	const struct ws73_boot_board board = { .xo_coarse = 8, .xo_fine = 60 };
 	struct ws73_boot_session session = {};
+	struct ws73_boot_io io = ws->boot_io;
 	int ret;
 
-	ret = ws73_boot_start(&ws->interface->dev, &ws->boot_io, &board,
+	io.receive = ws73_trial_receive;
+	ret = ws73_boot_start(&ws->interface->dev, &io, &board,
 			      ws->boot_io.now_ms(ws) + 15000, &session);
 	if (ret)
 		ws73_usb_fail(ws, ret);

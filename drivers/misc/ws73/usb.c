@@ -8,39 +8,7 @@
 #include <linux/usb.h>
 #include <linux/workqueue.h>
 
-#include "boot.h"
-#include "usb-io.h"
-#include "ble-link.h"
-#include "startup.h"
-#include "runtime.h"
-
-struct ws73_usb {
-	struct usb_device *udev;
-	struct usb_interface *interface;
-	struct usb_anchor submitted;
-	struct work_struct initialize;
-	struct work_struct stop;
-	struct ws73_usb_tx tx;
-	struct ws73_platform_request identity;
-	struct ws73_startup startup;
-	struct ws73_ble_control_io ble_io;
-	struct ws73_usb_tx_io runtime_io;
-	struct ws73_ble_link ble;
-	struct ws73_boot_io boot_io;
-	struct ws73_usb_io io;
-	struct urb *rx_urb;
-	struct urb *interrupt_urb;
-	u8 *rx_buffer;
-	u8 *interrupt_buffer;
-	spinlock_t lock; /* Serialize submission admission with disconnect. */
-	bool disconnected;
-	bool runtime;
-	int error;
-	u8 in;
-	u8 out;
-	u8 notifications_seen; /* Observations only; never used to enable a function. */
-	bool bsp_seen;
-};
+#include "usb-owner.h"
 
 static void ws73_usb_stop(struct work_struct *work)
 {
@@ -52,7 +20,7 @@ static void ws73_usb_stop(struct work_struct *work)
 	usb_kill_urb(ws->interrupt_urb);
 }
 
-static void ws73_usb_fail(struct ws73_usb *ws, int error)
+void ws73_usb_fail(struct ws73_usb *ws, int error)
 {
 	unsigned long flags;
 	bool first = false;
@@ -69,6 +37,8 @@ static void ws73_usb_fail(struct ws73_usb *ws, int error)
 	if (first)
 		schedule_work(&ws->stop);
 }
+
+EXPORT_SYMBOL_NS_GPL(ws73_usb_fail, "WS73_USB_OWNER");
 
 static u64 ws73_usb_now(void *context)
 {
@@ -99,6 +69,19 @@ static int ws73_usb_submit_rx(struct ws73_usb *ws, struct urb *urb)
 	spin_unlock_irqrestore(&ws->lock, flags);
 	return ret;
 }
+
+int ws73_usb_start_rx(struct ws73_usb *ws)
+{
+	int ret;
+
+	if (!ws->runtime)
+		return -EINVAL;
+	ret = ws73_usb_submit_rx(ws, ws->interrupt_urb);
+	if (!ret)
+		ret = ws73_usb_submit_rx(ws, ws->rx_urb);
+	return ret;
+}
+EXPORT_SYMBOL_NS_GPL(ws73_usb_start_rx, "WS73_USB_OWNER");
 
 static void ws73_usb_interrupt_complete(struct urb *urb)
 {
@@ -236,9 +219,7 @@ static void ws73_usb_initialize(struct work_struct *work)
 	if (ws->runtime) {
 		const char *stage = "chip";
 
-		ret = ws73_usb_submit_rx(ws, ws->interrupt_urb);
-		if (!ret)
-			ret = ws73_usb_submit_rx(ws, ws->rx_urb);
+		ret = ws73_usb_start_rx(ws);
 		if (!ret)
 			ret = ws73_platform_get_chip(&ws->identity, &ws->tx, &ws->runtime_io,
 						     deadline, &identity);
@@ -290,13 +271,16 @@ static void ws73_usb_transport_fault(void *context, int error)
 	ws73_usb_fail(context, error);
 }
 
-static int ws73_usb_probe(struct usb_interface *interface, const struct usb_device_id *id)
+int ws73_usb_bind(struct usb_interface *interface, work_func_t initialize)
 {
 	struct usb_host_interface *alt = interface->cur_altsetting;
 	struct usb_device *udev = interface_to_usbdev(interface);
 	struct ws73_usb *ws;
 	unsigned int i;
 	bool runtime = alt->desc.bNumEndpoints == 5;
+
+	if (!initialize)
+		return -EINVAL;
 
 	/* Match the SDK boot endpoint roles as well as the interface protocol. */
 	if (interface->num_altsetting != 1 || alt->desc.bInterfaceNumber ||
@@ -330,7 +314,7 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	ws->out = alt->endpoint[1].desc.bEndpointAddress;
 	spin_lock_init(&ws->lock);
 	init_usb_anchor(&ws->submitted);
-	INIT_WORK(&ws->initialize, ws73_usb_initialize);
+	INIT_WORK(&ws->initialize, initialize);
 	INIT_WORK(&ws->stop, ws73_usb_stop);
 	ws73_usb_tx_init(&ws->tx);
 	ws73_platform_init(&ws->identity);
@@ -389,7 +373,9 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	return 0;
 }
 
-static void ws73_usb_disconnect(struct usb_interface *interface)
+EXPORT_SYMBOL_NS_GPL(ws73_usb_bind, "WS73_USB_OWNER");
+
+void ws73_usb_unbind(struct usb_interface *interface)
 {
 	struct ws73_usb *ws = usb_get_intfdata(interface);
 	unsigned long flags;
@@ -416,6 +402,13 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	kfree(ws);
 }
 
+EXPORT_SYMBOL_NS_GPL(ws73_usb_unbind, "WS73_USB_OWNER");
+
+static int ws73_usb_probe(struct usb_interface *interface, const struct usb_device_id *id)
+{
+	return ws73_usb_bind(interface, ws73_usb_initialize);
+}
+
 static const struct usb_device_id ws73_usb_ids[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0xffff, 0x3733, 0xe0, 0x02, 0x02) },
 	{}
@@ -425,7 +418,7 @@ MODULE_DEVICE_TABLE(usb, ws73_usb_ids);
 static struct usb_driver ws73_usb_driver = {
 	.name = "ws73",
 	.probe = ws73_usb_probe,
-	.disconnect = ws73_usb_disconnect,
+	.disconnect = ws73_usb_unbind,
 	.id_table = ws73_usb_ids,
 };
 module_usb_driver(ws73_usb_driver);

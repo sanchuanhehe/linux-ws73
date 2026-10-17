@@ -51,3 +51,27 @@ No autoload alias alone cannot prevent a loaded USB driver from matching
 new devices. The late registration, PID 1 constraint, enumeration binding
 and one-shot admission are separate protections; the pure tests do not
 qualify real USB matching, firmware loading or RF behavior.
+
+Native HCI experiment
+---------------------
+
+The separate `build.py --hci` output enables the existing btws73 auxiliary
+consumer and native Bluetooth stack. It leaves the previous non-HCI build
+and its evidence pointer intact. The BLE trial's default behavior still ends
+after acknowledged disable. Explicit `native_hci=1` instead publishes the BLE
+child after that disable; native open then owns the next enable. Publication
+is not an HCI initialization result. Builds without BT_WS73 reject this mode.
+
+Use this option only in the tagged VM's continuous fresh-load experiment:
+identity, three-file download, new runtime owner, reference customization,
+enable/BOOT and acknowledged disable must precede publication. No HCI traffic
+has been sent in that epoch. Do not apply it to an arbitrary retained-runtime
+instance. The guest has no BlueZ daemon, network interface or radio test
+requests; it observes native initialization and management Read Info only.
+
+Archive actual command/event pairs and any initialization failure. A returned
+BD_ADDR is an observation, not proof of a provisioned public address. This
+mode does not close board/address/RF, peer, E or production publication gates.
+The regular USB driver remains observation-only. A new physical trial requires
+its own identity/ownership checks and power-removal confirmation; never reuse
+a consumed confirmation or report the empty VM preflight as hardware evidence.

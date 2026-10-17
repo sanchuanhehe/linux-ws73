@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Build a tagged-VM WS73 RAM trial kernel and external test module; no device I/O."""
 import datetime
+import argparse
 import fcntl
 import hashlib
 import json
@@ -12,7 +13,6 @@ import subprocess
 
 SOURCE = Path(__file__).resolve().parents[4]
 WORK = SOURCE.parent / ".dev/ws73-upstream"
-BUILD = WORK / "build-hardware"
 CONFIG = Path(__file__).with_name("hardware.config")
 
 
@@ -27,20 +27,29 @@ def git(*args):
 def main():
     if not __debug__:
         raise RuntimeError("Run without Python optimization")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--hci", action="store_true",
+                        help="build the native HCI experiment in a separate fixed output")
+    args = parser.parse_args()
+    build = WORK / ("build-hardware-hci" if args.hci else "build-hardware")
     WORK.mkdir(parents=True, exist_ok=True)
     with (WORK / "build.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         assert not git("status", "--porcelain"), "commit sources before qualifying"
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-        record = WORK / "records" / ("hardware-build-" + stamp)
+        record = WORK / "records" / (("hardware-hci-build-" if args.hci else "hardware-build-") + stamp)
         record.mkdir(parents=True)
         print(record, flush=True)
-        BUILD.mkdir(exist_ok=True)
-        shutil.copyfile(CONFIG, record / "hardware.config")
+        build.mkdir(exist_ok=True)
+        config = CONFIG.read_text()
+        if args.hci:
+            config = config.replace("# CONFIG_NET is not set", "CONFIG_NET=y\nCONFIG_BT=y\nCONFIG_BT_WS73=y")
+        (record / "hardware.config").write_text(config)
         shutil.copyfile(__file__, record / "build.py")
         manifest = {"status": "INCOMPLETE", "source": git("rev-parse", "HEAD"),
                     "jobs": 4, "command": [], "artifacts": {}, "tools": {},
-                    "config_sha256": sha(CONFIG), "builder_sha256": sha(Path(__file__))}
+                    "native_hci": args.hci,
+                    "config_sha256": sha(record / "hardware.config"), "builder_sha256": sha(Path(__file__))}
 
         def save():
             (record / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
@@ -59,11 +68,11 @@ def main():
                         })
                     },
                 }
-            env = dict(os.environ, CCACHE_DISABLE="1", KCONFIG_ALLCONFIG=str(CONFIG),
+            env = dict(os.environ, CCACHE_DISABLE="1", KCONFIG_ALLCONFIG=str(record / "hardware.config"),
                        KCONFIG_DEFCONFIG_LIST="/dev/null", KCONFIG_CONFIG=".config")
             with (record / "build.log").open("w") as log:
                 for target in ("allnoconfig", "bzImage", "modules"):
-                    command = ["make", "-C", str(SOURCE), f"O={BUILD}", "ARCH=x86_64",
+                    command = ["make", "-C", str(SOURCE), f"O={build}", "ARCH=x86_64",
                                "LLVM=1", "W=1", "-j4", target]
                     manifest["command"].append(command)
                     save()
@@ -71,17 +80,17 @@ def main():
                                    env=env, check=True)
                     # Check dependencies before accepting or building a weakened configuration.
                     if target == "allnoconfig":
-                        actual = (BUILD / ".config").read_text().splitlines()
-                        for line in CONFIG.read_text().splitlines():
+                        actual = (build / ".config").read_text().splitlines()
+                        for line in config.splitlines():
                             if line.startswith("CONFIG_") or line.startswith("# CONFIG_"):
                                 assert line in actual, "unresolved config: " + line
-            module = WORK / "build-hardware-module"
+            module = WORK / ("build-hardware-hci-module" if args.hci else "build-hardware-module")
             module.mkdir(exist_ok=True)
             for name in ("loader.c", "guard.h", "guard-test.c", "ble-trial.c", "ble-profile.h", "ble-profile-test.c", "Kbuild"):
                 original = Path(__file__).with_name(name)
                 shutil.copyfile(original, module / name)
                 shutil.copyfile(original, record / name)
-            command = ["make", "-C", str(SOURCE), f"O={BUILD}", f"M={module}",
+            command = ["make", "-C", str(SOURCE), f"O={build}", f"M={module}",
                        f"WS73_SOURCE={SOURCE}", "ARCH=x86_64", "LLVM=1", "W=1", "-j4", "modules"]
             manifest["command"].append(command)
             with (record / "module-build.log").open("w") as log:
@@ -97,10 +106,14 @@ def main():
             names += [f"drivers/misc/ws73/{name}.o" for name in
                       ("usb", "usb-io", "boot", "boot-loader", "firmware", "runtime", "usb-tx", "usb-wire",
                        "platform-config", "service", "ble-control", "customize", "customize-request", "startup", "ble", "ble-link")]
+            if args.hci:
+                names += ["drivers/bluetooth/btws73.o", "drivers/bluetooth/btws73_proto.o",
+                          "net/bluetooth/hci_core.o", "net/bluetooth/hci_sync.o",
+                          "net/bluetooth/hci_event.o", "net/bluetooth/mgmt.o"]
             for name in names:
                 dest = record / name
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(BUILD / name, dest)
+                shutil.copyfile(build / name, dest)
                 manifest["artifacts"][name] = sha(dest)
             manifest["status"] = "PASS"
         except BaseException as error:
@@ -109,7 +122,8 @@ def main():
             raise
         finally:
             save()
-        (WORK / "hardware-build-record").write_text(str(record) + "\n")
+        pointer = "hardware-hci-build-record" if args.hci else "hardware-build-record"
+        (WORK / pointer).write_text(str(record) + "\n")
         print("PASS", flush=True)
 
 

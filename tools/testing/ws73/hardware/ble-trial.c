@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Explicit one-device VM trial; no HCI publication or radio traffic commands. */
+/* Explicit one-device VM trial; optional native HCI, no radio test requests. */
 #include <linux/dmi.h>
 #include <linux/firmware.h>
 #include <linux/module.h>
@@ -13,6 +13,9 @@ static char *serial;
 module_param(serial, charp, 0400);
 static unsigned int devnum;
 module_param(devnum, uint, 0400);
+/* Only the continuous fresh-load supervisor may request this experiment. */
+static bool native_hci;
+module_param(native_hci, bool, 0400);
 static atomic_t available = ATOMIC_INIT(1);
 static struct ws73_customization parameters;
 
@@ -50,10 +53,23 @@ static void ws73_ble_trial_start(struct work_struct *work)
 	stage = "disable";
 	ret = ws73_ble_control_set(&ws->startup.ble, &ws->ble_io, false,
 				   ws->runtime_io.now_ms(ws) + 2000);
+	if (!ret && native_hci) {
+		/* No HCI was sent in this fresh-load epoch. The acknowledged close
+		 * precedes publication; native open owns the next enable transaction.
+		 * This reference-board experiment does not qualify address provenance.
+		 */
+		stage = "publish";
+		ret = ws73_ble_link_publish(&ws->ble, &ws->interface->dev);
+	}
 done:
 	if (ret)
 		ws73_usb_fail(ws, ret);
-	dev_info(&ws->interface->dev, "BLE trial result=%d stage=%s; no HCI published\n", ret, stage);
+	if (native_hci)
+		dev_info(&ws->interface->dev,
+			 "BLE trial result=%d stage=%s; native HCI experiment, address source unqualified\n",
+			 ret, stage);
+	else
+		dev_info(&ws->interface->dev, "BLE trial result=%d stage=%s; no HCI published\n", ret, stage);
 }
 
 static int ws73_ble_trial_probe(struct usb_interface *intf, const struct usb_device_id *id)
@@ -91,6 +107,7 @@ static int __init ws73_ble_trial_init(void)
 	int ret;
 
 	if (!serial || !*serial || !devnum || devnum > 127 ||
+	    (native_hci && !IS_ENABLED(CONFIG_BT_WS73)) ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
 	    !dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial"))
 		return -ENODEV;

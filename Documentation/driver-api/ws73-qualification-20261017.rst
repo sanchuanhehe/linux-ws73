@@ -3564,3 +3564,60 @@ Private records and manifest SHA-256:
   ``7c3bef00e63f9e348cd05680d69633c1e578d5b8d8901dfb93b901820e3c604e``.
 * ``native-hci-preparation-20261017T222842.377146Z``,
   ``6e6e680b6ed4d20a5d85b0ebfaa14a3d5c776e32970c3236376478ba162a410f``.
+
+Explicit LE configuration and wire-based native close gate (2026-10-18 SGT)
+-------------------------------------------------------------------------
+
+Pre-execution review found two gaps in the preceding physical-trial
+preparation. First, allnoconfig left CONFIG_BT_LE disabled even though the
+native HCI driver and command initialization compiled. Source ``2202c0568ffc``
+explicitly enables CONFIG_BT_LE and disables CONFIG_BT_BREDR in both the
+hardware-HCI and virtual USB fixtures. Earlier records retain their actual
+configuration and are not relabeled as complete LE-stack qualification.
+
+Second, the USB owner logs each function-notification kind only once through
+notifications_seen. A supervisor waiting for a second BLE_CLOSE printk could
+therefore time out after a successful native close. The earlier readiness was
+withdrawn before any physical execution. The corrected private supervisor
+waits for actual capture records: four completed ordered class transactions
+(25,26,25,26), with both complete BLE_CLOSE replies following their matching
+requests. Text timestamps are joined to full binary receive payloads, and
+reused URB identifiers are handled by ordered pending requests. Final complete
+transcript validation still checks all transfers, HCI replies and owner drains.
+Neither management's powered bit nor deduplicated printk output is a close ACK.
+
+The new wire gate passed two synthetic positives and rejected 13 missing,
+short, malformed, failed, wrong-device/queue/role/tag controls. It also rejected
+the hash-verified earlier real U startup/disable capture as insufficient for
+native HCI close. The HCI transcript checker covers read-buffer v1/v2 and the
+native default-PHY/disabled-ISO-host initialization commands traced to
+net/bluetooth/hci_sync.c. Two synthetic transcripts passed; 24 shared negative
+types plus two extended-path mutations were rejected. This does not establish
+actual firmware capabilities or permit radio test commands.
+
+The corrected hardware-HCI build and empty VM preflight passed. The virtual
+USB build and full/high-speed native HCI runs each passed three cases: two
+initializations and Reset-in-flight cancellation, 27 commands/26 synthetic
+replies, two management readouts/auto-off acknowledgements and three drains.
+KASAN/UBSAN/lockdep diagnostics were absent. The virtual supervisor rejected
+34 log and five artifact mutations. These are bounded synthetic integration
+results, not physical HCI/peer qualification or resolution of prior KCSAN
+reports. No new physical USB operation occurred; the requested fresh allocated-U
+power-removal confirmation remains pending and must not be inferred from time.
+
+Private records and manifest SHA-256:
+
+* ``hardware-hci-build-20261017T223332.663004Z``,
+  ``9275b75501df6ae08b0bcbae9a10368ebf1ccd0233a9f15caf6a37a9ecac91ec``.
+* ``virtual-usb-build-20261017T223542.759832Z``,
+  ``1baafdf16eecafd376a02d547c743b52bae2136c491e08b56b9a2df91a22d72a``.
+* ``virtual-usb-20261017T223631.281003Z``,
+  ``f637b64624501dd76099972c7a9519cdbd32b58db44af67dad26a888c565cbff``.
+* ``virtual-usb-20261017T223703.034283Z``,
+  ``963bdd88f9b042b63dffbcae4d12cc2b0601f402b6107b17c38b4bb06cd728fe``.
+* ``virtual-usb-negative-20261017T223833.440080Z``,
+  ``8a751726eca0eecba9d160ac00003481b39074f161de32b05cee20830f7b11ab``.
+* ``load-hci-trial-20261017T223835.915555Z``,
+  ``dc8c9e631ea2627147d4b676e85c5c62654e0154c76a6851935b637aad5d20de``.
+* ``native-hci-le-correction-20261017T223929.335578Z``,
+  ``854861f6ccc21ab94e88de9bc27c13d28e05ee1a668b0d72a2d8afe5b9e7a5cd``.

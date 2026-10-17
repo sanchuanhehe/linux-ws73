@@ -2210,3 +2210,68 @@ Records and manifest SHA-256:
   ``1345f905e49657a89eb9b8ac41522a795f2c0bd0ceceec42a5e8364e0d4cc5c4``.
 * ``mutation-supervisor-20261017T135303.863717Z`` (PASS),
   ``e928b2a8062bcf2ae4f7ade1099d14a720b0dec7f0124e9cc3527841729d5e87``.
+
+Actual driver cross-architecture compile and link matrix
+-------------------------------------------------------
+
+The earlier Wi-Fi ABI object probe did not compile the actual driver. The new
+``tools/testing/ws73/build-cross.py`` compiles vmlinux first, then the shared
+core, USB I/O/owner, native HCI, H4 protocol and Bluetooth stack modules.
+Profiles are arm64 little endian, i386 32-bit little endian and PowerPC64 big
+endian with Clang, plus x86-64 with GCC. PowerPC64 uses the supported ELFv2
+kernel ABI. Arm64 big endian depends on BROKEN in this tree and is excluded.
+No KUnit, virtual USB or hardware trial modules are enabled in this matrix.
+
+The first four builds at ``8e8fc64252e82f7e5e36edbdbc2fe7aa432fd99d`` pass,
+but configuration review found that allnoconfig disables BT_LE. These records
+are retained as minimal-HCI compile results, not LE-stack coverage. The
+follow-up at ``1709ab9d18ced4906afee5f5ecc0b18c81511fe7`` explicitly requires
+BT_LE=y and BT_BREDR=n. All four follow-up builds pass too. They are incremental
+builds in the corresponding fixed per-profile directories; no production C
+changed between these two sources. Their earlier full-build records remain
+part of the provenance. Each profile runs sequentially with four jobs and the
+shared build lock, after checking whole-machine resource use.
+
+Every build checks resolved module dependencies, and completes vmlinux and
+module links without unresolved symbols. The archived kernel and six target
+modules have the expected ELF word size, byte order, type and machine ID.
+Configuration, source, tools, command log and artifact hashes are retained;
+a separate audit verifies all artifact hashes, configuration modes and ELF
+headers, and saves llvm-readelf output for shared-core/native-HCI modules.
+All builds use W=1. No WS73 source warning occurs. The first arm64 build has
+517 initializer-overrides warnings in architecture syscall/trap tables, and
+the first GCC build has one unused-but-set-variable warning in
+fs/proc/proc_sysctl.c. These are retained, not hidden by the subsequent
+incremental logs (which contain no warnings). Compiler versions are pinned
+in each manifest. This is not a whole-kernel zero-warning claim.
+
+Only the modular BLE consumer plus its shared USB dependencies is qualified
+for compilation here. Built-in/module permutations, cross-architecture runtime,
+module insertion/removal, Wi-Fi, PM and physical behavior are not established.
+No kernel/module was installed or executed, and no hardware was accessed.
+The physical READM failure and pending new single-device power-cycle
+confirmation remain unresolved; prior physical observations retain their
+original scope. No formal support or upstream acceptance gate is closed.
+
+Private records and manifest SHA-256 (first round BT_LE disabled, second
+round BT_LE enabled for each profile):
+
+* ``cross-arm64-clang-20261017T140302.019714Z``,
+  ``6a2c081f7349b309f56f5202cb7dd372d62df364e7349d952cf116f7c02f9a51``.
+* ``cross-arm64-clang-20261017T140934.630843Z``,
+  ``99249bf9aaed09aa3c1673b2517dd045232889551bb5a2de2bb22f1458603a38``.
+* ``cross-i386-clang-20261017T140442.559379Z``,
+  ``58c81751811f897c7ace376d494f13861b255f6d4cecf06c0f2254095e501982``.
+* ``cross-i386-clang-20261017T140949.075009Z``,
+  ``72a3f817e6134609dead72c8ba736706130742c2356d23dd2677726729bbbe82``.
+* ``cross-ppc64be-clang-20261017T140614.346468Z``,
+  ``c5e470b514b6439f63c898715f499d4a02f5f5030c53fd9efcf0fea7da61d571``.
+* ``cross-ppc64be-clang-20261017T141008.453016Z``,
+  ``40ace5feea06a0f6aa203c400501e839ade58f1a35c654196f236795fc1ef889``.
+* ``cross-x86_64-gcc-20261017T140739.378910Z``,
+  ``82764608f6fe61bdf438e6114bba7e78c6ee28b9807907254c5e03c1c523f7de``.
+* ``cross-x86_64-gcc-20261017T141023.929702Z``,
+  ``fdbd201e28222592dcbdac5968f907e74caf180e2e70e1180ec052c6bc552e47``.
+
+Artifact audit ``cross-matrix-audit.json`` SHA-256:
+``f93d102bcef6e7de886b30ff71180e807302dc769a18fd438d5eec7e4d473632``.

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config WS73_CORE
+	tristate
+	help
+	  Shared WS73 protocol helpers used by actual function consumers.
+	  This initial component validates HCC records and chip replies.
+	  It has no Bluetooth or Wi-Fi stack dependency and does not yet
+	  register a USB driver, download firmware or enable a function.

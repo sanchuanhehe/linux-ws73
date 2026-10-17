@@ -340,3 +340,5 @@ kunit_test_suite(btws73_suite);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("WS73 BLE wire codec tests");
+
+MODULE_IMPORT_NS("WS73");

@@ -109,7 +109,8 @@ def main():
         manifest["source_after"] = source_identity(after_dir)
         manifest["artifacts"] = {}
         for name in (".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
-                     "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o"):
+                     "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o",
+                     "drivers/misc/ws73/hcc.o"):
             path = build / name
             if path.is_file():
                 dest = record / "artifacts" / name
@@ -135,7 +136,8 @@ def main():
                               {case["name"] for case in cases} == expected and
                               all(case["status"] == "PASS" for case in cases))
         required = {".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
-                    "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o"}
+                    "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o",
+                    "drivers/misc/ws73/hcc.o"}
         passed = (passed and run.returncode == 0 and before == manifest["source_after"]
                   and required <= manifest["artifacts"].keys())
         manifest["status"] = "PASS" if passed else "FAIL"

@@ -845,6 +845,36 @@ supervisor failure and full evidence hashes are recorded in the qualification
 page. Physical loading still requires the board/INI, preparation and firmware
 epoch inputs; E hardware, a BLE peer, an AP and upstream review remain open.
 
+Explicit allocated-U RAM trial
+------------------------------
+
+``tools/testing/ws73/hardware/`` provides a separate VM-only development
+loader consumer. It requires the trial DMI markers, an explicit allocated
+serial, the first guest USB port and the verified boot descriptor. It has
+no module autoload alias. The normal physical driver remains an observer;
+no universal board defaults or automatic physical loading are introduced.
+The experiment uses explicitly sourced SDK110 USB reference inputs: XO
+8/60 (0x3c08), temperature compensation disabled, fixed calibration-RAM
+preparation, and the three independently validated original U files.
+Board marketing identification and general RF/cross-board applicability
+remain unqualified. A bounded RAM experiment does not establish those claims.
+
+The guest first requires successful U READM and the previously observed ROM
+version, then explicitly rebinds only its allocated interface. The production
+loader must independently read identity, validate all files, prepare RAM,
+download and reach WAIT_RUNTIME. A newly enumerated normal observer must
+independently query runtime identity/version. No boot object transfers to the
+runtime instance; no retry, alternate firmware, eFuse or flash operation is
+provided by this experiment.
+
+At source 7036cefcb555, the first actual attempt stopped at the initial
+observer's READM OUT timeout, before the explicit rebind. No board write or
+firmware download ran. Cancellation and disconnect drained, and the VM exited
+normally; physical startup remains unverified. The timeout cause is unknown.
+This failed attempt does not erase the earlier successful cold U read or
+constitute another cold trial. The qualification page retains every build,
+empty-VM preparation failure and the actual attempt with their own hashes.
+
 Native HCI initialization through the USB owner
 -----------------------------------------------
 

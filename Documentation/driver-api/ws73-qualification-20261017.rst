@@ -1978,3 +1978,82 @@ Additional records and manifest SHA-256:
   ``d3136f8b526ca20a4ed6d62849640dcb7cec58d2046814f837bfd81ea97b454c``.
 * ``virtual-usb-negative-20261017T125309.383175Z`` (PASS),
   ``7167654bd15afc5d103035f06cb2a5d0f35041770311c75c148237812b01b04a``.
+
+Allocated-U RAM trial: preparation and failed first physical attempt
+------------------------------------------------------------------
+
+Compiled and physically attempted source:
+``7036cefcb555c15910bd01892a6c63f83af23a0b``. The external test module and
+instrumented x86-64 KVM kernel build with four allocated jobs. The trial VM
+has two vCPUs, 1 GiB, no disk/network and only the individually allocated U
+passed through after identity/topology/ownership checks. SMP, KASAN, UBSAN,
+lockdep and DEBUG_ATOMIC_SLEEP are enabled. Loading the external trial
+module produces the expected out-of-tree taint inside the VM; it is not a
+host-module operation or a kernel warning.
+
+The explicit SDK110 reference inputs are XO coarse/fine 8/60, temperature
+compensation off, and the fixed USB RAM preparation. All three original U
+files are validated and supplied separately; no combined or E fallback is
+installed. This bounded development selection does not qualify production
+board defaults, RF calibration or cross-board compatibility. There is no
+BLE/Wi-Fi enabling, eFuse/flash writing or hub/controller operation.
+
+Preparation attempts are retained: the initial configuration rejected an
+unresolved USB_XHCI_PCI dependency; USB_PCI/PCI_MSI resolved the build. The
+first empty VM lacked DMIID sysfs, fixed in 7036cefcb555. Another launch could
+not bind the local QMP socket inside the sandbox. The following empty VM
+lacked the initramfs /dev/kmsg node; adding that node to the private supervisor
+allowed the empty-VM preflight to pass. None of these attempts attached a
+physical device. The trace verifier passes a synthetic positive and rejects
+17 corruption controls; those are verifier checks, not device evidence.
+
+The actual attempt at 13:14:26 UTC failed before loading. Guest usbmon has
+exactly one bulk OUT submission, the 19-byte ``READM 0x40019000 4 ``. After
+2,021,855 microseconds its cancellation completion reports status -2 and
+actual length 19; the owner reports -110. The failed completion cannot be
+interpreted as successful command receipt. There is no bulk IN submission,
+trial rebind, RAM write, FILES transfer or QUIT. The supervisor originally
+waited for runtime observation until its 30-second limit; it now detects the
+terminal observation failure immediately. No device retry was executed.
+
+QMP device removal, one callback drain, VM exit 0 and absence of a post-exit
+host owner are independently checked. No BUG/WARNING/sanitizer/lock report
+occurs. The original FAIL manifest remains unchanged; a separate
+failure-analysis.json verifies cleanup without relabeling startup as PASS.
+The boot observer and USB IO source are unchanged from the preceding
+successful physical observation at 97b978a49a0b. The root cause remains
+unresolved; this evidence cannot distinguish device state from passthrough
+behavior. The user has been asked for a new single-device power removal
+before another attempt, which remains pending at this checkpoint.
+
+This attempt has no new cold-start confirmation. The earlier confirmed cold
+U read keeps its original scope. Original-firmware physical loading/runtime
+comparison, complete physical HCI, E, real peers/AP and RF qualification
+remain open. No external submission or support milestone is claimed.
+
+Records and manifest SHA-256 (including all preparation failures):
+
+* ``hardware-build-20261017T130231.470698Z`` (FAIL),
+  ``08a5032abd071798e86d1ce644e7b31f0316b30ba075df5084c8948eed56e7c6``.
+* ``hardware-build-20261017T130451.999801Z`` (PASS),
+  ``f0a1602b2a9da9a24635e32bc5a820cb23c8c01751015b372bf241dc1d234896``.
+* ``hardware-build-20261017T130920.618349Z`` (PASS),
+  ``ed3a66c211116ba87902d54019b8480d3e321aed23a8b3a2c9c5158fabed9a11``.
+* ``ram-trial-20261017T130853.776180Z`` (FAIL),
+  ``2b15623886e3eb7e6284a440ad4e00fb39f8e1cfc4793d136c6a1ac327e19f21``.
+* ``ram-trial-20261017T131330.253447Z`` (FAIL),
+  ``5a9be5cac3643dce9cbddbae14146efb2ef26bc991c7e6aa204733078aba5463``.
+* ``ram-trial-20261017T131346.413504Z`` (FAIL),
+  ``e38f6ab1a560e10bf84188c3ea21946e32f9182687a0e9aa211205aa9b8d7f08``.
+* ``ram-trial-20261017T131410.962393Z`` (VM_PREFLIGHT_PASS_NO_HARDWARE),
+  ``cead38294cd967bbed3c1d469bdc9f022c464ea6a3e7f5f2a9bd49721b2291b9``.
+* ``ram-trial-20261017T131426.761683Z`` (FAIL),
+  ``9899dcc14c2a3562ac1e071a306490e3a4cbc04ca0b6e7e29fb5958ce6385edc``.
+* ``ram-trial-verifier-20261017T131041.905859Z`` (PASS),
+  ``295ebd1271d68a12589caf2b654d0a16ad2398917233e664462e95fb33eb5d78``.
+* ``ram-trial-verifier-20261017T131330.052044Z`` (PASS),
+  ``295ebd1271d68a12589caf2b654d0a16ad2398917233e664462e95fb33eb5d78``.
+* ``ram-trial-verifier-20261017T131623.112434Z`` (PASS),
+  ``690e26b31d4079622043976ba2b0297b60b90ef03d6d6b77a533621095b860c3``.
+
+Separate failure-analysis SHA-256: ``2e11ef4b37bb5ac2b14a15c5a9c7b512db5e9269aa3f76d142bf6fafc2f8fb65``.

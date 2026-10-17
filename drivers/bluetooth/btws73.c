@@ -309,13 +309,15 @@ static void btws73_receive(void *context, const u8 *data, size_t length)
 		if (ret)
 			break;
 	}
-	if (ret < 0)
+	if (ret < 0) {
 		bt->hdev->stat.err_rx++;
+		/* Close TX admission before dropping the receive-state lock.
+		 * Only the worker may reenter the shared fault interface.
+		 */
+		btws73_fault_locked(bt, ret);
+	}
 unlock:
 	spin_unlock_irqrestore(&bt->lock, flags);
-	/* The shared callback lock forbids reentry into ws73_ble_fault here. */
-	if (ret < 0)
-		btws73_fault(bt, ret);
 }
 
 static const struct ws73_ble_client btws73_client = {

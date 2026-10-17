@@ -6,6 +6,9 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/jiffies.h>
+#include <linux/kthread.h>
+#include <linux/sched.h>
+#include <linux/sched/task.h>
 #include <linux/unaligned.h>
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
@@ -20,6 +23,10 @@ struct ws73_hci_model {
 	struct completion reset;
 	struct completion release;
 	struct completion acl;
+	struct completion flushing;
+	struct completion flushed;
+	struct task_struct *flusher;
+	int flush_result;
 	bool block;
 	unsigned int commands;
 	unsigned int acls;
@@ -99,6 +106,10 @@ static void ws73_model_cleanup(void *context)
 		ws73_ble_fault(m->adev, -ECANCELED);
 	complete_all(&m->published);
 	complete_all(&m->release);
+	if (m->flusher) {
+		kthread_stop(m->flusher);
+		put_task_struct(m->flusher);
+	}
 	if (m->adev) {
 		/* Join the synchronous model call before dropping its context. */
 		ws73_ble_stop(m->adev);
@@ -128,6 +139,8 @@ static struct ws73_hci_model *ws73_model_create(struct kunit *test, bool block)
 	init_completion(&m->reset);
 	init_completion(&m->release);
 	init_completion(&m->acl);
+	init_completion(&m->flushing);
+	init_completion(&m->flushed);
 	m->block = block;
 	if (kunit_add_action_or_reset(test, ws73_model_cleanup, m))
 		return NULL;
@@ -315,11 +328,149 @@ static void ws73_hci_rejected_acl_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_ble_start(m->adev), -EMSGSIZE);
 }
 
+/* Capture the owned RX queue while native processing is deliberately stopped. */
+static void ws73_model_expect_rx(struct kunit *test, struct ws73_hci_model *m,
+				 const u8 *h4, size_t size)
+{
+	struct sk_buff *skb = skb_dequeue(&m->hdev->rx_q);
+
+	KUNIT_EXPECT_NOT_NULL(test, skb);
+	if (!skb)
+		return;
+	KUNIT_EXPECT_EQ(test, hci_skb_pkt_type(skb), h4[0]);
+	KUNIT_EXPECT_EQ(test, skb->len, size - 1);
+	if (skb->len == size - 1)
+		KUNIT_EXPECT_MEMEQ(test, skb->data, h4 + 1, size - 1);
+	/* Return it to the real stack after verifying the driver's copy. */
+	skb_queue_tail(&m->hdev->rx_q, skb);
+}
+
+static void ws73_hci_acl_rx_test(struct kunit *test)
+{
+	struct ws73_hci_model *m = ws73_model_create(test, false);
+	const u8 expected[] = { HCI_ACLDATA_PKT, 1, 0x20, 3, 0, 0xaa, 0xbb, 0xcc };
+	u8 input[sizeof(expected)];
+	unsigned int before;
+	size_t split;
+
+	KUNIT_ASSERT_NOT_NULL(test, m);
+	/* Split every header/payload boundary; changing the source must be harmless. */
+	for (split = 1; split < sizeof(input); split++) {
+		disable_work_sync(&m->hdev->rx_work);
+		before = m->hdev->stat.byte_rx;
+		memcpy(input, expected, sizeof(input));
+		ws73_ble_receive(m->adev, input, split);
+		memset(input, 0xee, split);
+		KUNIT_EXPECT_TRUE(test, skb_queue_empty(&m->hdev->rx_q));
+		KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, before);
+		ws73_ble_receive(m->adev, input + split, sizeof(input) - split);
+		memset(input, 0xee, sizeof(input));
+		KUNIT_EXPECT_EQ(test, skb_queue_len(&m->hdev->rx_q), 1);
+		ws73_model_expect_rx(test, m, expected, sizeof(expected));
+		enable_work(&m->hdev->rx_work);
+		queue_work(m->hdev->workqueue, &m->hdev->rx_work);
+		flush_work(&m->hdev->rx_work);
+		KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, before + sizeof(input) - 1);
+	}
+	/* HCI_INIT intentionally drops ACL: no connection/L2CAP qualification. */
+	ws73_ble_fault(m->adev, -ECANCELED);
+	ws73_model_withdrawn(test, m);
+}
+
+static int ws73_model_flush_thread(void *context)
+{
+	struct ws73_hci_model *m = context;
+
+	complete(&m->flushing);
+	m->flush_result = m->hdev->flush(m->hdev);
+	complete(&m->flushed);
+	return 0;
+}
+
+static void ws73_hci_active_flush_test(struct kunit *test)
+{
+	struct ws73_hci_model *m = ws73_model_create(test, true);
+	const u8 event[] = { HCI_EVENT_PKT, 0xff, 1, 0x73 };
+	struct sk_buff *skb;
+	unsigned long deadline;
+	unsigned int before;
+	bool waiting;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, m);
+	skb = ws73_model_packet();
+	KUNIT_ASSERT_NOT_NULL(test, skb);
+	ret = m->hdev->send(m->hdev, skb);
+	if (ret)
+		kfree_skb(skb);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	m->flusher = kthread_create(ws73_model_flush_thread, m, "ws73-hci-flush");
+	if (IS_ERR(m->flusher)) {
+		m->flusher = NULL;
+		KUNIT_FAIL(test, "cannot start flush thread");
+		return;
+	}
+	get_task_struct(m->flusher);
+	wake_up_process(m->flusher);
+	KUNIT_ASSERT_TRUE(test, wait_for_completion_timeout(&m->flushing, HZ));
+	/* The only blocking operation after that completion is the driver's flush.
+	 * Observe its join wait before releasing the model's in-flight Reset.
+	 */
+	deadline = jiffies + HZ;
+	do {
+		waiting = READ_ONCE(m->flusher->__state) == TASK_UNINTERRUPTIBLE;
+		if (waiting || completion_done(&m->flushed))
+			break;
+		usleep_range(1000, 2000);
+	} while (time_before(jiffies, deadline));
+	KUNIT_EXPECT_TRUE(test, waiting);
+	KUNIT_EXPECT_FALSE(test, completion_done(&m->flushed));
+	/* RX stays admitted while flush waits on TX, including native event delivery. */
+	before = m->hdev->stat.byte_rx;
+	ws73_ble_receive(m->adev, event, sizeof(event));
+	flush_work(&m->hdev->rx_work);
+	KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, before + sizeof(event) - 1);
+	complete_all(&m->release);
+	KUNIT_ASSERT_TRUE(test, wait_for_completion_timeout(&m->flushed, 5 * HZ));
+	KUNIT_EXPECT_EQ(test, m->flush_result, -ECANCELED);
+	ws73_model_withdrawn(test, m);
+	KUNIT_EXPECT_EQ(test, m->acls, 0);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(m->adev), -ECANCELED);
+}
+
+static void ws73_hci_rx_fault_test(struct kunit *test)
+{
+	struct ws73_hci_model *m = ws73_model_create(test, false);
+	const u8 invalid[] = { HCI_ACLDATA_PKT, 1, 0, 0xff, 0xff };
+	const u8 valid[] = { HCI_EVENT_PKT, 0xff, 1, 0x73 };
+	struct sk_buff *skb;
+	unsigned int before;
+
+	KUNIT_ASSERT_NOT_NULL(test, m);
+	skb = ws73_model_packet();
+	KUNIT_ASSERT_NOT_NULL(test, skb);
+	before = m->hdev->stat.byte_rx;
+	ws73_ble_receive(m->adev, invalid, sizeof(invalid));
+	/* Rejection is synchronous even before deferred HCI withdrawal runs. */
+	KUNIT_EXPECT_EQ(test, m->hdev->send(m->hdev, skb), -EMSGSIZE);
+	KUNIT_EXPECT_MEMEQ(test, skb->data, ws73_model_acl, sizeof(ws73_model_acl));
+	kfree_skb(skb);
+	ws73_ble_receive(m->adev, valid, sizeof(valid));
+	ws73_model_withdrawn(test, m);
+	KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, before);
+	KUNIT_EXPECT_EQ(test, m->hdev->stat.err_rx, 1);
+	KUNIT_EXPECT_EQ(test, m->acls, 0);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(m->adev), -EMSGSIZE);
+}
+
 static struct kunit_case ws73_hci_data_cases[] = {
 	KUNIT_CASE(ws73_hci_data_test),
 	KUNIT_CASE(ws73_hci_queue_limit_test),
 	KUNIT_CASE(ws73_hci_byte_limit_test),
 	KUNIT_CASE(ws73_hci_rejected_acl_test),
+	KUNIT_CASE(ws73_hci_acl_rx_test),
+	KUNIT_CASE(ws73_hci_active_flush_test),
+	KUNIT_CASE(ws73_hci_rx_fault_test),
 	{}
 };
 

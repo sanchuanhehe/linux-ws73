@@ -234,7 +234,9 @@ def main():
                 expected_groups = {"btws73-proto": expected,
                                    "ws73-hci-lifecycle": {"ws73_hci_failed_enable_test"},
                                    "ws73-hci-data": {"ws73_hci_data_test", "ws73_hci_queue_limit_test",
-                                                     "ws73_hci_byte_limit_test", "ws73_hci_rejected_acl_test"}}
+                                                     "ws73_hci_byte_limit_test", "ws73_hci_rejected_acl_test",
+                                                     "ws73_hci_acl_rx_test", "ws73_hci_active_flush_test",
+                                                     "ws73_hci_rx_fault_test"}}
             passed = len(groups) == len(expected_groups)
             seen = set()
             for group in groups:

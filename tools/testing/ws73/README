@@ -50,6 +50,10 @@ Kernel diagnostics fail validation independently of KTAP PASS lines. Existing
 concurrent HCI cases exercise blocked TX, flush, RX and abort against explicit
 synthetic backends. KCSAN is sampled detection: a successful bounded run does
 not prove absence of races, hardware behavior or all lifecycle interleavings.
+The KCSAN fixture disables the unused i8042 keyboard/mouse controller driver:
+a retained earlier run reported a libps2 race and panicked before any WS73
+test ran. Serial console operation and all WS73 test dependencies remain.
+This isolates the headless fixture; it does not fix or qualify the PS/2 path.
 
 The USB aggregate and H4 tests also run bounded deterministic mutation campaigns
 with four fixed xorshift32 seeds each. USB supplies 16,384 unaligned inputs in

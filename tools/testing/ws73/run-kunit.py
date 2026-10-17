@@ -29,7 +29,8 @@ def sanitizer_summary(raw, config, kcsan=False):
     required = {"CONFIG_KCSAN=y", "CONFIG_KCSAN_STRICT=y", "CONFIG_KCSAN_WEAK_MEMORY=y",
                 "CONFIG_KCSAN_SELFTEST=y", "CONFIG_KCSAN_EARLY_ENABLE=y",
                 "CONFIG_KCSAN_SKIP_WATCH=1000", "CONFIG_SMP=y", "CONFIG_PROVE_LOCKING=y",
-                "CONFIG_DEBUG_ATOMIC_SLEEP=y", "CONFIG_UBSAN=y", "# CONFIG_KASAN is not set"}
+                "CONFIG_DEBUG_ATOMIC_SLEEP=y", "CONFIG_UBSAN=y", "# CONFIG_KASAN is not set",
+                "# CONFIG_SERIO_I8042 is not set"}
     if not required <= set(config.splitlines()):
         raise ValueError("missing KCSAN instrumentation configuration")
     for marker in ("kcsan: enabled early", "kcsan: strict mode configured",
@@ -155,7 +156,8 @@ def main():
             config_text += ("# CONFIG_KASAN is not set\nCONFIG_KCSAN=y\n"
                             "CONFIG_KCSAN_STRICT=y\nCONFIG_KCSAN_WEAK_MEMORY=y\n"
                             "CONFIG_KCSAN_SELFTEST=y\nCONFIG_KCSAN_EARLY_ENABLE=y\n"
-                            "CONFIG_KCSAN_SKIP_WATCH=1000\n")
+                            "CONFIG_KCSAN_SKIP_WATCH=1000\n"
+                            "# CONFIG_SERIO_I8042 is not set\n")
         config.write_text(config_text)
         manifest = {
             "scope": ("native auxiliary/HCI synthetic data/lifecycle and codecs in VM; no real controller/peer"

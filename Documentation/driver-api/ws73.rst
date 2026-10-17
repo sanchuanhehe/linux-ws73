@@ -1,7 +1,7 @@
 .. SPDX-License-Identifier: GPL-2.0-only
 
 WS73 Wi-Fi / BLE development baseline
-====================================
+=====================================
 
 Status and scope
 ----------------
@@ -13,6 +13,11 @@ USB driver or hci_dev, download firmware, or provide functional BLE/Wi-Fi.
 Synthetic HCI event fixtures are parser inputs, never generated completions
 for an HCI device. No hardware or SparkLink qualification is inherited.
 
+.. toctree::
+   :maxdepth: 1
+
+   ws73-qualification-20261017
+
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.
 Its exit criteria are a reproducible build, all named codec tests passing,
@@ -20,7 +25,7 @@ preserved failures, and an explicit list of missing integration gates.
 It is not the shared-core or upstream-RFC acceptance gate.
 
 Reference snapshots (2026-10-17)
--------------------------------
+--------------------------------
 
 All four reference worktrees were clean when inspected:
 
@@ -84,7 +89,7 @@ calibration correctness or permission to publish it. No firmware is loaded
 by these tests. No board/MAC/trim constants are embedded in the codec.
 
 USB observations and safety boundary
------------------------------------
+------------------------------------
 
 The allocated WS73U (user-provided model) is at physical path ``1-1.1.1``,
 ffff:3733, under GenesysLogic 05e3:0610 hub ``1-1.1``. Initial sysfs inspection
@@ -147,7 +152,7 @@ still need a 110 capture. No speculative re-synchronization or success is
 generated after malformed input.
 
 Architecture decision 0001 (provisional)
----------------------------------------
+----------------------------------------
 
 Keep this BLE-specific codec local to drivers/bluetooth. There is no
 exported registration API, auxiliary child or unused SLE interface. The
@@ -165,7 +170,7 @@ drain before freeing the parent. Protocol HCI credits remain separate from
 USB queue slots. A BLE close must not reset an active Wi-Fi consumer.
 
 Wi-Fi MAC audit (initial, not a final selection)
-----------------------------------------------
+------------------------------------------------
 
 Paths in this list are below the pinned SDK's ``driver/wifi``:
 
@@ -196,7 +201,7 @@ Keep the choice provisional until data/status/security interfaces are traced
 and tested with a controlled AP. No AP or credentials are assumed here.
 
 Reproduction and remaining gates
--------------------------------
+--------------------------------
 
 After checking the whole machine's build/VM load, reserve a share of the
 8-job budget when hardware regression is active, then run from this tree::

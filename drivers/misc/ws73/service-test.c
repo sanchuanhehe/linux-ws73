@@ -164,9 +164,9 @@ static void ws73_notification_aggregate_test(struct kunit *test)
 	}
 	/* RX admission does not enable unchecked queue-10 TX. */
 	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, sizeof(out), 0,
-			data + 92, 16), -EOPNOTSUPP);
+			data + 92, 16), -EMSGSIZE);
 	KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, sizeof(out), 0,
-			WS73_USB_SWITCH_QUEUE, 10), -EOPNOTSUPP);
+			WS73_USB_SWITCH_QUEUE, 10), 36);
 }
 
 static void ws73_interrupt_wire_test(struct kunit *test)

@@ -19,7 +19,8 @@ for an HCI device. No hardware or SparkLink qualification is inherited.
 
 Runtime USB wire helpers now encode a single HCC record and queue-control
 descriptors and validate bounded receive aggregates for BLE (queue 7) and
-platform messages (queue 9), plus function notifications (queue 10) on RX.
+platform messages (queue 9), plus function notifications (queue 10) on RX
+and explicit no-flash customization records on TX.
 They are exercised with synthetic inputs;
 the runtime USB path now consumes these helpers. The new runtime path has
 not been exercised on physical hardware; it does not establish firmware
@@ -173,8 +174,9 @@ into its result. A malformed or unsupported final record cannot publish earlier
 valid statuses. The USB parent currently records each of the four notification
 kinds at most once per device object; this bounded observation is not a request
 completion, persistent readiness state or a function registration. New USB
-instances start with no observations. Queue-10 TX remains closed until valid
-customization input and transaction sequencing are implemented. The BLE action transaction engine and USB send backend are described below;
+instances start with no observations. Queue-10 TX has a strict customization
+encoder, but initialization does not send it without qualified inputs and
+transaction sequencing. The BLE action engine and USB backend are described below;
 initialization does not invoke them until their prerequisites are established.
 
 BLE action transactions

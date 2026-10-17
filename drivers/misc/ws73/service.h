@@ -3,6 +3,20 @@
 #define _WS73_SERVICE_H
 
 #include <linux/types.h>
+#include <linux/bits.h>
+
+#define WS73_INTERRUPT_SIZE 8
+#define WS73_INTERRUPT_BSP_READY BIT(0)
+#define WS73_INTERRUPT_PACKET_LOSS BIT(5)
+#define WS73_INTERRUPT_PANIC (BIT(6) | BIT(18))
+
+struct ws73_interrupt {
+	u32 events;
+	u32 high_priority_pool;
+};
+
+/* Raw little-endian words, exact length; neither field authorizes a send. */
+int ws73_interrupt_decode(const u8 *data, size_t length, struct ws73_interrupt *result);
 
 enum ws73_notification {
 	WS73_NOTIFY_BOOT,

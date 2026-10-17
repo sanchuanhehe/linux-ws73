@@ -7,6 +7,21 @@
 
 #include "service.h"
 
+int ws73_interrupt_decode(const u8 *data, size_t length, struct ws73_interrupt *result)
+{
+	struct ws73_interrupt parsed;
+
+	if (!data || !result)
+		return -EINVAL;
+	if (length != WS73_INTERRUPT_SIZE)
+		return -EMSGSIZE;
+	parsed.events = get_unaligned_le32(data);
+	parsed.high_priority_pool = get_unaligned_le32(data + 4);
+	*result = parsed;
+	return 0;
+}
+EXPORT_SYMBOL_NS_GPL(ws73_interrupt_decode, "WS73");
+
 int ws73_notification_decode(const u8 *record, size_t length,
 			     enum ws73_notification *notification)
 {

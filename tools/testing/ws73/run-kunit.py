@@ -169,6 +169,7 @@ def main():
                     "ws73_usb_tx_admission_test",
                 },
                 "ws73-service": {
+                    "ws73_interrupt_wire_test", "ws73_interrupt_invalid_test",
                     "ws73_notification_valid_test", "ws73_notification_invalid_test",
                     "ws73_notification_values_test", "ws73_notification_aggregate_test",
                 },

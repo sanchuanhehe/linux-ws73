@@ -21,7 +21,9 @@ struct ws73_usb {
 	struct ws73_usb_tx tx;
 	struct ws73_platform_request identity;
 	struct urb *rx_urb;
+	struct urb *interrupt_urb;
 	u8 *rx_buffer;
+	u8 *interrupt_buffer;
 	spinlock_t lock; /* Serialize submission admission with disconnect. */
 	bool disconnected;
 	bool runtime;
@@ -29,6 +31,7 @@ struct ws73_usb {
 	u8 in;
 	u8 out;
 	u8 notifications_seen; /* Observations only; never used to enable a function. */
+	bool bsp_seen;
 };
 
 static void ws73_usb_stop(struct work_struct *work)
@@ -38,6 +41,7 @@ static void ws73_usb_stop(struct work_struct *work)
 	usb_kill_anchored_urbs(&ws->submitted);
 	/* The RX completion can already have left the anchor. Join it too. */
 	usb_kill_urb(ws->rx_urb);
+	usb_kill_urb(ws->interrupt_urb);
 }
 
 static void ws73_usb_fail(struct ws73_usb *ws, int error)
@@ -148,7 +152,7 @@ static bool ws73_usb_cancelled(void *context)
 	return READ_ONCE(ws->disconnected) || READ_ONCE(ws->error);
 }
 
-static int ws73_usb_submit_rx(struct ws73_usb *ws)
+static int ws73_usb_submit_rx(struct ws73_usb *ws, struct urb *urb)
 {
 	unsigned long flags;
 	int ret;
@@ -157,13 +161,52 @@ static int ws73_usb_submit_rx(struct ws73_usb *ws)
 	if (ws->disconnected || ws->error) {
 		ret = ws->disconnected ? -ENODEV : ws->error;
 	} else {
-		usb_anchor_urb(ws->rx_urb, &ws->submitted);
-		ret = usb_submit_urb(ws->rx_urb, GFP_ATOMIC);
+		usb_anchor_urb(urb, &ws->submitted);
+		ret = usb_submit_urb(urb, GFP_ATOMIC);
 		if (ret)
-			usb_unanchor_urb(ws->rx_urb);
+			usb_unanchor_urb(urb);
 	}
 	spin_unlock_irqrestore(&ws->lock, flags);
 	return ret;
+}
+
+static void ws73_usb_interrupt_complete(struct urb *urb)
+{
+	struct ws73_usb *ws = urb->context;
+	struct ws73_interrupt notification;
+	int ret;
+
+	if (ws73_usb_cancelled(ws))
+		return;
+	ret = urb->status;
+	if (!ret)
+		ret = ws73_interrupt_decode(ws->interrupt_buffer, urb->actual_length,
+					    &notification);
+	if (ret)
+		goto fail;
+	/* A fault in the same word always takes precedence over BSP_READY. */
+	if (notification.events & WS73_INTERRUPT_PANIC) {
+		ret = -EIO;
+		goto fail;
+	}
+	if (notification.events & WS73_INTERRUPT_PACKET_LOSS) {
+		/* Lost high-priority messages cannot prove a successful handshake. */
+		ret = -ENOBUFS;
+		goto fail;
+	}
+	if ((notification.events & WS73_INTERRUPT_BSP_READY) && !ws->bsp_seen) {
+		ws->bsp_seen = true;
+		dev_info(&ws->interface->dev,
+			 "BSP notification observation; pool %#010x is not a TX credit\n",
+			 notification.high_priority_pool);
+	}
+	/* Other bits do not imply BLE action completion, PM success or credits. */
+	ret = ws73_usb_submit_rx(ws, urb);
+	if (!ret || ws73_usb_cancelled(ws))
+		return;
+fail:
+	ws73_usb_fail(ws, ret);
+	dev_err(&ws->interface->dev, "interrupt observation failed: %d\n", ret);
 }
 
 static void ws73_usb_rx_complete(struct urb *urb)
@@ -208,7 +251,7 @@ static void ws73_usb_rx_complete(struct urb *urb)
 		}
 	}
 	/* No function consumers yet. No borrowed URB storage escapes this call. */
-	ret = ws73_usb_submit_rx(ws);
+	ret = ws73_usb_submit_rx(ws, urb);
 	if (ret && !ws73_usb_cancelled(ws))
 		ws73_usb_fail(ws, ret);
 }
@@ -248,7 +291,9 @@ static void ws73_usb_initialize(struct work_struct *work)
 		u64 deadline = ws73_usb_now(ws) + 4000;
 		const char *stage = "chip";
 
-		ret = ws73_usb_submit_rx(ws);
+		ret = ws73_usb_submit_rx(ws, ws->interrupt_urb);
+		if (!ret)
+			ret = ws73_usb_submit_rx(ws, ws->rx_urb);
 		if (!ret)
 			ret = ws73_platform_get_chip(&ws->identity, &ws->tx, &runtime_io,
 						     deadline, &identity);
@@ -331,16 +376,25 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	ws73_platform_init(&ws->identity);
 	if (runtime) {
 		ws->rx_urb = usb_alloc_urb(0, GFP_KERNEL);
+		ws->interrupt_urb = usb_alloc_urb(0, GFP_KERNEL);
 		ws->rx_buffer = kmalloc(BTWS73_RX_MAX_SIZE, GFP_KERNEL);
-		if (!ws->rx_urb || !ws->rx_buffer) {
+		ws->interrupt_buffer = kmalloc(WS73_INTERRUPT_SIZE, GFP_KERNEL);
+		if (!ws->rx_urb || !ws->rx_buffer || !ws->interrupt_urb ||
+		    !ws->interrupt_buffer) {
 			usb_free_urb(ws->rx_urb);
+			usb_free_urb(ws->interrupt_urb);
 			kfree(ws->rx_buffer);
+			kfree(ws->interrupt_buffer);
 			usb_put_dev(ws->udev);
 			kfree(ws);
 			return -ENOMEM;
 		}
 		usb_fill_bulk_urb(ws->rx_urb, ws->udev, usb_rcvbulkpipe(ws->udev, ws->in),
 				  ws->rx_buffer, BTWS73_RX_MAX_SIZE, ws73_usb_rx_complete, ws);
+		usb_fill_int_urb(ws->interrupt_urb, ws->udev,
+				 usb_rcvintpipe(ws->udev, alt->endpoint[2].desc.bEndpointAddress),
+				 ws->interrupt_buffer, WS73_INTERRUPT_SIZE,
+				 ws73_usb_interrupt_complete, ws, alt->endpoint[2].desc.bInterval);
 	}
 	usb_set_intfdata(interface, ws);
 	schedule_work(&ws->initialize);
@@ -359,10 +413,13 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	ws73_platform_abort(&ws->identity, -ENODEV);
 	usb_kill_anchored_urbs(&ws->submitted);
 	usb_kill_urb(ws->rx_urb);
+	usb_kill_urb(ws->interrupt_urb);
 	cancel_work_sync(&ws->initialize);
 	cancel_work_sync(&ws->stop);
 	usb_free_urb(ws->rx_urb);
+	usb_free_urb(ws->interrupt_urb);
 	kfree(ws->rx_buffer);
+	kfree(ws->interrupt_buffer);
 	usb_put_dev(ws->udev);
 	kfree(ws);
 }

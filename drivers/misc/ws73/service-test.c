@@ -169,7 +169,54 @@ static void ws73_notification_aggregate_test(struct kunit *test)
 			WS73_USB_SWITCH_QUEUE, 10), -EOPNOTSUPP);
 }
 
+static void ws73_interrupt_wire_test(struct kunit *test)
+{
+	static const u8 wire[9] = { 0xa5, 0x41, 0, 4, 0, 0x78, 0x56, 0x34, 0x12 };
+	struct ws73_interrupt result;
+	u8 record[8] = {};
+	unsigned int i;
+
+	KUNIT_ASSERT_EQ(test, ws73_interrupt_decode(wire + 1, 8, &result), 0);
+	KUNIT_EXPECT_EQ(test, result.events, (u32)0x00040041);
+	KUNIT_EXPECT_EQ(test, result.high_priority_pool, (u32)0x12345678);
+	KUNIT_EXPECT_EQ(test, result.events & WS73_INTERRUPT_PANIC, (u32)0x00040040);
+	for (i = 0; i < 32; i++) {
+		put_unaligned_le32(BIT(i), record);
+		put_unaligned_le32(~BIT(i), record + 4);
+		KUNIT_ASSERT_EQ(test, ws73_interrupt_decode(record, 8, &result), 0);
+		KUNIT_EXPECT_EQ(test, result.events, (u32)BIT(i));
+		KUNIT_EXPECT_EQ(test, result.high_priority_pool, (u32)~BIT(i));
+	}
+	memset(record, 0, sizeof(record));
+	KUNIT_ASSERT_EQ(test, ws73_interrupt_decode(record, 8, &result), 0);
+	KUNIT_EXPECT_EQ(test, result.events, 0);
+	KUNIT_EXPECT_EQ(test, result.high_priority_pool, 0);
+}
+
+static void ws73_interrupt_invalid_test(struct kunit *test)
+{
+	struct ws73_interrupt result, before;
+	u8 record[16] = {};
+	unsigned int i;
+
+	memset(&before, 0xa5, sizeof(before));
+	for (i = 0; i <= sizeof(record); i++) {
+		if (i == 8)
+			continue;
+		result = before;
+		KUNIT_EXPECT_EQ(test, ws73_interrupt_decode(record, i, &result), -EMSGSIZE);
+		KUNIT_EXPECT_MEMEQ(test, &result, &before, sizeof(result));
+	}
+	KUNIT_EXPECT_EQ(test, ws73_interrupt_decode(record, SIZE_MAX, &result), -EMSGSIZE);
+	KUNIT_EXPECT_EQ(test, ws73_interrupt_decode(NULL, 8, &result), -EINVAL);
+	KUNIT_EXPECT_EQ(test, ws73_interrupt_decode(record, 8, NULL), -EINVAL);
+	KUNIT_EXPECT_MEMEQ(test, &result, &before, sizeof(result));
+	KUNIT_EXPECT_EQ(test, ws73_interrupt_decode(record, 8, &result), 0);
+}
+
 static struct kunit_case ws73_service_cases[] = {
+	KUNIT_CASE(ws73_interrupt_wire_test),
+	KUNIT_CASE(ws73_interrupt_invalid_test),
 	KUNIT_CASE(ws73_notification_valid_test),
 	KUNIT_CASE(ws73_notification_invalid_test),
 	KUNIT_CASE(ws73_notification_values_test),

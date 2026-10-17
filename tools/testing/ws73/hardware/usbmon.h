@@ -36,8 +36,9 @@ static int ws73_mon_open(void)
 
 static int ws73_mon_drain(int fd)
 {
- unsigned int events = 0;
- for (;;) {
+ unsigned int events = 0, consumed = 0;
+ /* Give the independent text and kernel readers a turn during bursts. */
+ while (consumed < 16) {
   struct ws73_mon_header header = {};
   unsigned char data[512];
   struct ws73_mon_get get = { &header, data, sizeof(data) };
@@ -45,15 +46,21 @@ static int ws73_mon_drain(int fd)
    if (errno == EAGAIN || errno == EINTR) break;
    return -1;
   }
+  consumed++;
   /* Enumeration/control traffic is captured by the existing text recorder. */
   if (header.transfer != 3 && header.transfer != 1) continue;
   size_t copied = header.captured < sizeof(data) ? header.captured : sizeof(data);
-  printf("WS73_MON id=%016llx event=%c transfer=%u bus=%u device=%u ep=%02x status=%d length=%u captured=%u copied=%zu time=%lld.%06d data=",
+  char hex[sizeof(data) * 2 + 1];
+  static const char digits[] = "0123456789abcdef";
+  for (size_t i = 0; i < copied; i++) {
+   hex[i * 2] = digits[data[i] >> 4];
+   hex[i * 2 + 1] = digits[data[i] & 15];
+  }
+  hex[copied * 2] = 0;
+  printf("WS73_MON id=%016llx event=%c transfer=%u bus=%u device=%u ep=%02x status=%d length=%u captured=%u copied=%zu time=%lld.%06d data=%s\n",
          (unsigned long long)header.id, header.type, header.transfer, header.bus, header.device,
          header.endpoint, header.status, header.length, header.captured, copied,
-         (long long)header.seconds, header.microseconds);
-  for (size_t i = 0; i < copied; i++) printf("%02x", data[i]);
-  puts("");
+         (long long)header.seconds, header.microseconds, hex);
   events++;
  }
  struct ws73_mon_stats stats;

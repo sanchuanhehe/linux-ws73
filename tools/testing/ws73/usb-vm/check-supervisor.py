@@ -193,11 +193,13 @@ if proof.get('phase')=='loader':
 
 if proof.get('phase')=='startup':
  trials={
+  'missing_platform':(k,s.replace('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified','',1)),
+  'short_platform':(k,s.replace('sequence=4 actual=128 sleep=0','sequence=4 actual=127 sleep=0',1)),
   'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
   'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
   'missing_case':(k,s.replace('WS73_STARTUP_CASE 4 PASS','')),
-  'short_customization':(k,s.replace('step=6 actual=864','step=6 actual=863',1)),
-  'missing_queue_switch':(k,s.replace('WS73_STARTUP_OUT step=4 actual=36 verified','',1)),
+  'short_customization':(k,s.replace('step=7 actual=864','step=7 actual=863',1)),
+  'missing_queue_switch':(k,s.replace('WS73_STARTUP_OUT step=5 actual=36 verified','',1)),
   'wrong_action':(k,s.replace('message=25','message=26',1)),
   'short_action':(k,s.replace('message=25 actual=4','message=25 actual=3',1)),
   'wrong_setup_direction':(k,s.replace('2100000000000400','a100000000000400',1)),
@@ -236,7 +238,7 @@ if proof.get('phase')=='hci':
   'wrong_action':(k,s.replace('message=25','message=26',1)),
   'short_action':(k,s.replace('message=25 actual=4','message=25 actual=3',1)),
   'wrong_setup':(k,s.replace('2100000000000400','a100000000000400',1)),
-  'wrong_queue':(k,s.replace('WS73_HCI_QUEUE step=7','WS73_HCI_QUEUE step=6',1)),
+  'wrong_queue':(k,s.replace('WS73_HCI_QUEUE step=8','WS73_HCI_QUEUE step=7',1)),
   'wrong_opcode':(k,s.replace('sequence=9 opcode=1003','sequence=9 opcode=1009',1)),
   'wrong_sequence':(k,s.replace('sequence=9 opcode=1003','sequence=10 opcode=1003',1)),
   'missing_reply':(k,s.replace('WS73_HCI_COMPLETE step=0 opcode=1003 h4=15 synthetic','',1)),

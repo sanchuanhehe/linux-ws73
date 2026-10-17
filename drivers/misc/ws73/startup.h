@@ -3,6 +3,7 @@
 #define _WS73_STARTUP_H
 
 #include "ble-control.h"
+#include "platform-config.h"
 #include "customize-request.h"
 
 enum ws73_startup_state {
@@ -14,6 +15,7 @@ enum ws73_startup_state {
 	WS73_STARTUP_WAIT_BOOT,
 	WS73_STARTUP_DONE,
 	WS73_STARTUP_FAILED,
+	WS73_STARTUP_CONFIGURE,
 };
 
 struct ws73_startup {
@@ -40,7 +42,7 @@ int ws73_startup_interrupt(struct ws73_startup *startup,
 int ws73_startup_receive(struct ws73_startup *startup,
 			 enum ws73_notification notification, u64 now_ms);
 /*
- * One-shot BSP -> customization -> BLE enable -> BOOT handshakes after arm.
+ * One-shot BSP -> platform configuration -> customization -> BLE enable -> BOOT handshakes after arm.
  * A current BOOT can precede its wait, including while identity is checked.
  * Caller must establish firmware epoch, identity/version and board validity.
  * All clocks must use the same monotonic millisecond domain. No locks may be
@@ -51,6 +53,7 @@ int ws73_startup_receive(struct ws73_startup *startup,
 int ws73_startup_run(struct ws73_startup *startup, struct ws73_usb_tx *tx,
 		     const struct ws73_usb_tx_io *bulk,
 		     const struct ws73_ble_control_io *control,
+		     const struct ws73_platform_config *platform,
 		     const struct ws73_customization *parameters);
 
 #endif

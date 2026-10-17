@@ -262,6 +262,8 @@ def main():
                     "ws73_board_admission_test", "ws73_board_echo_test",
                     "ws73_board_echo_reject_test",
                 },
+                "ws73-platform-config": {"ws73_platform_config_wire_test",
+                                         "ws73_platform_config_transport_test"},
                 "ws73-startup": {
                     "ws73_startup_sequence_test", "ws73_startup_missing_test",
                     "ws73_startup_failures_test", "ws73_startup_fault_priority_test",

@@ -17,6 +17,7 @@ enum ws73_start_mock_mode {
 	START_EXPIRE,
 	START_REENTER,
 	START_ASYNC,
+	START_SHORT_PLATFORM,
 };
 
 struct ws73_start_mock {
@@ -25,6 +26,7 @@ struct ws73_start_mock {
 	struct ws73_usb_tx tx;
 	struct ws73_usb_tx_io bulk;
 	struct ws73_ble_control_io control;
+	struct ws73_platform_config platform;
 	struct ws73_customization parameters;
 	struct completion waiting;
 	struct completion enabled;
@@ -45,7 +47,7 @@ static const struct ws73_interrupt ws73_start_bsp = {
 static int ws73_start_run(struct ws73_start_mock *mock)
 {
 	return ws73_startup_run(&mock->startup, &mock->tx, &mock->bulk,
-				&mock->control, &mock->parameters);
+				&mock->control, &mock->platform, &mock->parameters);
 }
 
 static u64 ws73_start_now(void *context)
@@ -69,12 +71,19 @@ static int ws73_start_bulk(void *context, const u8 *data, size_t length,
 	struct kunit *test = mock->test;
 
 	mock->bulk_calls++;
-	KUNIT_EXPECT_EQ(test, mock->startup.state, WS73_STARTUP_CUSTOMIZE);
+	KUNIT_EXPECT_TRUE(test, mock->startup.state == WS73_STARTUP_CUSTOMIZE ||
+			  mock->startup.state == WS73_STARTUP_CONFIGURE);
 	KUNIT_EXPECT_TRUE(test, mock->startup.bsp_seen);
 	KUNIT_EXPECT_GT(test, timeout, 0);
 	KUNIT_EXPECT_LE(test, timeout, 2000);
 	if (length == 36)
 		return length;
+	if (mock->startup.state == WS73_STARTUP_CONFIGURE) {
+		KUNIT_EXPECT_EQ(test, length, 128);
+		KUNIT_EXPECT_EQ(test, data[64], 0x19);
+		KUNIT_EXPECT_EQ(test, get_unaligned_le16(data + 68), 0);
+		return mock->mode == START_SHORT_PLATFORM ? length - 1 : length;
+	}
 	KUNIT_EXPECT_EQ(test, length, 864);
 	KUNIT_EXPECT_EQ(test, data[64], 0x50);
 	KUNIT_EXPECT_EQ(test, data[65], 10);
@@ -154,7 +163,7 @@ static void ws73_startup_sequence_test(struct kunit *test)
 				ws73_startup_interrupt(&mock->startup, &ws73_start_bsp, 0), 0);
 		KUNIT_EXPECT_EQ(test, ws73_start_run(mock), 0);
 		KUNIT_EXPECT_EQ(test, mock->startup.state, WS73_STARTUP_DONE);
-		KUNIT_EXPECT_EQ(test, mock->bulk_calls, 3);
+		KUNIT_EXPECT_EQ(test, mock->bulk_calls, 6);
 		KUNIT_EXPECT_EQ(test, mock->control_calls, 1);
 		KUNIT_EXPECT_TRUE(test, mock->startup.boot_seen);
 		KUNIT_EXPECT_EQ(test, ws73_start_run(mock), -EALREADY);
@@ -180,7 +189,7 @@ static void ws73_startup_missing_test(struct kunit *test)
 			ws73_startup_interrupt(&mock->startup, &ws73_start_bsp, 0);
 		KUNIT_EXPECT_EQ(test, ws73_start_run(mock), -ETIMEDOUT);
 		KUNIT_EXPECT_EQ(test, mock->startup.state, WS73_STARTUP_FAILED);
-		KUNIT_EXPECT_EQ(test, mock->bulk_calls, stage ? 3 : 0);
+		KUNIT_EXPECT_EQ(test, mock->bulk_calls, stage ? 6 : 0);
 		KUNIT_EXPECT_EQ(test, mock->control_calls, stage >= 2 ? 1 : 0);
 		KUNIT_EXPECT_EQ(test, mock->startup.ble.state, WS73_BLE_FAILED);
 		KUNIT_EXPECT_EQ(test, ws73_start_run(mock), -ETIMEDOUT);
@@ -197,6 +206,7 @@ static void ws73_startup_failures_test(struct kunit *test)
 		{ START_SHORT_CUSTOM, -EREMOTEIO, 0 }, { START_SHORT_CONTROL, -EMSGSIZE, 1 },
 		{ START_ABORT_CUSTOM, -ENODEV, 0 }, { START_ABORT_CONTROL, -ESHUTDOWN, 1 },
 		{ START_EXPIRE, -ETIMEDOUT, 0 },
+		{ START_SHORT_PLATFORM, -EREMOTEIO, 0 },
 	};
 	struct ws73_start_mock *mock = kunit_kmalloc(test, sizeof(*mock), GFP_KERNEL);
 	unsigned int i;
@@ -259,6 +269,10 @@ static void ws73_startup_admission_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_start_run(mock), -ERANGE);
 	KUNIT_EXPECT_EQ(test, mock->startup.state, WS73_STARTUP_ARMED);
 	mock->parameters.calibration_count = 0;
+	mock->platform.wake_gpio = 256;
+	KUNIT_EXPECT_EQ(test, ws73_start_run(mock), -ERANGE);
+	KUNIT_EXPECT_EQ(test, mock->bulk_calls, 0);
+	mock->platform.wake_gpio = 0;
 	mock->mode = START_REENTER;
 	ws73_startup_interrupt(&mock->startup, &ws73_start_bsp, 0);
 	KUNIT_ASSERT_EQ(test, ws73_start_run(mock), 0);
@@ -280,7 +294,7 @@ static void ws73_startup_admission_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_startup_arm(&mock->startup, 0, 100), -ETIMEDOUT);
 	KUNIT_EXPECT_EQ(test, ws73_startup_arm(NULL, 0, 100), -EINVAL);
 	KUNIT_EXPECT_EQ(test, ws73_startup_run(NULL, &mock->tx, &mock->bulk,
-					       &mock->control, &mock->parameters), -EINVAL);
+					       &mock->control, &mock->platform, &mock->parameters), -EINVAL);
 }
 
 static int ws73_start_rx_thread(void *context)

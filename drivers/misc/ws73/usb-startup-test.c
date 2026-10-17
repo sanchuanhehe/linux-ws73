@@ -8,6 +8,7 @@ static void ws73_test_initialize_common(struct work_struct *work, bool publish)
 {
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	/* Fixture parameters only: no physical board applicability is claimed. */
+	const struct ws73_platform_config platform = {};
 	const struct ws73_customization parameters = {};
 	struct btws73_chip_identity chip;
 	struct ws73_version version;
@@ -37,7 +38,7 @@ static void ws73_test_initialize_common(struct work_struct *work, bool publish)
 	dev_info(&ws->interface->dev, "synthetic runtime identity verified\n");
 	stage = "startup";
 	ret = ws73_startup_run(&ws->startup, &ws->tx, &ws->runtime_io,
-			       &ws->ble_io, &parameters);
+			       &ws->ble_io, &platform, &parameters);
 	if (ret)
 		goto done;
 	stage = "disable";

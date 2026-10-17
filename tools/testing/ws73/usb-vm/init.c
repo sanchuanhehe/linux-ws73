@@ -520,12 +520,19 @@ static void startup_notification(int in, unsigned int kind, int malformed)
 }
 static void startup_customization(int out)
 {
- for (unsigned int step = 4; step <= 6; step++) {
+ unsigned char pm[1024], pm_expected[128] = {0};
+ le32(pm_expected + 4, 128); le32(pm_expected + 8, 4);
+ pm_expected[64] = 0x19; pm_expected[65] = 9;
+ le16(pm_expected + 66, 32); le16(pm_expected + 70, 4);
+ ssize_t actual = read(out, pm, sizeof(pm));
+ if (actual != sizeof(pm_expected) || memcmp(pm, pm_expected, sizeof(pm_expected))) die("startup PM OUT");
+ puts("WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified");
+ for (unsigned int step = 5; step <= 7; step++) {
   unsigned char got[1024], expected[864] = {0};
-  unsigned int length = step < 6 ? 36 : 864;
-  le32(expected, step < 6 ? 3 : 0); le32(expected + 4, step < 6 ? 0 : 864);
+  unsigned int length = step < 7 ? 36 : 864;
+  le32(expected, step < 7 ? 3 : 0); le32(expected + 4, step < 7 ? 0 : 864);
   le32(expected + 8, step);
-  if (step < 6) { le32(expected + 12, step == 4 ? 1 : 0); le32(expected + 16, step == 4 ? 10 : 0); }
+  if (step < 7) { le32(expected + 12, step == 5 ? 1 : 0); le32(expected + 16, step == 5 ? 10 : 0); }
   else {
    expected[64] = 0x50; expected[65] = 10; le16(expected + 66, 800);
    le16(expected + 70, 140);
@@ -621,7 +628,7 @@ static void hci_command(int out, int in, unsigned int step, int reply)
  unsigned char got[512], expected[128] = {0}, event[71] = {4, 0x0e, 0, 1};
  unsigned int opcode = opcodes[step], parameters = opcode == 0x0c01 || opcode == 0x2001 ? 8 : 0;
  unsigned int size = 7;
- le32(expected + 4, sizeof(expected)); le32(expected + 8, step + 9);
+ le32(expected + 4, sizeof(expected)); le32(expected + 8, step + 10);
  expected[65] = 7; le16(expected + 66, parameters + 4);
  expected[68] = 1; le16(expected + 69, opcode); expected[71] = parameters;
  if (opcode == 0x0c01) { expected[73] = 0xe0; expected[79] = 0x20; }
@@ -630,7 +637,7 @@ static void hci_command(int out, int in, unsigned int step, int reply)
   fprintf(stderr, "WS73_HCI_UNEXPECTED step=%u length=%zd opcode=%04x\n", step, n, n >= 72 ? get16(got + 69) : 0);
   die("HCI command bytes");
  }
- printf("WS73_HCI_COMMAND step=%u sequence=%u opcode=%04x actual=%zd verified\n", step, step + 9, opcode, n);
+ printf("WS73_HCI_COMMAND step=%u sequence=%u opcode=%04x actual=%zd verified\n", step, step + 10, opcode, n);
  if (!reply) return;
  le16(event + 4, opcode);
  switch (opcode) {
@@ -656,10 +663,10 @@ static int startup_hci(int control, int *eps, int log, int management, unsigned 
  wait_kernel(log, "synthetic auxiliary result=0");
  startup_action(control, 25, 0);
  startup_notification(eps[0], 2, 0);
- for (unsigned int step = 7; step < 9; step++) {
+ for (unsigned int step = 8; step < 10; step++) {
   unsigned char got[512], expected[36] = {0};
   le32(expected, 3); le32(expected + 8, step);
-  le32(expected + 12, step == 7 ? 1 : 0); le32(expected + 16, step == 7 ? 7 : 0);
+  le32(expected + 12, step == 8 ? 1 : 0); le32(expected + 16, step == 8 ? 7 : 0);
   ssize_t n = read(eps[1], got, sizeof(got));
   if (n != sizeof(expected) || memcmp(got, expected, sizeof(expected))) die("HCI queue controls");
   printf("WS73_HCI_QUEUE step=%u actual=%zd verified\n", step, n);

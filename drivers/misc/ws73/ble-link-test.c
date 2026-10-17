@@ -40,6 +40,10 @@ static int ws73_link_bulk(void *context, const u8 *data, size_t length, unsigned
 	if (length == 864) {
 		KUNIT_EXPECT_EQ(f->test, data[65], 10);
 		ws73_ble_link_notify(&f->link, WS73_NOTIFY_CUSTOMIZED, f->now);
+	} else if (length == 128 && data[65] == 9) {
+		static const u8 expected[64] = { 0x19, 9, 32, 0, 0, 0, 4 };
+
+		KUNIT_EXPECT_MEMEQ(f->test, data + 64, expected, sizeof(expected));
 	} else if (length == 128) {
 		KUNIT_EXPECT_MEMEQ(f->test, data + 64, ws73_link_record, 8);
 		KUNIT_EXPECT_PTR_EQ(f->test, memchr_inv(data + 72, 0, 56), NULL);
@@ -136,6 +140,7 @@ static int ws73_link_startup(struct ws73_link_fixture *f)
 {
 	const struct ws73_interrupt bsp = { .events = WS73_INTERRUPT_BSP_READY };
 	/* Explicit synthetic parameters, never a physical board default. */
+	const struct ws73_platform_config platform = {};
 	const struct ws73_customization parameters = {};
 	int ret;
 
@@ -144,7 +149,7 @@ static int ws73_link_startup(struct ws73_link_fixture *f)
 		ret = ws73_startup_interrupt(&f->startup, &bsp, f->now);
 	if (!ret)
 		ret = ws73_startup_run(&f->startup, &f->tx, &f->link.bulk,
-				       &f->link.control, &parameters);
+				       &f->link.control, &platform, &parameters);
 	return ret;
 }
 
@@ -205,7 +210,7 @@ static void ws73_link_lifecycle_test(struct kunit *test)
 	KUNIT_ASSERT_EQ(test, ws73_ble_start(f->link.child), 0);
 	KUNIT_EXPECT_EQ(test, f->controls, 3);
 	KUNIT_EXPECT_EQ(test, ws73_ble_send(f->link.child, ws73_link_record, 8), 0);
-	KUNIT_EXPECT_EQ(test, f->bulks, 6); /* custom + switch/reset/BLE */
+	KUNIT_EXPECT_EQ(test, f->bulks, 9); /* PM + custom + switch/reset/BLE */
 	ws73_link_feed(test, f);
 	KUNIT_EXPECT_EQ(test, f->receives, 1);
 	KUNIT_EXPECT_MEMEQ(test, f->received, event, sizeof(event));

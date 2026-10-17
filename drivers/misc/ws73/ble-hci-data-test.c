@@ -216,7 +216,7 @@ static int ws73_model_bulk(void *context, const u8 *data, size_t size, unsigned 
 		if (operation == 1) {
 			u32 queue = get_unaligned_le32(data + 16);
 
-			if (queue != (m->selected ? 7 : 10))
+			if (queue != (!m->selected ? 9 : m->queue == 9 ? 10 : 7))
 				goto invalid;
 			m->queue = queue;
 			m->selected = true;
@@ -233,7 +233,13 @@ static int ws73_model_bulk(void *context, const u8 *data, size_t size, unsigned 
 	    get_unaligned_le32(data + 4) != size || memchr_inv(data + 12, 0, 52) ||
 	    data[65] != m->queue)
 		goto invalid;
-	if (m->queue == 10) {
+	if (m->queue == 9) {
+		static const u8 expected[64] = { 0x19, 9, 32, 0, 0, 0, 4 };
+
+		if (size != 128 || memcmp(data + 64, expected, sizeof(expected)))
+			goto invalid;
+		ret = 0;
+	} else if (m->queue == 10) {
 		if (size != 864 || ws73_customize_validate(data + 64, 800))
 			goto invalid;
 		ret = ws73_model_notify(m, 2, 2);
@@ -255,6 +261,7 @@ invalid:
 static int ws73_model_start_link(struct ws73_hci_model *m)
 {
 	/* Only this explicit model uses zero board parameters and synthetic BSP. */
+	const struct ws73_platform_config platform = {};
 	const struct ws73_customization parameters = {};
 	const struct ws73_interrupt bsp = { .events = WS73_INTERRUPT_BSP_READY };
 	const struct ws73_usb_tx_io bulk = {
@@ -276,7 +283,7 @@ static int ws73_model_start_link(struct ws73_hci_model *m)
 	if (!ret)
 		ret = ws73_startup_interrupt(&m->startup, &bsp, 0);
 	if (!ret)
-		ret = ws73_startup_run(&m->startup, &m->tx, &bulk, &control, &parameters);
+		ret = ws73_startup_run(&m->startup, &m->tx, &bulk, &control, &platform, &parameters);
 	if (!ret)
 		ret = ws73_ble_control_set(&m->startup.ble, &control, false, 2000);
 	/* The synchronous model has no outstanding old data after disable. */
@@ -731,7 +738,7 @@ static void ws73_hci_link_data_test(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, m);
 	KUNIT_ASSERT_EQ(test, m->hdev->flush(m->hdev), 0);
 	KUNIT_EXPECT_EQ(test, m->controls, 3);
-	KUNIT_EXPECT_EQ(test, m->bulk_calls, 8);
+	KUNIT_EXPECT_EQ(test, m->bulk_calls, 11);
 	KUNIT_EXPECT_EQ(test, m->commands, 3);
 	KUNIT_EXPECT_MEMEQ(test, &m->hdev->bdaddr, ws73_model_address, 6);
 	skb = ws73_model_packet();
@@ -742,7 +749,7 @@ static void ws73_hci_link_data_test(struct kunit *test)
 	KUNIT_ASSERT_EQ(test, ret, 0);
 	KUNIT_ASSERT_TRUE(test, wait_for_completion_timeout(&m->acl, HZ));
 	KUNIT_ASSERT_EQ(test, m->hdev->flush(m->hdev), 0);
-	KUNIT_EXPECT_EQ(test, m->bulk_calls, 9);
+	KUNIT_EXPECT_EQ(test, m->bulk_calls, 12);
 	KUNIT_EXPECT_EQ(test, m->hdev->stat.acl_tx, 1);
 	memcpy(input, event, sizeof(event));
 	memcpy(input + sizeof(event), acl, sizeof(acl));
@@ -804,7 +811,7 @@ static void ws73_hci_link_short_action_test(struct kunit *test)
 		KUNIT_EXPECT_PTR_EQ(test, m->link.child, NULL);
 	KUNIT_EXPECT_EQ(test, m->link.error, -EMSGSIZE);
 	KUNIT_EXPECT_EQ(test, m->controls, 3);
-	KUNIT_EXPECT_EQ(test, m->bulk_calls, 3);
+	KUNIT_EXPECT_EQ(test, m->bulk_calls, 6);
 	KUNIT_EXPECT_EQ(test, m->commands, 0);
 	KUNIT_EXPECT_EQ(test, m->transport_faults, 0);
 	KUNIT_EXPECT_EQ(test, m->wire_error, 0);
@@ -837,7 +844,7 @@ static void ws73_hci_link_abort_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_model_fragment(m, event, sizeof(event)), 0);
 	KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, before);
 	KUNIT_EXPECT_EQ(test, m->acls, 0);
-	KUNIT_EXPECT_EQ(test, m->bulk_calls, 8);
+	KUNIT_EXPECT_EQ(test, m->bulk_calls, 11);
 	KUNIT_EXPECT_EQ(test, m->tx.failure, -ENODEV);
 	KUNIT_EXPECT_EQ(test, m->link.error, -ENODEV);
 	ws73_ble_link_remove(&m->link);
@@ -846,7 +853,7 @@ static void ws73_hci_link_abort_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_ble_send(held, ws73_model_record, sizeof(ws73_model_record)),
 			-ENODEV);
 	KUNIT_EXPECT_EQ(test, m->controls, 3);
-	KUNIT_EXPECT_EQ(test, m->bulk_calls, 8);
+	KUNIT_EXPECT_EQ(test, m->bulk_calls, 11);
 	put_device(&held->dev);
 }
 

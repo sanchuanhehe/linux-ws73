@@ -37,7 +37,7 @@ int ws73_startup_arm(struct ws73_startup *startup, u64 now_ms, u64 deadline_ms)
 		startup->error = ret;
 		startup->state = WS73_STARTUP_FAILED;
 	} else {
-		/* 6 s BSP + 2 s customization + 2 s enable + 2 s BOOT, no retries. */
+		/* One 12 s budget across all stages, including platform TX; no retries. */
 		startup->deadline = now_ms + min_t(u64, deadline_ms - now_ms, 12000);
 		startup->state = WS73_STARTUP_ARMED;
 		ret = 0;
@@ -171,15 +171,16 @@ static int ws73_startup_wait(struct ws73_startup *startup, struct completion *do
 int ws73_startup_run(struct ws73_startup *startup, struct ws73_usb_tx *tx,
 		     const struct ws73_usb_tx_io *bulk,
 		     const struct ws73_ble_control_io *control,
+		     const struct ws73_platform_config *platform,
 		     const struct ws73_customization *parameters)
 {
 	unsigned long flags;
 	int ret;
 
 	if (!startup || !tx || !bulk || !bulk->now_ms || !bulk->cancelled || !bulk->send ||
-	    !control || !control->now_ms || !control->cancelled || !control->send || !parameters)
+	    !control || !control->now_ms || !control->cancelled || !control->send || !platform || !parameters)
 		return -EINVAL;
-	if (parameters->calibration_count > 8)
+	if (parameters->calibration_count > 8 || platform->wake_gpio > U8_MAX)
 		return -ERANGE;
 	if (!mutex_trylock(&startup->command_lock))
 		return -EBUSY;
@@ -198,6 +199,12 @@ int ws73_startup_run(struct ws73_startup *startup, struct ws73_usb_tx *tx,
 	if (ret)
 		goto unlock;
 	ret = ws73_startup_wait(startup, &startup->bsp_done, bulk, 6000);
+	if (ret)
+		goto failed;
+	ret = ws73_startup_stage(startup, WS73_STARTUP_CONFIGURE);
+	if (ret)
+		goto failed;
+	ret = ws73_platform_configure(tx, bulk, platform, startup->deadline);
 	if (ret)
 		goto failed;
 	ret = ws73_startup_stage(startup, WS73_STARTUP_CUSTOMIZE);

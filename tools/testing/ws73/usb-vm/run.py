@@ -88,10 +88,11 @@ def validate_hci(kernel, log, speed="full"):
   assert part.count('synthetic auxiliary result=0')==1
   assert re.findall(r'WS73_TEST_OUT step=(\d) actual=(\d+) verified',part)==[('0','36'),('1','36'),('2','128'),('3','128')]
   assert re.findall(r'WS73_TEST_IN kind=(\w+) actual=(\d+) synthetic',part)==[('chip','124'),('version','124')]
-  assert re.findall(r'WS73_STARTUP_OUT step=(\d) actual=(\d+) verified',part)==[('4','36'),('5','36'),('6','864')]
-  assert re.findall(r'WS73_HCI_QUEUE step=(\d) actual=(\d+) verified',part)==[('7','36'),('8','36')]
+  assert part.count('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified') == 1
+  assert re.findall(r'WS73_STARTUP_OUT step=(\d) actual=(\d+) verified',part)==[('5','36'),('6','36'),('7','864')]
+  assert re.findall(r'WS73_HCI_QUEUE step=(\d) actual=(\d+) verified',part)==[('8','36'),('9','36')]
   commands=12 if good else 3; replies=12 if good else 2
-  assert re.findall(r'WS73_HCI_COMMAND step=(\d+) sequence=(\d+) opcode=([0-9a-f]+) actual=(\d+) verified',part)==[(str(i),str(i+9),opcodes[i],'128') for i in range(commands)]
+  assert re.findall(r'WS73_HCI_COMMAND step=(\d+) sequence=(\d+) opcode=([0-9a-f]+) actual=(\d+) verified',part)==[(str(i),str(i+10),opcodes[i],'128') for i in range(commands)]
   assert re.findall(r'WS73_HCI_COMPLETE step=(\d+) opcode=([0-9a-f]+) h4=(\d+) synthetic',part)==[(str(i),opcodes[i],str(sizes[i])) for i in range(replies)]
   fragments=[]
   for size in sizes[:replies]:
@@ -127,7 +128,7 @@ def validate_hci(kernel, log, speed="full"):
   if errors:assert part.index('WS73_TEST_REMOVE')<part.index('interrupt observation failed:')
   assert len(records)==10+len(errors)
  assert log.count('WS73_HCI_MGMT_INFO')==2 and log.count('WS73_HCI_AUTO_OFF_ACK')==2
- return {'cases':3,'native_initializations':2,'reset_cancellation':1,'hci_commands':27,'hci_replies':26,'hci_fragments':78,'bulk_out':54,'bulk_in':101,'class_actions':11,'mgmt_info':2,'auto_off_ack':2,'drains':3}
+ return {'cases':3,'native_initializations':2,'reset_cancellation':1,'hci_commands':27,'hci_replies':26,'hci_fragments':78,'bulk_out':57,'bulk_in':101,'class_actions':11,'mgmt_info':2,'auto_off_ack':2,'drains':3}
 
 def validate_startup(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL|SKIP',kernel+'\n'+log)
@@ -154,7 +155,8 @@ def validate_startup(kernel, log, speed="full"):
   assert re.findall(r'WS73_TEST_OUT step=(\d) actual=(\d+) verified',part)==[('0','36'),('1','36'),('2','128'),('3','128')],number
   assert re.findall(r'WS73_TEST_IN kind=(\w+) actual=(\d+) synthetic',part)==[('chip','124'),('version','124')],number
   assert part.count('synthetic runtime identity verified')==1,number
-  assert re.findall(r'WS73_STARTUP_OUT step=(\d) actual=(\d+) verified',part)==([] if n==5 else [('4','36'),('5','36'),('6','864')]),number
+  assert part.count('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified') == int(n != 5)
+  assert re.findall(r'WS73_STARTUP_OUT step=(\d) actual=(\d+) verified',part)==([] if n==5 else [('5','36'),('6','36'),('7','864')]),number
   assert re.findall(r'WS73_STARTUP_INT actual=(\d+) bits=([0-9a-f]+) synthetic',part)==[('8','00000041' if n==5 else '00000001')],number
   notifications=[] if n==5 else [('0','108','0'),('1','108',str(int(n==3)))]
   if n in (0,6):notifications += [('2','108','0'),('3','108','0')]
@@ -185,7 +187,7 @@ def validate_startup(kernel, log, speed="full"):
   assert [e for e in errors if e not in removal]==(['-5'] if n==5 else []),number
   expected_records=4+int(n!=5)+len(delivered)+int(n==5)+len(removal)
   assert len(records)==expected_records,number
- return {'cases':7,'bulk_out':46,'bulk_in':30,'class_setups':7,'class_payloads':6,'interrupts':7,'disconnects':7,'drains':7,'no_extra_out_checks':6}
+ return {'cases':7,'bulk_out':52,'bulk_in':30,'class_setups':7,'class_payloads':6,'interrupts':7,'disconnects':7,'drains':7,'no_extra_out_checks':6}
 
 def validate_boot(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL',kernel+'\n'+log)

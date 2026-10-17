@@ -43,7 +43,9 @@ def main():
         build.mkdir(exist_ok=True)
         config = CONFIG.read_text()
         if args.hci:
-            config = config.replace("# CONFIG_NET is not set", "CONFIG_NET=y\nCONFIG_BT=y\nCONFIG_BT_WS73=y")
+            config = config.replace("# CONFIG_NET is not set",
+                                    "CONFIG_NET=y\nCONFIG_BT=y\nCONFIG_BT_LE=y\n"
+                                    "# CONFIG_BT_BREDR is not set\nCONFIG_BT_WS73=y")
         (record / "hardware.config").write_text(config)
         shutil.copyfile(__file__, record / "build.py")
         manifest = {"status": "INCOMPLETE", "source": git("rev-parse", "HEAD"),

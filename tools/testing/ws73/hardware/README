@@ -56,7 +56,8 @@ Native HCI experiment
 ---------------------
 
 The separate `build.py --hci` output enables the existing btws73 auxiliary
-consumer and native Bluetooth stack. It leaves the previous non-HCI build
+consumer and native Bluetooth LE stack, explicitly including CONFIG_BT_LE
+and excluding CONFIG_BT_BREDR. It leaves the previous non-HCI build
 and its evidence pointer intact. The BLE trial's default behavior still ends
 after acknowledged disable. Explicit `native_hci=1` instead publishes the BLE
 child after that disable; native open then owns the next enable. Publication

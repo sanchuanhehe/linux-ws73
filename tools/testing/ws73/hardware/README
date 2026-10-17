@@ -3,8 +3,10 @@ WS73 allocated-U RAM loading experiment
 
 This is an explicit development trial, not an automatically enabled production
 board profile. The test module registers only inside the specially tagged VM,
-requires an exact serial, accepts only the first guest USB device and a boot
-interface, and has no module-autoload USB alias or dynamic ID support. Never
+requires an exact serial and observed guest device number, accepts only an
+explicit PID 1 bind on the first guest USB port with a boot interface, and
+has no module-autoload USB alias or dynamic ID support. A single atomic
+admission is consumed before bind, including when bind subsequently fails. Never
 install or load it on the host. The normal physical driver remains an observer.
 The test does not enable BLE, Wi-Fi or RF functions, change eFuse/flash, reset
 a hub/controller or provide a general register interface.
@@ -28,12 +30,24 @@ set. Board marketing identity/INI confirmation, production RF calibration,
 and cross-board applicability remain unqualified; this bounded experiment
 must not install those values as universal driver defaults.
 
+Before attachment, the tagged guest runs eight pure admission cases in a
+separate test module and verifies that loading the trial without a device
+number fails. The actual trial driver must be absent at READY.
+
 After the normal driver reports exact U READM and the previously observed
-ROM version, guest PID 1 verifies serial and USB ID again, unbinds only that
-guest interface, then binds the explicit RAM trial. The production loader
+ROM version, guest PID 1 checks serial, USB ID, the device number captured
+from enumeration and existing observer ownership. Only then does it load
+the trial module with that number, recheck ownership, unbind that guest
+interface and bind the explicit RAM trial. Automatic worker-context probes,
+changed enumeration numbers and repeated probes are rejected. The production loader
 performs a fresh HCC identity query before choosing/requesting firmware.
 Successful download only means WAIT_RUNTIME. Re-enumeration must create a
 new normal observer object and independently report runtime identity/version.
 No old identity, URB or callback is transferred. No automatic failure retry
 or firmware/profile switch is allowed. Archive every attempt and report
 uncaptured wire payload bytes, unexpected enumeration or terminal failure.
+
+No autoload alias alone cannot prevent a loaded USB driver from matching
+new devices. The late registration, PID 1 constraint, enumeration binding
+and one-shot admission are separate protections; the pure tests do not
+qualify real USB matching, firmware loading or RF behavior.

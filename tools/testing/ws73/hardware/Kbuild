@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # Copy into the fixed external-module build directory; do not build in-tree.
 obj-m := ws73-ram-trial.o
+obj-m += ws73-ram-trial-guard-test.o
 ws73-ram-trial-y := loader.o
+ws73-ram-trial-guard-test-y := guard-test.o
 ccflags-y += -I$(WS73_SOURCE)/drivers/misc/ws73

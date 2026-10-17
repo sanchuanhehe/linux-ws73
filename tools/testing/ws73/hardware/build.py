@@ -77,7 +77,7 @@ def main():
                                 assert line in actual, "unresolved config: " + line
             module = WORK / "build-hardware-module"
             module.mkdir(exist_ok=True)
-            for name in ("loader.c", "Kbuild"):
+            for name in ("loader.c", "guard.h", "guard-test.c", "Kbuild"):
                 original = Path(__file__).with_name(name)
                 shutil.copyfile(original, module / name)
                 shutil.copyfile(original, record / name)
@@ -86,7 +86,7 @@ def main():
             manifest["command"].append(command)
             with (record / "module-build.log").open("w") as log:
                 subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, env=env, check=True)
-            for name in ("ws73-ram-trial.ko", "loader.o"):
+            for name in ("ws73-ram-trial.ko", "loader.o", "ws73-ram-trial-guard-test.ko", "guard-test.o"):
                 shutil.copyfile(module / name, record / name)
                 manifest["artifacts"][name] = sha(record / name)
             assert not git("status", "--porcelain")

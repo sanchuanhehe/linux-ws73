@@ -2,13 +2,19 @@
 /* Explicit, one-device RAM loading trial. Never install/load on the host. */
 #include <linux/dmi.h>
 #include <linux/module.h>
+#include <linux/sched.h>
 
 #include "boot-loader.h"
 #include "usb-owner.h"
+#include "guard.h"
 
 static char *serial;
 module_param(serial, charp, 0400);
 MODULE_PARM_DESC(serial, "Exact allocated USB serial, required inside the tagged trial VM");
+static unsigned int devnum;
+module_param(devnum, uint, 0400);
+MODULE_PARM_DESC(devnum, "Guest device number from the successful observation, required");
+static atomic_t available = ATOMIC_INIT(1);
 
 static void ws73_trial_load(struct work_struct *work)
 {
@@ -32,12 +38,17 @@ static void ws73_trial_load(struct work_struct *work)
 static int ws73_trial_probe(struct usb_interface *intf, const struct usb_device_id *id)
 {
 	struct usb_device *udev = interface_to_usbdev(intf);
+	int ret;
 
 	/* Runtime creates a fresh owner through the normal observation driver. */
 	if (!udev->serial || strcmp(udev->serial, serial) ||
 	    strcmp(dev_name(&udev->dev), "1-1") ||
 	    intf->cur_altsetting->desc.bNumEndpoints != 2)
 		return -ENODEV;
+	ret = ws73_trial_claim(&available, devnum, udev->devnum, is_global_init(current));
+	if (ret)
+		return ret;
+	/* Consumed before bind: allocation/probe failure must not permit retry. */
 	return ws73_usb_bind(intf, ws73_trial_load);
 }
 
@@ -57,7 +68,7 @@ static struct usb_driver ws73_trial_driver = {
 
 static int __init ws73_trial_init(void)
 {
-	if (!serial || !*serial ||
+	if (!serial || !*serial || !devnum || devnum > 127 ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
 	    !dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial"))
 		return -ENODEV;

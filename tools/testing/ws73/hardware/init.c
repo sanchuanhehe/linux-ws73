@@ -36,6 +36,19 @@ static void bind_command(const char *path)
  if (fd < 0 || write(fd, interface, sizeof(interface) - 1) != sizeof(interface) - 1) fail(path);
  close(fd);
 }
+static void load_module(const char *path, const char *parameters, int expected_error)
+{
+ int fd = open(path, O_RDONLY);
+ if (fd < 0) fail(path);
+ int ret = syscall(SYS_finit_module, fd, parameters, 0);
+ int error = ret < 0 ? errno : 0;
+ close(fd);
+ if (error != expected_error) { errno = error; fail("module result"); }
+}
+static void require_observer(void)
+{
+ if (access("/sys/bus/usb/drivers/ws73/1-1:1.0", F_OK)) fail("observer ownership");
+}
 int main(void)
 {
  if (getpid() != 1) return 2;
@@ -55,16 +68,22 @@ int main(void)
  read_text("/trial-serial", serial, sizeof(serial));
  if (strpbrk(serial, "\"\\ \t")) fail("serial parameter syntax");
  snprintf(parameters, sizeof(parameters), "serial=\"%s\"", serial);
- int module = open("/trial.ko", O_RDONLY);
- if (module < 0 || syscall(SYS_finit_module, module, parameters, 0)) fail("VM trial module");
- close(module);
+ /* Pure gate checks and an invalid-module-input check, before any attachment. */
+ load_module("/guard-test.ko", "", 0);
+ if (syscall(SYS_delete_module, "ws73_ram_trial_guard_test", O_NONBLOCK)) fail("guard test unload");
+ load_module("/trial.ko", parameters, ENODEV); /* Missing enumeration is forbidden. */
+ errno = 0;
+ if (!access("/sys/bus/usb/drivers/ws73-ram-trial", F_OK) || errno != ENOENT)
+  fail("premature trial registration");
  int monitor = open("/sys/kernel/debug/usb/usbmon/0u", O_RDONLY | O_NONBLOCK);
  int kmsg = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
  if (monitor < 0 || kmsg < 0) fail("capture");
+ puts("WS73_RAM_TRIAL_GUARDS_PASS_NO_DRIVER");
  puts("WS73_RAM_TRIAL_READY_NO_DEVICE");
  struct timespec start, now;
  clock_gettime(CLOCK_MONOTONIC, &start);
  int identity = 0, attempted = 0;
+ unsigned int observed_devnum = 0;
  for (;;) {
   clock_gettime(CLOCK_MONOTONIC, &now);
   if (now.tv_sec - start.tv_sec >= 90) fail("absolute VM deadline");
@@ -77,16 +96,32 @@ int main(void)
     if (n <= 0) fail("capture read");
     data[n] = 0; printf("%s %s", i ? "KMSG" : "USBMON", data);
     if (!i || attempted) continue;
-    if (strstr(data, "boot chip observation 0x00000000: package 0 bus 0;")) identity = 1;
-    if (!strstr(data, "boot version observation: 12 bytes 424f4f545645523030310000")) continue;
-    if (!identity) fail("initial U identity missing");
+    char *enumeration = strstr(data, "usb 1-1: new full-speed USB device number ");
+    if (enumeration) {
+     unsigned int number = 0; int consumed = 0;
+     if (sscanf(enumeration, "usb 1-1: new full-speed USB device number %u using xhci_hcd%n",
+                &number, &consumed) != 1 || !consumed || !number || number > 127 || observed_devnum)
+      fail("unexpected boot enumeration");
+     observed_devnum = number;
+    }
+    if (strstr(data, "usb 1-1: USB disconnect")) fail("observed boot epoch disconnected");
+    if (strstr(data, "ws73 1-1:1.0: boot chip observation 0x00000000: package 0 bus 0;")) identity = 1;
+    if (!strstr(data, "ws73 1-1:1.0: boot version observation: 12 bytes 424f4f545645523030310000")) continue;
+    if (!identity || !observed_devnum) fail("initial U identity/epoch missing");
     read_text("/sys/bus/usb/devices/1-1/serial", value, sizeof(value));
     if (strcmp(serial, value)) fail("guest serial mismatch");
     read_text("/sys/bus/usb/devices/1-1/idVendor", value, sizeof(value));
     if (strcmp(value, "ffff")) fail("guest vendor mismatch");
     read_text("/sys/bus/usb/devices/1-1/idProduct", value, sizeof(value));
     if (strcmp(value, "3733")) fail("guest product mismatch");
+    read_text("/sys/bus/usb/devices/1-1/devnum", value, sizeof(value));
+    char *end; unsigned long current_devnum = strtoul(value, &end, 10);
+    if (*end || current_devnum != observed_devnum) fail("guest enumeration changed");
     attempted = 1;
+    require_observer();
+    snprintf(parameters, sizeof(parameters), "serial=\"%s\" devnum=%u", serial, observed_devnum);
+    load_module("/trial.ko", parameters, 0);
+    require_observer();
     puts("WS73_RAM_TRIAL_REBIND_ONE_U reference_xo=8,60");
     bind_command("/sys/bus/usb/drivers/ws73/unbind");
     bind_command("/sys/bus/usb/drivers/ws73-ram-trial/bind");

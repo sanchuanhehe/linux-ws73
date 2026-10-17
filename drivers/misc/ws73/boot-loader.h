@@ -22,8 +22,10 @@ struct ws73_boot_session {
 /*
  * One serialized, sleepable attempt per zero-initialized session. Caller owns
  * the device/IO/session until return and must interrupt blocked IO on removal.
- * The owner must first qualify cold boot register access and board/trim for
- * this hardware; this API cannot establish those facts from a successful read.
+ * The owner must establish boot-register access and select explicitly sourced
+ * board inputs for the intended hardware or bounded development trial. This
+ * API supplies no board defaults and cannot turn a successful load into cold
+ * boot, RF/trim, or cross-board qualification.
  * It performs a fresh READM, selects exactly one USB U/E profile, acquires and
  * validates all three original files, prepares RAM/XO, then sends FILES/QUIT.
  * Firmware references stay live until all synchronous transfers have joined.

@@ -191,3 +191,87 @@ review. The SDK loading audit and preference for drivers/misc/ws73 are
 provisional design evidence; transport, loader, HCI and cleanup integration
 remain unimplemented. Cold-start HCC identity availability is still an open
 hardware/protocol gate, so no guessed U/E firmware was loaded.
+
+Shared-core, boot transactions and H4 stream increment
+------------------------------------------------------
+
+The shared HCC migration retained all 13 cases unchanged. Its clean-source
+run at 92f2e06c7800 is records/20261017T053022.087868Z. Firmware/profile
+validation and bounded boot transactions added five cases; the clean
+18-case run at 18f290020cb6 is records/20261017T053705.562167Z. An earlier
+dirty 18-case run is retained at records/20261017T053533.150180Z.
+All record paths here are under .dev/ws73-upstream/.
+
+Subsequent SDK/libws73 comparison found a faulty QUIT fixture: the first
+executor and its test both omitted the command's trailing space. Those
+passes do not establish the correct QUIT wire bytes. Commit 9b9ee2ec18d5
+corrects both to the SDK's five-byte command; no physical download had run.
+The earlier records are retained, not rewritten as corrected results.
+
+A separate core-only VM built with CONFIG_NET disabled and no Bluetooth
+passed all five shared-core cases at 8f0e0c44b402, then again at the corrected
+9b9ee2ec18d5. The records are 20261017T054204.019185Z and
+20261017T054428.012737Z. The command adds --core-only to the normal runner.
+The runner checks the resulting .config and expects exactly the core suite;
+stale Bluetooth objects in the reusable build directory are not evidence.
+This establishes build/runtime independence for these helpers, not a
+BLE-only hardware configuration or the future module-dependency matrix.
+
+The latest full instrumented VM run compiled clean source
+**b1b1729259d3f9a1af81f30f9d0eac2fa640d4f5** and passed all **21 cases**.
+It is records/20261017T054924.481201Z, run with::
+
+   python3 tools/testing/ws73/run-kunit.py --jobs 4
+
+The new H4 cases cover every two-part split of maximum event/ACL packets,
+coalesced and bytewise input, zero-length payloads, all type bytes and all
+65536 ACL length values, permanent failure after malformed input, explicit
+reset, and argument rejection. Firmware tests use synthetic file bytes
+with production SHA-256 validation; boot tests use a scripted transport,
+including errors/short I/O/timeout/cancellation at every I/O boundary.
+They do not exercise request_firmware deployment, USB/URB lifetime, board
+preparation, real identity, firmware execution, hci_dev or any peer.
+
+KASAN/UBSAN were configured in x86-64 QEMU with two vCPUs, no network, USB
+or disk. The retained object inspection in h4-fw-boot-instrumentation.json
+finds KASAN hooks in H4, firmware and boot objects, and UBSAN hooks in H4.
+The absence of a diagnostic is limited to the paths these tests execute.
+KCSAN, lockdep, fuzzing, formal verification and other architectures remain
+separate incomplete gates.
+
+Latest artifact SHA-256 values::
+
+   .config
+   7a981d0075072e8f9c5fb78c728f36b48943495309562be6fe1435045f08fedf
+   arch/x86/boot/bzImage
+   fa80e696cdbbf6cc3883efaca2923c31d8d9b5e7fc7dfb340a3d9d9144904d1f
+   test.log
+   08260e8664455f8cd81f44877a52d8fac598e59d456139f60afb2f94665b0294
+   drivers/bluetooth/btws73_proto.o
+   570be25f905bef40eb18a79ff0732395ad53efebc953111c2a70eddbc5ae033e
+   drivers/misc/ws73/firmware.o
+   42ab055d6a44d37418a02b9e1ed565bbaf06fb0ef98d792faa562c7270067cc1
+   drivers/misc/ws73/boot.o
+   3f960bd4bd1e962350a08d2095be6b7ee6473590ccca42ccc04459397464a9cf
+   manifest.json
+   e6067217f35a493bf4bf382336567bd94f89a8fceb5658c87725abcd4973858d
+
+The first H4 build failed before execution because KUNIT_EXPECT_PTR_EQ
+received an array expression instead of an explicit pointer. Its FAIL
+record 20261017T054651.587538Z and original unpublished source patch
+failed-h4-source-65708ff852c1.patch are retained; the unpublished commit
+was corrected before pushing. The patch reconstructs that source from
+9b9ee2ec18d5. No published history was rewritten. The corrected clean run
+above supersedes its qualification, not its failure history. Initial
+checkpatch alignment findings and corrected zero-finding reports are also
+retained. Existing unrelated W=1 base warnings remain in build logs.
+
+The libws73 identity follow-up is pinned in
+identity-libws73-followup.json. It confirms a boot register-access mechanism
+but not the missing eFuse-to-U/E mapping or status bitfield definitions;
+see ws73-roadmap.rst for the exact source paths and limitations. SDK local
+use remains authorized. No vendor source or binary was published.
+
+Retained failure patch SHA-256::
+
+   f83d3ed757fe5592427e5220a4788e799f6fb9fe040378a96f4e34c100a61fb0

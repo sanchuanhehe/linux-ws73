@@ -5,9 +5,10 @@ config WS73_CORE
 	select CRYPTO_LIB_SHA256
 	help
 	  Shared WS73 protocol helpers used by actual function consumers.
-	  This initial component validates HCC records and chip replies.
+	  This component validates HCC records, chip replies and original
+	  firmware, and provides bounded boot transaction sequencing.
 	  It has no Bluetooth or Wi-Fi stack dependency and does not yet
-	  register a USB driver, download firmware or enable a function.
+	  register a USB driver, transfer to hardware or enable a function.
 
 config WS73_KUNIT_TEST
 	tristate "WS73 firmware and boot transaction tests" if !KUNIT_ALL_TESTS

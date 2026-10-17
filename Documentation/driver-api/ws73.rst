@@ -225,14 +225,24 @@ on TX or event/ACL on RX. SCO, ISO and direction-invalid types are rejected.
 zeroed 8-byte alignment padding, and leaves output untouched on failure.
 It does not emit USB descriptors, switch queues or submit transfers.
 
+``btws73_h4_feed`` now assembles event/ACL packets across validated fragments
+in fixed 1500-byte storage. A call consumes at most one complete packet and
+reports the consumed byte count, allowing coalesced packets without losing
+their boundaries. Completed views borrow the stream storage until the next
+feed/reset; the eventual HCI consumer must copy them before feeding again.
+Invalid types and oversized lengths permanently fail that stream. Only an
+explicit reset after stopping and draining the old producer may reopen it.
+Partial headers and payloads are not dispatched. This implements assembly,
+not an hci_dev, HCI command credit, or a real controller response.
+
 The conservative 1500-byte fragment ceiling is an initial implementation
 limit, not a measured RX firmware maximum. Fragmentation across aggregates,
 USB short-transfer/reassembly semantics and actual BLE RX size distribution
 still need a 110 capture. No speculative re-synchronization or success is
 generated after malformed input.
 
-Architecture decision 0001 (provisional)
-----------------------------------------
+Architecture decision 0001 (selected implementation)
+---------------------------------------------------
 
 HCI validation and H4 transmit framing stay local to drivers/bluetooth.
 HCC receive and chip identity helpers now live in drivers/misc/ws73 and
@@ -240,13 +250,14 @@ are exported in the WS73 namespace. There is no registration API, auxiliary
 child or unused SLE interface yet. The
 eventual single USB owner will manage firmware, HCC, bounded transport and
 physical teardown. Only actual Wi-Fi/BLE consumer needs justify extraction
-into a shared directory. The preferred shared-layer location is now
+into a shared directory. The selected shared-layer location is
 ``drivers/misc/ws73/``: USB ownership, chip identity, firmware, HCC routing
 and device lifecycle belong there; BLE and Wi-Fi adapters remain in their
 subsystems. This avoids making BLE-only builds depend on a Wi-Fi Host.
-A wireless-tree core remains an alternative for upstream discussion. Neither
-location has maintainer approval. Existing btrsi/RSI and the
-auxiliary bus documentation are comparisons, not mandatory templates.
+Use the auxiliary bus for actual Bluetooth/Wi-Fi children and namespaced
+kernel symbols for their shared operations. The directory and cross-tree
+arrangement still require maintainer review. Existing btrsi/RSI and the
+auxiliary bus documentation inform the design; no parallel core is planned.
 
 For this pure codec there are no URBs, workers, module references, retries
 or allocated buffers to drain. Callers own both input and output. Future
@@ -255,8 +266,12 @@ timeouts, stop admission before kill/drain, and complete callback/worker
 drain before freeing the parent. Protocol HCI credits remain separate from
 USB queue slots. A BLE close must not reset an active Wi-Fi consumer.
 
-Wi-Fi MAC audit (initial, not a final selection)
-------------------------------------------------
+Wi-Fi MAC audit (mac80211 implementation route)
+----------------------------------------------
+
+The approved plan selects mac80211. The audit must establish its required
+firmware interfaces before advertising STA support. A change to FullMAC
+requires complete ownership evidence and an updated architecture decision.
 
 Paths in this list are below the pinned SDK's ``driver/wifi``:
 

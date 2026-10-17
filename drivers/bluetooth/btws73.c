@@ -34,13 +34,20 @@ struct btws73 {
 static void btws73_fault_work(struct work_struct *work)
 {
 	struct btws73 *bt = container_of(work, struct btws73, fault_work);
+	unsigned long flags;
+	int error;
+
+	/* Removal can replace the terminal error while this work is running. */
+	spin_lock_irqsave(&bt->lock, flags);
+	error = bt->error;
+	spin_unlock_irqrestore(&bt->lock, flags);
 
 	/* RX parse failures become terminal without reentering its callback. */
-	ws73_ble_fault(bt->adev, READ_ONCE(bt->error));
+	ws73_ble_fault(bt->adev, error);
 	/* No fabricated HCI Hardware Error or command-complete event. */
 	mutex_lock(&bt->registration);
 	if (bt->registered) {
-		hci_cmd_sync_cancel_sync(bt->hdev, -READ_ONCE(bt->error));
+		hci_cmd_sync_cancel_sync(bt->hdev, -error);
 		hci_unregister_dev(bt->hdev);
 		bt->registered = false;
 	}

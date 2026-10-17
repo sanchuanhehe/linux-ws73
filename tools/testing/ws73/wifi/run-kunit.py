@@ -6,6 +6,7 @@ import fcntl
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -17,8 +18,23 @@ WORK = SOURCE.parent / '.dev/ws73-upstream'
 SPEC = importlib.util.spec_from_file_location('ws73_verification', HERE.parent / 'run-kunit.py')
 COMMON = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMMON)
-CASES = {'ws73_frw_' + name for name in ('request_bytes', 'request_limits', 'reply_bytes',
-         'reply_truncation', 'reply_metadata', 'reply_bounds', 'zero_and_maximum', 'null_args')}
+CASE_ORDER = ['ws73_frw_' + name for name in ('request_bytes', 'request_limits', 'reply_bytes',
+              'reply_truncation', 'reply_metadata', 'reply_bounds', 'zero_and_maximum', 'null_args')]
+CASES = set(CASE_ORDER)
+
+
+def validate_raw(raw):
+    lines = raw.splitlines()
+    expected = [f'    ok {i} {name}' for i, name in enumerate(CASE_ORDER, 1)]
+    actual = [line for line in lines if re.match(r'^\s*(?:not )?ok \d+ ws73_frw_', line)]
+    if actual != expected:
+        raise ValueError('raw cases missing, duplicated, skipped, failed or reordered')
+    for marker in ('    # Subtest: ws73-wifi-frw', '    1..8',
+                   '# ws73-wifi-frw: pass:8 fail:0 skip:0 total:8',
+                   '# Totals: pass:8 fail:0 skip:0 total:8', 'ok 1 ws73-wifi-frw',
+                   'reboot: machine restart'):
+        if lines.count(marker) != 1:
+            raise ValueError('missing/repeated raw marker: ' + marker)
 
 
 def validate(result, raw, config):
@@ -33,8 +49,7 @@ def validate(result, raw, config):
     if not required <= set(config.splitlines()):
         raise ValueError('missing requested configuration')
     COMMON.sanitizer_summary(raw, config)
-    if 'KTAP version' not in raw:
-        raise ValueError('missing raw KTAP')
+    validate_raw(raw)
     return {'suite': 'ws73-wifi-frw', 'cases': len(cases)}
 
 

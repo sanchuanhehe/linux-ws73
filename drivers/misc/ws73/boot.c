@@ -228,7 +228,7 @@ int ws73_boot_download(const struct ws73_boot_io *io,
 			if (ret)
 				return ret;
 			progress->stage = WS73_BOOT_FILES_OK;
-			ret = ws73_boot_expect(io, "FILES OK", NULL, NULL, deadline_ms);
+			ret = ws73_boot_expect(io, "FILES OK", ":", command, deadline_ms);
 			if (ret)
 				return ret;
 			offset += len;

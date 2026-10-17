@@ -467,8 +467,17 @@ static void loader_trials(int control, int *eps, int log, const char *udc)
      n = read(eps[1], got, amount);
      if (n != (ssize_t)amount || memcmp(got, blobs[model][image].data + 64 + offset, amount)) die("original payload bytes");
      printf("WS73_LOADER_PAYLOAD image=%u offset=%zu actual=%zd original\n", image, offset, n);
-     if (write(eps[0], "FILES OK", 8) != 8) die("loader FILES OK");
-     puts("WS73_LOADER_FILES_OK actual=8");
+     if (trial == 0) {
+      unsigned char ack[100];
+      int count = snprintf((char *)ack, sizeof(ack), "FILES OK:%s", command) + 1;
+      if (count <= 0 || count > (int)sizeof(ack) || write(eps[0], ack, count) != count) die("loader FILES echo");
+      printf("WS73_LOADER_FILES_ECHO actual=%d data=", count);
+      for (int i = 0; i < count; i++) printf("%02x", ack[i]);
+      puts("");
+     } else {
+      if (write(eps[0], "FILES OK", 8) != 8) die("loader FILES OK");
+      puts("WS73_LOADER_FILES_OK actual=8");
+     }
      offset += amount;
     }
    }

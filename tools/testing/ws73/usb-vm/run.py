@@ -319,17 +319,19 @@ def validate_loader(kernel, log, speed="full"):
   echoes=writes if n==0 else ['WRITEM 4 0x40017790 51 '] if n==8 else []
   expected_echoes=[('WRITEM OK:'+command+'\0').encode() for command in echoes]
   assert re.findall(r'WS73_LOADER_ECHO actual=(\d+) data=([0-9a-f]+)',part)==[(str(len(b)),b.hex()) for b in expected_echoes],number
-  expected=[];ready_echoes=[]
+  expected=[];ready_echoes=[];files_echoes=[]
   if success:
    for image,size in enumerate([137580,20996,34056] if n==1 else [143892,20980,7708]):
     for offset in range(0,size,32768):
      amount=min(32768,size-offset);flag=(3 if amount==size else 0) if not offset else 2 if amount==size-offset else 1
      expected.append(tuple(map(str,(image,offset,amount,flag))))
      if n==0:ready_echoes.append(f'READY:FILE01:FILES 1 0x{[0x400000,0x430000,0x440000][image]+offset:x} 0x{amount:x} 0x{flag:x} \0'.encode())
+     if n==0:files_echoes.append(f'FILES OK:FILES 1 0x{[0x400000,0x430000,0x440000][image]+offset:x} 0x{amount:x} 0x{flag:x} \0'.encode())
   assert re.findall(r'WS73_LOADER_READY_ECHO actual=(\d+) data=([0-9a-f]+)',part)==[(str(len(b)),b.hex()) for b in ready_echoes],number
+  assert re.findall(r'WS73_LOADER_FILES_ECHO actual=(\d+) data=([0-9a-f]+)',part)==[(str(len(b)),b.hex()) for b in files_echoes],number
   assert re.findall(r'WS73_LOADER_FILES image=(\d+) offset=(\d+) size=(\d+) flag=(\d+) verified',part)==expected,number
   assert re.findall(r'WS73_LOADER_PAYLOAD image=(\d+) offset=(\d+) actual=(\d+) original',part)==[x[:3] for x in expected],number
-  assert part.count('WS73_LOADER_FILES_OK actual=8')==len(expected),number
+  assert part.count('WS73_LOADER_FILES_OK actual=8')==(0 if n==0 else len(expected)),number
   assert part.count('WS73_LOADER_QUIT actual=5 verified')==int(success),number
   assert part.count('WS73_LOADER_NO_EXTRA_OUT window_ms=100')==int(n!=7),number
   assert part.count('WS73_TEST_REMOVE')==1 and sum('USB disconnect' in x for x in records)==1,number
@@ -342,6 +344,7 @@ def validate_loader(kernel, log, speed="full"):
  assert log.count('WS73_LOADER_READM ')==10 and log.count('WS73_LOADER_ID ')==9
  assert log.count('WS73_LOADER_WRITEM ')==34 and log.count('WS73_LOADER_FILES ')==22 and log.count('WS73_LOADER_PAYLOAD ')==22
  assert log.count('WS73_LOADER_READY_ECHO ')==7
+ assert log.count('WS73_LOADER_FILES_ECHO ')==7 and log.count('WS73_LOADER_FILES_OK ')==15
  assert log.count('WS73_LOADER_ECHO ')==12 and log.count('WS73_LOADER_REPLY ')==22
  assert log.count('WS73_LOADER_QUIT ')==3
  assert kernel.count('synthetic loader result=')==10 and kernel.count('synthetic download callbacks drained')==10

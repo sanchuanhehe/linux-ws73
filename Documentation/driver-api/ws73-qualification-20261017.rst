@@ -573,3 +573,84 @@ as distinct requirements. None is implemented or qualified by version-query
 success. Firmware execution, boot/runtime compatibility, cold-start evidence,
 auxiliary/HCI consumers, E hardware, BLE peer/AP testing and formal submission
 remain open. No physical device was operated in this increment.
+
+Function-control notification increment
+--------------------------------------
+
+Production source ``30cb2bfb50773d438b8ac481c6b9379074990ffd`` adds bounded
+service-5/queue-10 RX notification decoding and USB parent observation. Every
+record is validated before any notification is published. Unknown tags and
+SLE actions reject the whole aggregate as unsupported; malformed known status
+records enter the existing USB fault/drain path and wake a pending query with
+its failure. Observation is bounded to four first-seen types per USB instance,
+not a BLE enable completion or readiness state. Queue-10 TX remains closed.
+
+The initial implementation exposed two evidence errors during reference review:
+service 5 was initially encoded as 0x05 rather than 0x50, and Host TX's
+allocation-size convention was incorrectly applied to RX. The pinned SDK's
+actual ``hcc_header`` bitfields, libws73's documented wire correction and RX
+walker, and the existing SDK110 status audit distinguish these conventions.
+Commits ``744c8915323f`` and ``30cb2bfb5077`` correct them without rewriting the
+initial ``296739b42c7d`` history. The tests had shared the initial assumptions;
+their PASS results therefore did not prove the protocol. They are preserved,
+explicitly superseded, in ``notification-nibble-correction.json``:
+
+* ``20261017T072512.104782Z``: 44 KUnit on the first implementation.
+* ``virtual-usb-build-20261017T072614.843733Z`` and runs
+  ``virtual-usb-20261017T072650.121878Z`` /
+  ``virtual-usb-20261017T072731.400771Z``: first synthetic USB results.
+* ``20261017T072902.795200Z``: 44 KUnit after the nibble correction, before
+  correcting RX length units.
+* ``virtual-usb-supervisor-negative-v4.json``: original 24 text rejection
+  controls; they check log rejection, not protocol correctness.
+
+The final source and fixture both use header byte 0x50 and RX payload length
+excluding the four HCC bytes. The fixed-byte test and all 256 first-byte values
+explicitly reject 0x05, wrong service and nonzero subtype. Other tests cover
+unaligned input, all truncations, all 16-bit HCC/tag lengths, valid status/action
+values, high-bit invalid values, padding, unchanged outputs on error, valid
+input after error and 1..24-record aggregate publication. Queue-10 RX support
+does not implicitly admit unchecked customization TX. All 44 KUnit pass.
+
+The separate virtual USB kernel enables KASAN, UBSAN, lockdep and
+DEBUG_ATOMIC_SLEEP, with networking/Bluetooth/KUnit disabled. Full-speed and
+high-speed each pass 11 cases: the prior eight chip/version scenarios plus
+unsupported/duplicate function notifications, malformed tag size, and a valid
+first status followed by an invalid final status. Each run verifies 41 exact
+OUT transfers, 22 IN replies and 11 removals. The successful notification case
+publishes exactly four observations; the malformed aggregate publishes none.
+The following final records all bind the same clean production source:
+
+* ``20261017T073018.661091Z``, manifest SHA-256
+  ``3d63ddd06eeb6edeca759506b423435b2711c72b1861132505c884a25903b8b7``.
+* ``virtual-usb-build-20261017T073049.937645Z``, manifest SHA-256
+  ``ad66ff0ddac699489130afa80aff2991f79bdec382b256d982073f9b06bfb529``.
+* ``virtual-usb-20261017T073156.937282Z``, manifest SHA-256
+  ``e151cb2ccbe9a0297aa5a9d4953d639130e6ca06ca31c4e07766fdddfdf36e6b``.
+* ``virtual-usb-20261017T073216.716238Z``, manifest SHA-256
+  ``2cfe234e89046729bf3716b944256b98b1c520fe816f94712bf4fd6ac4769d8f``.
+
+``virtual-usb-supervisor-negative-v5.json`` pins the corrected positive record,
+runner and checker hashes and rejects 24 negative controls. Notification
+additions include wrong/missing/duplicate status, partial publication on a
+malformed aggregate and missing unsupported-message injection. No sanitizer,
+lockdep or atomic-sleep error was reported. This is synthetic transport
+qualification; no physical device, firmware execution or HCI function was
+qualified. The portable in-tree USB harness remains pending.
+
+The separate ``ble-layout-audit-v1`` compiles assertions against the actual
+pinned SDK header for x86-64, arm64, i386 and powerpc64, establishing 140-byte
+customization layout and specific field offsets only. The first attempt failed
+before compilation because ccache could not write its temporary directory;
+``attempt-1-ccache-denied.json`` is preserved, and a CCACHE_DISABLE=1 rerun
+passes all four targets. It is not a cross-architecture driver build or proof
+of valid board/calibration/address values. SDK address-source auditing also
+identifies its INI/eFuse/random fallback, which is not adopted as a device
+Bluetooth public-address source.
+
+The initial implementation's checkpatch reports only the generic new-file
+MAINTAINERS reminder; the new files are style-clean and both corrections report
+zero errors/warnings. A formal driver maintenance entry remains part of the
+actual-consumer submission series. No physical hardware was touched in this
+increment; cold U, E hardware, peer/AP, firmware loading, enable/disable request
+completion, native HCI and formal upstream gates remain open.

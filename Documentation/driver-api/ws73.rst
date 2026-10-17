@@ -19,7 +19,8 @@ for an HCI device. No hardware or SparkLink qualification is inherited.
 
 Runtime USB wire helpers now encode a single HCC record and queue-control
 descriptors and validate bounded receive aggregates for BLE (queue 7) and
-platform messages (queue 9). They are exercised with synthetic inputs;
+platform messages (queue 9), plus function notifications (queue 10) on RX.
+They are exercised with synthetic inputs;
 the runtime USB path now consumes these helpers. The new runtime path has
 not been exercised on physical hardware; it does not establish firmware
 compatibility, version or boot/runtime identity agreement.
@@ -49,7 +50,8 @@ Runtime USB framing baseline
 * Receive type 2 has a 92-byte prefix with at most 24 contiguous nonzero
   record lengths. Each record is bounded to 4096 bytes, must match the full
   outer queue value, and is checked before any view is published. BLE lengths
-  exclude HCC; platform lengths include it. Unknown queues/services, holes,
+  exclude HCC; platform lengths include it. Queue-10 RX lengths exclude
+  HCC, unlike the SDK Host customization TX allocation length. Unknown queues/services, holes,
   trailing bytes, truncated records and inconsistent platform lengths fail.
 * Input views remain borrowed and immutable; service consumers still validate
   platform reply identity or H4 streams. Encoding never conveys device credit,
@@ -104,8 +106,8 @@ cannot distinguish a stale device-generated reply from a fresh reply with the
 same ID. This implementation does not use such an observation to register a
 function or bypass the boot/cold-start and firmware-version gates. Boot and
 runtime objects do not share requests, callbacks or identity cache. Unknown
-outer types/queues are dropped; malformed or unsupported records in supported
-aggregates terminate the observation.
+outer types/queues and unsupported notification tags/actions are dropped as
+whole aggregates. Malformed known records terminate the observation.
 BLE frames have no consumer yet and are not presented as HCI events.
 
 GET_VERSION is SDK110 platform request 13 with one input byte equal to 1,
@@ -118,6 +120,33 @@ printed ROM "1.0.0" is a constant, not the reported word. Neither that string
 nor a plausible version value proves the selected firmware image is running.
 The parent logs observations only after both queries succeed, and names the
 chip or version stage on failure.
+
+Function notification reception
+-------------------------------
+
+``service.c`` decodes SDK110 service 5, subtype 0, queue 10. The first HCC
+byte is **0x50**, because ``hcc_comm.h`` puts service in the high nibble;
+``hcc_transfer_param`` has a different bitfield order and is not a wire header.
+Notification RX length excludes HCC's four bytes. This differs from the Host
+customization TX allocation-size convention; applying that convention to RX
+would reject short valid replies and accept inconsistent lengths.
+
+The four-byte little-endian tag contains type and body length. Known status
+messages require exactly four declared body bytes, even when HCC includes
+allocation padding. Device status type 2 accepts BOOT_FINISH=1 and
+CUSTOMIZE_RECEIVED=2. Action status type 4 accepts BLE_OPEN=0 and BLE_CLOSE=1.
+The decoder rejects invalid values, services, subtypes and lengths without
+changing its output. Other tags and SLE actions 2/3 are unsupported; there is
+no SLE consumer. Padding is never scanned for another notification.
+
+The USB aggregate decoder validates all records before copying notifications
+into its result. A malformed or unsupported final record cannot publish earlier
+valid statuses. The USB parent currently records each of the four notification
+kinds at most once per device object; this bounded observation is not a request
+completion, persistent readiness state or a function registration. New USB
+instances start with no observations. Queue-10 TX remains closed until valid
+customization input and transaction sequencing are implemented. The actual
+BLE control request and its completion waiter are still pending.
 
 BLE initialization audit (SDK110)
 --------------------------------
@@ -159,6 +188,26 @@ the native HCI consumer, complete the versioned customization layout and valid
 board/address inputs, receive and check the corresponding acknowledgement,
 validate enable/action status, and wait for actual HCI address/setup responses.
 No fixed development address or guessed board parameters are installed here.
+
+The customization ABI is 140 bytes: thirty 32-bit words at offsets 0..119,
+then temperature s16 at 120, coarse/fine trim u8 at 122/123, power calibration
+s16 at 124, BLE address bytes at 126..131, SLE address bytes at 132..137 and
+two bytes of structure tail padding. The tag is four bytes. Local compilation
+against the actual pinned SDK header asserts these offsets for x86-64, arm64,
+i386 and powerpc64 targets. This checks layout only, not driver portability,
+wire byte order, board compatibility or parameter validity. The compiler runs
+no experimental driver or hardware access.
+
+``CONFIG_NO_SUPPORT_INI`` copies build defaults, while the INI path assembles
+configured fields and optionally reads flash. ``CONFIG_INI_BSLE_USE_FLASH=0``
+in the inspected USB configurations means those flash fields are not a mandate
+to install arbitrary MAC/trim values. In ``mac_addr.c``, address initialization
+tries INI when enabled, then eFuse, then an Ethernet-random fallback; BLE can
+also derive an address from that global base. Thus ``get_dev_addr`` success is
+not proof of a device-provisioned Bluetooth address. The upstream path must
+preserve the source and validate address type, instead of treating the fallback
+or SDK's fixed flash-failure development address as a public device identity.
+No customization defaults or address fallback are installed by this increment.
 
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.

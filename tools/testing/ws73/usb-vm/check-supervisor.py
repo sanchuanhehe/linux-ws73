@@ -229,6 +229,9 @@ if proof.get('phase')=='hci':
  detached=int(re.search(r'WS73_TEST_KMSG \d+,\d+,(\d+),[^;]*;[^\n]*USB disconnect',pending)[1])
  late=re.sub(r'(WS73_TEST_KMSG \d+,\d+,)\d+(,[^;]*;[^\n]*device callbacks drained)',lambda m:m[1]+str(detached+1000000)+m[2],pending)
  trials={
+  'missing_platform':(k,s.replace('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified','',1)),
+  'short_platform':(k,s.replace('sequence=4 actual=128 sleep=0','sequence=4 actual=127 sleep=0',1)),
+  'late_platform':(k,s.replace('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified','',1).replace('WS73_STARTUP_OUT step=7 actual=864 verified','WS73_STARTUP_OUT step=7 actual=864 verified\nWS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified',1)),
   'late_reset_drain':(k,s.replace(pending,late)),
   'hci_command_timeout':(k+'\nBluetooth: hci0: command 0x0c03 tx timeout\n',s),
   'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
@@ -240,8 +243,8 @@ if proof.get('phase')=='hci':
   'short_action':(k,s.replace('message=25 actual=4','message=25 actual=3',1)),
   'wrong_setup':(k,s.replace('2100000000000400','a100000000000400',1)),
   'wrong_queue':(k,s.replace('WS73_HCI_QUEUE step=8','WS73_HCI_QUEUE step=7',1)),
-  'wrong_opcode':(k,s.replace('sequence=9 opcode=1003','sequence=9 opcode=1009',1)),
-  'wrong_sequence':(k,s.replace('sequence=9 opcode=1003','sequence=10 opcode=1003',1)),
+  'wrong_opcode':(k,s.replace('sequence=10 opcode=1003','sequence=10 opcode=1009',1)),
+  'wrong_sequence':(k,s.replace('sequence=10 opcode=1003','sequence=11 opcode=1003',1)),
   'missing_reply':(k,s.replace('WS73_HCI_COMPLETE step=0 opcode=1003 h4=15 synthetic','',1)),
   'missing_fragment':(k,s.replace('WS73_HCI_FRAGMENT h4=1 actual=100 synthetic','',1)),
   'wrong_fragment_size':(k,s.replace('h4=1 actual=100','h4=1 actual=99',1)),

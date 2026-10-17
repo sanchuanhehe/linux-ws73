@@ -3320,3 +3320,69 @@ Records and manifest SHA-256 (private evidence root):
   ``e730d73e0600ffdcc974dd49f02edf131d6b4bf68e73071da5482abaa154f248``.
 * ``hci-build-module-20261017T175749.474079Z``,
   ``592dd2b5301090b64069ef789dd2f3ceb23ad62931a3b8145cae1609684d1c1d``.
+
+Allocated-U BLE trial admission and retained-runtime timeout
+---------------------------------------------------------
+
+Source ``923f77adde928e8270a57c1720f4ac92d1f086fd`` adds a tagged-VM,
+explicit-PID-1-bound BLE startup test module.  It validates an exact private
+140-byte reference customization input before USB driver registration.  No
+reference payload is included in the public source.  The worker arms readiness
+before RX, requires U/USB plus the previously observed SDK110/ROM versions,
+then runs the production awake-platform/customization/enable/BOOT sequence and
+one explicit disable.  It never publishes HCI or sends radio activity commands.
+The regular USB parent remains observation-only and board/address gates remain.
+
+The Clang W=1 hardware build passed.  Empty-VM preflight passed eight admission
+checks, 141 rejected profile sizes, 140 one-bit corruptions, two null cases and
+one accepted profile, plus missing/invalid enumeration module rejection and
+empty registration/unload.  These are offline/VM properties, not BLE support.
+
+A single physical attempt on the allocated U reused the exact same unowned
+runtime host enumeration as the preceding RAM-load record.  Guest explicit
+binding succeeded, but the first 36-byte queue-9 switch on OUT endpoint 1 timed
+out.  The driver returned ``-ETIMEDOUT`` at ``identity``; USB cancellation
+completed with ``-ENOENT`` and actual length 36.  That length does not prove
+firmware acceptance.  There was no identity/version reply, PM configuration,
+customization, BLE class request, HCI publication or firmware reload in this
+attempt.  The cause remains unresolved; neither sleep nor an endpoint bug is
+established.  Endpoint 1 matches SDK descriptor index 1 and the preceding
+successful physical transcript; endpoints at indices 3/4 are register access.
+
+The original supervisor result remains FAIL.  An independent failure audit
+checks all archived hashes, four device bulk events and two interrupt events,
+all three paired cancellations, zero successful RX, one owner drain and VM
+exit 0.  Both capture streams agree and every binary drop counter is zero.
+No KASAN/UBSAN/lock warning was observed.  Host ownership was released, but USB
+cancellation is not evidence that firmware state has been cleared.
+
+A private continuous load-to-BLE trial has been prepared and passed an empty
+VM preflight.  It retains the previously checked boot READM/VERSION and
+three-file loading path, disables automatic authorization of future guest
+interfaces before loading, then explicitly binds a new runtime owner after
+controlled QMP handoff.  A new physical power-cycle confirmation is required
+and consumed once before attachment.  This is pending hardware execution, not
+natural reenumeration or BLE qualification.  Independent transcript checks
+reject 12 BLE and five boot corruptions; synthetic positives establish checker
+behavior only.  The initial BLE checker assumptions were corrected offline:
+ignore virtual root-hub IRQs, use endpoint 1, and compare ordering using text
+usbmon timestamps rather than mixing text and binary clock domains.  Original
+failed-trial tools remain archived unchanged.
+
+The 512-byte binary capture retains complete expected RX and the entire
+140-byte customization body.  It does not retain the last 352 padding bytes of
+an 864-byte customization TX; a future success must retain that scope limit.
+No E, address provisioning, peer, RF, STA or formal-submission gate is closed.
+
+Private records and manifest SHA-256:
+
+* ``hardware-build-20261017T180514.506244Z``,
+  ``c47e8b9cd17ec360abcba4da878f07ddc3e867caad7e615ce3405f634e5f5e4b``.
+* ``ble-startup-trial-20261017T181109.269163Z``,
+  ``b0c87d8aae199f575408928b297f548e0aa13403fd41e27b3c8a47540289b893``.
+* ``ble-startup-trial-20261017T181210.020136Z``,
+  ``41732fff8d13774cd594ecb4d267582a0a6656634375c5302e03378dac62a12d``.
+* ``ble-startup-failure-analysis-20261017``,
+  ``fd604cd6d1ea0016813b8a739d293f31c30da73c1791b7f6f676b55a1aec8498``.
+* ``load-ble-trial-20261017T181504.963546Z``,
+  ``5b602a7248de426d9347b3fbf07dce31c759616606fdff84fc921177074b96db``.

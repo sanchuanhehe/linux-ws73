@@ -230,7 +230,7 @@ static void ws73_board_echo_test(struct kunit *test)
 	mock.first_ack = padded;
 	mock.first_ack_length = sizeof(padded);
 	KUNIT_EXPECT_EQ(test, ws73_boot_load(&mock.io, mock.image, &mock.board,
-					  100, &progress), 0);
+					     100, &progress), 0);
 }
 
 static void ws73_board_echo_reject_test(struct kunit *test)
@@ -252,7 +252,7 @@ static void ws73_board_echo_reject_test(struct kunit *test)
 		mock.first_ack = modified;
 		mock.first_ack_length = sizeof(modified);
 		KUNIT_EXPECT_EQ(test, ws73_boot_load(&mock.io, mock.image, &mock.board,
-						  100, &progress), -EPROTO);
+						     100, &progress), -EPROTO);
 		KUNIT_EXPECT_EQ(test, mock.calls, 2);
 		KUNIT_EXPECT_EQ(test, progress.preparation_writes, 0);
 		KUNIT_EXPECT_EQ(test, mock.waits, 0);

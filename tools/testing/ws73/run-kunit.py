@@ -132,7 +132,8 @@ def main():
                     "drivers/misc/ws73/customize-request.o",
                     "drivers/misc/ws73/customize-request-test.o",
                     "drivers/misc/ws73/startup.o", "drivers/misc/ws73/startup-test.o",
-                    "drivers/misc/ws73/board-test.o"}
+                    "drivers/misc/ws73/board-test.o", "drivers/misc/ws73/ble.o",
+                    "drivers/misc/ws73/ble-test.o"}
         if not args.core_only:
             required.update({"drivers/bluetooth/btws73_proto.o",
                              "drivers/bluetooth/btws73_test.o",
@@ -158,6 +159,10 @@ def main():
                 "btws73_h4_splits", "btws73_h4_coalesced", "btws73_h4_errors",
             }
             expected_groups = {
+                "ws73-ble-endpoint": {
+                    "ws73_ble_lifecycle_test", "ws73_ble_failure_release_test",
+                    "ws73_ble_send_failure_test",
+                },
                 "ws73-board-load": {
                     "ws73_board_sequence_test", "ws73_board_faults_test",
                     "ws73_board_admission_test",

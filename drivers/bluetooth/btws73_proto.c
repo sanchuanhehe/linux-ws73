@@ -3,6 +3,7 @@
 
 #include <linux/align.h>
 #include <linux/errno.h>
+#include <linux/module.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
 
@@ -141,3 +142,10 @@ fail:
 	*consumed = used;
 	return ret;
 }
+
+EXPORT_SYMBOL_NS_GPL(btws73_hci_validate, "BTWS73");
+EXPORT_SYMBOL_NS_GPL(btws73_hcc_encode, "BTWS73");
+EXPORT_SYMBOL_NS_GPL(btws73_h4_reset, "BTWS73");
+EXPORT_SYMBOL_NS_GPL(btws73_h4_feed, "BTWS73");
+MODULE_DESCRIPTION("WS73 BLE H4 codec");
+MODULE_LICENSE("GPL");

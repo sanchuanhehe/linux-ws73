@@ -51,7 +51,11 @@ hci_uart-$(CONFIG_BT_HCIUART_MRVL)	+= hci_mrvl.o
 hci_uart-$(CONFIG_BT_HCIUART_AML)	+= hci_aml.o
 hci_uart-objs				:= $(hci_uart-y)
 
+obj-$(CONFIG_BT_WS73) += btws73-hci.o
+btws73-hci-y := btws73.o
+obj-$(CONFIG_BT_WS73_PROTO) += btws73_proto.o
+
 obj-$(CONFIG_BT_WS73_KUNIT_TEST) += btws73-test.o
-btws73-test-y := btws73_proto.o btws73_test.o
+btws73-test-y := btws73_test.o
 
 CONTEXT_ANALYSIS := y

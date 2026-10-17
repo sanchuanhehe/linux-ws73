@@ -473,10 +473,26 @@ config BT_INTEL_PCIE
 	  Say Y here to compiler support for Intel Bluetooth PCIe device into
 	  the kernel or say M to compile it as module (btintel_pcie)
 
+config BT_WS73_PROTO
+	tristate
+
+config BT_WS73
+	tristate "WS73 USB Bluetooth LE auxiliary consumer"
+	depends on WS73_USB
+	select WS73_CORE
+	select BT_WS73_PROTO
+	help
+	  Native HCI consumer for a qualified WS73 BLE auxiliary endpoint.
+	  Command/ACL TX and event/ACL RX use the standard Bluetooth stack.
+	  The USB parent currently remains observation-only and does not
+	  publish this endpoint until firmware/board/startup gates close.
+	  Enabling this option alone does not enable physical BLE support.
+
 config BT_WS73_KUNIT_TEST
 	tristate "WS73 BLE wire codec tests" if !KUNIT_ALL_TESTS
 	depends on KUNIT
 	select WS73_CORE
+	select BT_WS73_PROTO
 	default KUNIT_ALL_TESTS
 	help
 	  Test the WS73 BLE HCC and H4 wire validation routines. This does

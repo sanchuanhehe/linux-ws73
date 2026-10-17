@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: GPL-2.0-only
 config WS73_CORE
 	tristate
+	select AUXILIARY_BUS
 	select FW_LOADER
 	select CRYPTO_LIB_SHA256
 	help
 	  Shared WS73 protocol helpers used by actual function consumers.
 	  This component validates HCC records, chip replies and original
 	  firmware, and provides bounded boot transaction sequencing.
-	  It has no Bluetooth or Wi-Fi stack dependency and does not yet
-	  register a USB driver, transfer to hardware or enable a function.
+	  It has no Bluetooth or Wi-Fi stack dependency. It also provides
+	  the auxiliary BLE endpoint; publishing it requires qualified
+	  initialization by the physical transport owner.
 
 config WS73_KUNIT_TEST
 	tristate "WS73 firmware and boot transaction tests" if !KUNIT_ALL_TESTS

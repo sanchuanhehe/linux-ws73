@@ -17,6 +17,7 @@ for an HCI device. No hardware or SparkLink qualification is inherited.
    :maxdepth: 1
 
    ws73-qualification-20261017
+   ws73-roadmap
 
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.
@@ -129,7 +130,7 @@ requirements for the forthcoming loader, not implemented transport states:
    only after all required images succeed and check its response.
 #. PATCH_LAUCH refreshes the bus state. USB ``hcc_usb_reload`` waits for the
    runtime probe before enabling HCC traffic. The SDK distinguishes two
-   boot endpoints from three runtime endpoints; the new driver must also
+   boot endpoints from five runtime endpoints; the new driver must also
    validate types/directions and physical identity across re-enumeration.
 #. Apply platform PM parameters and XO temperature compensation, initialize
    device addresses, then start/enable heartbeat. BLE enable/action-status

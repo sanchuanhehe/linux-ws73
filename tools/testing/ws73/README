@@ -61,6 +61,22 @@ comments. Source, compiler candidates, configuration, build tool and output
 hashes are recorded. Do not run with Python optimization. Compile/link success
 does not prove module loading/unloading, suspend/resume or hardware behavior.
 
+  python3 tools/testing/ws73/build-cross.py all
+
+build-cross.py builds vmlinux and the actual shared/USB/native Bluetooth modules
+with W=1 for arm64 and i386 using Clang, PowerPC64 big endian using Clang,
+and x86-64 using GCC. Individual profile names are available through --help.
+Run after checking the whole-machine build budget; profiles run sequentially
+with four jobs and the shared build lock in separate fixed output directories.
+It requires clean committed sources, checks requested Kconfig dependencies,
+rejects test drivers and BROKEN, and verifies module/kernel ELF architecture,
+word size and endianness. Each record retains logs, configuration, kernel,
+module and tool hashes; failure records are retained too. No kernel/module is
+installed or executed. This does not qualify cross-architecture runtime or
+hardware behavior, module loading, Wi-Fi, or all built-in/module combinations.
+PowerPC64 supplies the big-endian build; arm64 big endian currently depends
+on BROKEN and is deliberately excluded.
+
 See usb-vm/README for boot/runtime and synthetic FILES/QUIT download integration
 through dummy_hcd and FunctionFS, including actual 32-KiB URBs and READY wait.
 The download phase uses synthetic payloads. The loader phase uses the local

@@ -55,12 +55,23 @@ def validate_raw(raw):
 
 
 def validate(result, raw, config):
+    def totals(group, count):
+        expected = dict(tests=count, passed=count, failed=0, crashed=0, skipped=0, errors=0)
+        if group.get('misc') != expected:
+            raise ValueError('inconsistent JSON totals')
+
+    totals(result, sum(len(names) for names in SUITES.values()))
+    if result.get('test_cases') != []:
+        raise ValueError('unexpected top-level test cases')
     groups = result.get('sub_groups', [])
     if [g.get('name') for g in groups] != list(SUITES):
         raise ValueError('missing/extra/reordered Wi-Fi suite')
     for group in groups:
         cases = group.get('test_cases', [])
         names = SUITES[group['name']]
+        totals(group, len(names))
+        if group.get('sub_groups') != []:
+            raise ValueError('unexpected nested suite')
         if ([c['name'] for c in cases] != names or
                 any(c['status'] != 'PASS' for c in cases)):
             raise ValueError('missing, repeated, skipped or failed test')

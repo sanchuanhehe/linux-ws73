@@ -17,6 +17,7 @@ enum ws73_frw_test_mode {
 	MALFORMED_REPLY,
 	NO_REPLY,
 	EXPIRED_REPLY,
+	REPLY_THEN_EXPIRE,
 	BLOCK_SEND,
 };
 
@@ -103,6 +104,8 @@ static int ws73_frw_test_send(void *context, const u8 *record, size_t length,
 				-EPROTO);
 	/* RX buffers can be reused before send returns. */
 	memset(f->reply, 0xa5, sizeof(f->reply));
+	if (f->mode == REPLY_THEN_EXPIRE)
+		msleep(30);
 	if (f->mode == ERROR_AFTER_REPLY)
 		return -EPIPE;
 	if (f->mode == SHORT_AFTER_REPLY)
@@ -207,6 +210,15 @@ static void ws73_frw_transaction_deadline(struct kunit *test)
 	struct ws73_frw_fixture *f = test->priv;
 
 	f->mode = EXPIRED_REPLY;
+	KUNIT_EXPECT_EQ(test, ws73_frw_test_call(f, 20), -ETIMEDOUT);
+	KUNIT_EXPECT_EQ(test, ws73_frw_test_call(f, 1000), -ETIMEDOUT);
+	ws73_frw_expect_untouched(test);
+	KUNIT_EXPECT_EQ(test, f->sends, 1U);
+
+	/* A timely reply cannot excuse TX returning after the same deadline. */
+	ws73_frw_transaction_init(&f->transaction);
+	f->sends = 0;
+	f->mode = REPLY_THEN_EXPIRE;
 	KUNIT_EXPECT_EQ(test, ws73_frw_test_call(f, 20), -ETIMEDOUT);
 	KUNIT_EXPECT_EQ(test, ws73_frw_test_call(f, 1000), -ETIMEDOUT);
 	ws73_frw_expect_untouched(test);

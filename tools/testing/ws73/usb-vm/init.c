@@ -835,7 +835,7 @@ int main(void)
   if (trial == 0 || trial == 1 || trial >= 5) {
    transaction(eps[1], 3);
    if (trial == 7) {
-    if (write(eps[0], reply, wire_size) != wire_size) die("stale chip IN");
+    if (write(eps[0], reply, wire_size) != (ssize_t)wire_size) die("stale chip IN");
     puts("WS73_TEST_IN kind=stale actual=124 synthetic");
    }
    if (trial >= 8 && trial <= 10) notifications(eps[0], trial);
@@ -847,7 +847,7 @@ int main(void)
    le32(reply + 100, trial == 5 ? 1 : 0);
    le32(reply + 104, trial == 6 ? 7 : 8);
    le32(reply + 108, 0x010a6e7f); le32(reply + 112, 0x12345678);
-   if (write(eps[0], reply, wire_size) != wire_size) die("version IN");
+   if (write(eps[0], reply, wire_size) != (ssize_t)wire_size) die("version IN");
    printf("WS73_TEST_IN kind=version actual=%zu synthetic\n", wire_size);
    }
   }

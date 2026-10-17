@@ -118,7 +118,8 @@ int ws73_boot_download(const struct ws73_boot_io *io,
 		}
 	}
 	progress->stage = WS73_BOOT_QUIT;
-	ret = ws73_boot_send(io, "QUIT", 4, deadline_ms);
+	/* SDK exec_quit_type_cmd terminates the command with a space. */
+	ret = ws73_boot_send(io, "QUIT ", 5, deadline_ms);
 	if (ret)
 		return ret;
 	/* The USB SDK has an EMPTY QUIT response; runtime probe is the gate. */

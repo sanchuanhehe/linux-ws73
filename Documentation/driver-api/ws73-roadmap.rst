@@ -95,6 +95,27 @@ locking and arbitrary register access are not part of this driver.
 If boot identity cannot be established, fail closed and continue virtual
 protocol/transport work; obtain the missing mapping or boot specification.
 
+The user identified libws73-usb as a reference. Its remote HEAD was checked
+again and matches the pinned f4d85d0e95af2d0043432e1301fd2f6b660a4906.
+src/ws73_usb_firmware.c demonstrates boot READM/WRITEM. In the SDK,
+hcc_usb_host_ops.c dispatches hcc_usb_read_reg/write_reg to read_device_reg/
+write_device_reg in BUS_USB_BOOT, so boot register access is an explicit
+HCC path, not inferred from runtime endpoints. The SDK implementations in
+driver/platform/firmware_download/plat_firmware.c return four raw bytes for
+READM and use WRITEM OK for a successful write. New code must check exact
+transfer lengths; the SDK's positive-length read check is insufficient.
+
+libws73-usb src/ws73_usb_control.c restricts get_chip_id/get_die_id to five
+endpoints through id_mode_gate. It reads eFuse byte 0 for chip ID and bytes
+1--18 for die ID. Neither function returns the U/S/E package or bus enum.
+Its documented observed chip byte 0x18 is not a U/E compatibility table.
+SDK g_efuse_cfg also defines TYPE_ID as four bits at bit 168, but no checked
+source maps those bits to U/E. Generated eFuse status-register bitfield
+definitions referenced by hal_soc_reg.h are absent from this SDK snapshot.
+The reference's fixed status polls do not substitute for the SDK's busy,
+boot-complete and read-complete conditions. These remain explicit gaps;
+no eFuse value or runtime-only call is promoted to verified boot identity.
+
 Validation and resources
 ------------------------
 
@@ -168,3 +189,7 @@ firmware_send_quit_func waits for hcc_usb_reload instead of a text ACK.
 Therefore the executor returns WAIT_RUNTIME after sending QUIT; its success
 is not runtime readiness or identity verification. No USB caller is enabled
 before the boot identity/board prerequisites are established.
+The SDK exec_quit_type_cmd and libws73 send_cmd both append a space: the
+wire command is five bytes, ``QUIT ``. The initial synthetic transcript
+incorrectly used four bytes. It has been corrected together with production
+code; earlier test passes did not establish this wire-format property.

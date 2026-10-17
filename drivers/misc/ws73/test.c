@@ -124,7 +124,8 @@ static const struct {
 	{ .reply = "READY" },
 	{ .offset = 0, .length = 5 },
 	{ .reply = "FILES OK" },
-	{ "QUIT" },
+	/* SDK exec_quit_type_cmd includes COMPART_KEYWORD (0x20). */
+	{ "QUIT " },
 };
 
 static u64 ws73_mock_now(void *context)

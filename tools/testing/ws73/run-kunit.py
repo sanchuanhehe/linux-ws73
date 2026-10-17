@@ -177,6 +177,8 @@ def main():
                 "ws73-ble-link": {
                     "ws73_link_admission_test", "ws73_link_lifecycle_test",
                     "ws73_link_action_failure_test", "ws73_link_transport_failure_test",
+                    "ws73_link_immediate_probe_test", "ws73_link_aborted_probe_test",
+                    "ws73_link_deadline_test",
                 },
                 "ws73-ble-endpoint": {
                     "ws73_ble_lifecycle_test", "ws73_ble_failure_release_test",

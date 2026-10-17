@@ -14,7 +14,7 @@ struct ws73_link_fixture {
 	u64 now;
 	unsigned int controls, bulks, receives, faults, transport_faults;
 	int fault;
-	bool short_control, short_bulk;
+	bool short_control, short_bulk, abort_probe;
 	u8 received[4];
 };
 
@@ -228,12 +228,12 @@ static void ws73_link_action_failure_test(struct kunit *test)
 
 	KUNIT_ASSERT_EQ(test, ws73_link_publish(f), 0);
 	f->short_control = true;
-	KUNIT_EXPECT_EQ(test, ws73_ble_start(f->link.child), -EREMOTEIO);
-	KUNIT_EXPECT_EQ(test, f->fault, -EREMOTEIO);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(f->link.child), -EMSGSIZE);
+	KUNIT_EXPECT_EQ(test, f->fault, -EMSGSIZE);
 	KUNIT_EXPECT_EQ(test, f->faults, 1);
 	KUNIT_EXPECT_EQ(test, f->transport_faults, 0);
 	KUNIT_EXPECT_EQ(test, f->startup.state, WS73_STARTUP_DONE);
-	KUNIT_EXPECT_EQ(test, ws73_ble_start(f->link.child), -EREMOTEIO);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(f->link.child), -EMSGSIZE);
 	KUNIT_EXPECT_EQ(test, f->controls, 3);
 }
 
@@ -255,11 +255,103 @@ static void ws73_link_transport_failure_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, f->transport_faults, 1);
 }
 
+static int ws73_link_probe(struct auxiliary_device *adev,
+			   const struct auxiliary_device_id *id)
+{
+	struct ws73_link_fixture *f = dev_get_drvdata(adev->dev.parent);
+	int ret;
+
+	if (!f)
+		return -ENODEV;
+	KUNIT_EXPECT_PTR_EQ(f->test, f->link.child, adev);
+	ret = ws73_ble_bind(adev, &ws73_link_client, f);
+	if (!ret)
+		ret = ws73_ble_start(adev);
+	if (ret) {
+		ws73_ble_unbind(adev);
+		return ret;
+	}
+	/* This RX occurs inside auxiliary_device_add(), before it returns. */
+	ws73_link_feed(f->test, f);
+	if (f->abort_probe)
+		ws73_ble_link_abort(&f->link, -ECANCELED);
+	return 0;
+}
+
+static void ws73_link_probe_remove(struct auxiliary_device *adev)
+{
+	ws73_ble_unbind(adev);
+}
+
+static const struct auxiliary_device_id ws73_link_ids[] = {
+	{ .name = "ws73_core.ble" },
+	{}
+};
+
+static struct auxiliary_driver ws73_link_driver = {
+	.name = "ws73-link-test",
+	.probe = ws73_link_probe,
+	.remove = ws73_link_probe_remove,
+	.id_table = ws73_link_ids,
+};
+
+static void ws73_link_probe_case(struct kunit *test, bool abort)
+{
+	struct ws73_link_fixture *f = test->priv;
+	int ret;
+
+	KUNIT_ASSERT_EQ(test, ws73_link_startup(f), 0);
+	ret = ws73_ble_control_set(&f->startup.ble, &f->link.control, false, f->now + 2000);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	f->abort_probe = abort;
+	dev_set_drvdata(f->parent, f);
+	KUNIT_ASSERT_EQ(test, auxiliary_driver_register(&ws73_link_driver), 0);
+	ret = ws73_ble_link_publish(&f->link, f->parent);
+	KUNIT_EXPECT_EQ(test, ret, abort ? -ECANCELED : 0);
+	KUNIT_EXPECT_EQ(test, f->receives, 1);
+	KUNIT_EXPECT_EQ(test, f->controls, 3);
+	if (abort) {
+		KUNIT_EXPECT_PTR_EQ(test, f->link.child, NULL);
+		KUNIT_EXPECT_EQ(test, f->fault, -ECANCELED);
+		KUNIT_EXPECT_EQ(test, ws73_ble_link_publish(&f->link, f->parent), -ECANCELED);
+	} else {
+		KUNIT_EXPECT_NOT_NULL(test, f->link.child);
+		ws73_ble_link_remove(&f->link);
+	}
+	auxiliary_driver_unregister(&ws73_link_driver);
+	dev_set_drvdata(f->parent, NULL);
+}
+
+static void ws73_link_immediate_probe_test(struct kunit *test)
+{
+	ws73_link_probe_case(test, false);
+}
+
+static void ws73_link_aborted_probe_test(struct kunit *test)
+{
+	ws73_link_probe_case(test, true);
+}
+
+static void ws73_link_deadline_test(struct kunit *test)
+{
+	struct ws73_link_fixture *f = test->priv;
+
+	KUNIT_ASSERT_EQ(test, ws73_link_publish(f), 0);
+	f->now = U64_MAX;
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(f->link.child), -ETIMEDOUT);
+	KUNIT_EXPECT_EQ(test, f->controls, 2);
+	KUNIT_EXPECT_EQ(test, f->transport_faults, 0);
+	KUNIT_EXPECT_EQ(test, f->fault, -ETIMEDOUT);
+}
+
 static struct kunit_case ws73_link_cases[] = {
 	KUNIT_CASE(ws73_link_admission_test),
 	KUNIT_CASE(ws73_link_lifecycle_test),
 	KUNIT_CASE(ws73_link_action_failure_test),
 	KUNIT_CASE(ws73_link_transport_failure_test),
+	KUNIT_CASE(ws73_link_immediate_probe_test),
+	KUNIT_CASE(ws73_link_aborted_probe_test),
+	KUNIT_CASE(ws73_link_deadline_test),
 	{}
 };
 

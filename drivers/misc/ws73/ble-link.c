@@ -107,8 +107,17 @@ int ws73_ble_link_publish(struct ws73_ble_link *link, struct device *parent)
 		goto discard;
 	/* Routing is installed before add: an immediate consumer can receive. */
 	ret = auxiliary_device_add(child);
-	if (!ret)
-		return 0;
+	if (!ret) {
+		/* Probe may have faulted synchronously while add still succeeded. */
+		spin_lock_irqsave(&link->lock, flags);
+		ret = link->error;
+		if (ret)
+			link->child = NULL;
+		spin_unlock_irqrestore(&link->lock, flags);
+		if (ret)
+			ws73_ble_remove(child);
+		return ret;
+	}
 	spin_lock_irqsave(&link->lock, flags);
 	link->child = NULL;
 	spin_unlock_irqrestore(&link->lock, flags);

@@ -116,6 +116,70 @@ The reference's fixed status polls do not substitute for the SDK's busy,
 boot-complete and read-complete conditions. These remain explicit gaps;
 no eFuse value or runtime-only call is promoted to verified boot identity.
 
+Subsequent evidence: fixed boot strap register
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The user supplied an existing research report and candidate tool in the
+independent SparkLink project. Rechecking the original firmware files here
+confirmed that U function 0x408bc2 and E function 0x409896 contain the same
+56-byte decoder (SHA-256
+f7f1221ea123e5c8f6426f30da777a4b81f8d590e26daa3f9c405659e8379365).
+Offsets subtract load address 0x400000 and add the original 64-byte header.
+An independent invocation of the Hisi disassembler confirms a read of
+0x40019000 followed by this mapping:
+
+.. list-table:: Firmware strap mapping
+   :header-rows: 1
+
+   * - Condition
+     - Package
+     - Bus
+   * - v & 0x0c is 0x00 or 0x0c
+     - U (0)
+     - USB (0)
+   * - v & 0x0c is 0x04
+     - S (1)
+     - SDIO (1)
+   * - v & 0x0c is 0x08; v & 0x30 is 0x20
+     - E (2)
+     - UART (2)
+   * - v & 0x0c is 0x08; otherwise
+     - E (2)
+     - USB (0)
+
+This is now the primary identification candidate; the eFuse route above is
+historical investigation, not a prerequisite for using the strap register.
+The missing work is cold-start access validity and compatibility evidence,
+not absence of a model-decoding algorithm. Parsing S/SDIO or E/UART does not
+enable those combinations. Raw unrelated bits are retained, not interpreted
+as an established hardware revision.
+
+The fixed command is ``READM 0x40019000 4 `` (19 bytes, trailing space).
+The helper exposes no address argument or register write. It requests up to
+512 reply bytes to detect oversized/error replies, requires exact successful
+OUT length and exactly four IN bytes, decodes little endian only afterward,
+and preserves caller output on failure. All operations share an absolute
+deadline and cancellation gate. Zero maps to U/USB; it is not rejected solely
+because a failed or unfilled buffer might also contain zero. Transfer status,
+actual length and captured bytes are checked independently. Repeated zeros
+alone do not prove register-access validity or cold-power stability.
+
+The USB parent validates boot interface protocol and endpoint roles, then
+issues one query from a worker. It does not select a firmware profile, issue
+WRITEM/FILES, reset the chip or publish a functional child. On timeout/error
+it remains bound without retrying; teardown closes admission and drains its
+URBs/worker. USB cancellation does not establish device-side reply flushing.
+Rebinding or QMP reattachment is not a cold-power test or proof of stale
+response removal. Automatic loading remains disabled.
+
+On this project's allocated U, the instrumented VM captured a successful
+19-byte OUT and four-byte ``00000000`` IN, decoded U/USB, followed by normal
+device removal and VM exit. This is independent observation evidence with
+unknown power history, not inherited qualification or cold-start success.
+Other-project U/E software-reset reports remain references only. True U/E
+cold starts, additional samples, runtime identity agreement after this
+project's own downloads and full lifecycle fault injection remain open.
+
 Validation and resources
 ------------------------
 
@@ -187,7 +251,7 @@ padding, pending real 110 capture confirmation.
 One further SDK correction: MSG_FROM_DEV_QUIT_OK is the EMPTY string. USB
 firmware_send_quit_func waits for hcc_usb_reload instead of a text ACK.
 Therefore the executor returns WAIT_RUNTIME after sending QUIT; its success
-is not runtime readiness or identity verification. No USB caller is enabled
+is not runtime readiness or identity verification. No USB download caller is enabled
 before the boot identity/board prerequisites are established.
 The SDK exec_quit_type_cmd and libws73 send_cmd both append a space: the
 wire command is five bytes, ``QUIT ``. The initial synthetic transcript

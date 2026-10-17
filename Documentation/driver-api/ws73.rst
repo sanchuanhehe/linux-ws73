@@ -10,8 +10,9 @@ This branch is a development series based on Linux
 70dd4ee72eb2d5793c62e71c14e3aba78e5a4e56. The initial codec is executable
 kernel code consumed by its KUnit tests. The shared module also contains
 firmware validation and a bounded download executor with injectable I/O.
-It does not register a USB driver or hci_dev, execute hardware downloads,
-or provide functional BLE/Wi-Fi.
+The USB parent can now issue one fixed boot READM chip observation and
+drain its requests on disconnect. It does not select/download firmware,
+register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
 Synthetic HCI event fixtures are parser inputs, never generated completions
 for an HCI device. No hardware or SparkLink qualification is inherited.
 
@@ -156,13 +157,17 @@ U/S/E are 0/1/2 and USB/SDIO/UART are 0/1/2. The new record codec validates
 these fields, bounds and status before publishing an identity. Parsing S
 or non-USB wire values does not enable support for those devices.
 
-This query is found in the SDK's runtime platform message path. No evidence
-yet establishes that its boot firmware accepts it before initial loading.
-The cold-start identity gate therefore remains OPEN: do not guess U/E,
-load a guessed image to obtain an identity, or treat synthetic replies as a
-live detection. Trace the HCC boot transport/identity mechanism and validate
-it in the allocated device's VM before enabling the loader. Runtime identity
-must also be checked after loading and before registering consumers.
+This query is found in the SDK's runtime platform message path, not proven
+available before loading. A subsequent firmware analysis identified an
+independent boot path: fixed ``READM 0x40019000 4 ``. Both original 110
+firmwares map bits 2--5 of that register to package/bus, as detailed in
+ws73-roadmap.rst. The new USB parent issued this exact query on the allocated
+device in its own instrumented VM; usbmon recorded a successful four-byte
+zero reply and the driver decoded U/USB. The device's power history was
+unknown, so cold-start read validity remains OPEN. Do not guess firmware
+or equate a decoded observation with qualified automatic selection.
+Runtime identity must also be checked after loading and before registering
+consumers; no firmware was downloaded in this observation.
 A future transaction owner must validate the outer USB queue, allow only
 one pending query per device, enforce a deadline, and invalidate pending and
 cached identities at disconnect. The wire format has no transaction token;
@@ -247,9 +252,9 @@ Architecture decision 0001 (selected implementation)
 HCI validation and H4 transmit framing stay local to drivers/bluetooth.
 HCC receive and chip identity helpers now live in drivers/misc/ws73 and
 are exported in the WS73 namespace. There is no registration API, auxiliary
-child or unused SLE interface yet. The
-eventual single USB owner will manage firmware, HCC, bounded transport and
-physical teardown. Only actual Wi-Fi/BLE consumer needs justify extraction
+child or unused SLE interface yet. The USB owner currently provides bounded
+boot observation and request teardown; firmware and runtime HCC remain to
+be integrated. Only actual Wi-Fi/BLE consumer needs justify extraction
 into a shared directory. The selected shared-layer location is
 ``drivers/misc/ws73/``: USB ownership, chip identity, firmware, HCC routing
 and device lifecycle belong there; BLE and Wi-Fi adapters remain in their
@@ -259,11 +264,14 @@ kernel symbols for their shared operations. The directory and cross-tree
 arrangement still require maintainer review. Existing btrsi/RSI and the
 auxiliary bus documentation inform the design; no parallel core is planned.
 
-For this pure codec there are no URBs, workers, module references, retries
-or allocated buffers to drain. Callers own both input and output. Future
-transport integration must add per-device state, bounded submission and
-timeouts, stop admission before kill/drain, and complete callback/worker
-drain before freeing the parent. Protocol HCI credits remain separate from
+The codecs borrow caller buffers. The boot USB owner separately allocates
+DMA-safe buffers and serial URBs in a per-device worker. Submission and
+disconnect admission share a spinlock. Disconnect sets a terminal flag,
+kills anchored URBs and joins initialization before releasing the parent;
+each transfer joins its completion before freeing its request storage.
+The worker does not retry failed reads or register functions. Full runtime
+queue, callback and function drain contracts still need implementation.
+Protocol HCI credits remain separate from
 USB queue slots. A BLE close must not reset an active Wi-Fi consumer.
 
 Wi-Fi MAC audit (mac80211 implementation route)

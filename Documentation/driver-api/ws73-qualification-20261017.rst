@@ -275,3 +275,98 @@ use remains authorized. No vendor source or binary was published.
 Retained failure patch SHA-256::
 
    f83d3ed757fe5592427e5220a4788e799f6fb9fe040378a96f4e34c100a61fb0
+
+Fixed boot identity query and first project-owned USB observation
+----------------------------------------------------------------
+
+Compiled clean source **cf8fc9628899b16daa10cbeed69b27237d60b12b** adds the
+fixed boot READM decoder/transaction and an initial USB parent. All **24**
+KUnit cases passed in records/20261017T060557.135517Z with KASAN/UBSAN.
+The three new cases cover every low-16-bit value, upper-bit invariance,
+all reply counts 0--513, zero U/USB, little-endian raw preservation, short
+command/reply, transport failure, timeout/cancellation at both I/O boundaries,
+and no output publication or further I/O after a failure.
+
+This project's independent static audit is records/rom-identity-static-v1/.
+Both original firmware identities and internal digests were rechecked, the
+56-byte functions extracted using payload-relative load addresses, and the
+Hisi tool rerun. The private audit retains file/function/tool hashes and
+output. It confirms the supplied mapping, not cold-start register validity.
+No vendor code, extracted firmware bytes or disassembly is committed here.
+
+A separate, NET-disabled observation kernel from the SAME compiled source
+uses built-in WS73 USB/xHCI, usbmon, KASAN/UBSAN and an initramfs observer.
+The private build directory is .dev/ws73-upstream/build-observe, protected
+by the project build lock; LLVM/W=1 and four jobs were used. The observer
+has no shell or device-write operation: it mounts proc/sysfs/debugfs and
+prints usbmon records. QEMU has two vCPUs, 1 GiB, no disk or NIC. A no-device
+boot passed at records/usb-observe-20261017T061439.193641Z before hardware
+was attached in a new VM.
+
+The physical observation record is
+records/usb-observe-20261017T061500.347386Z. Before attachment, host sysfs,
+serial, VID/PID, hub ancestry, descriptors, driver absence, node permissions
+and fuser were checked. Only assigned 1-1.1.1 was passed through by host bus
+and port plus VID/PID. No hub or PCI-controller passthrough/reset was used.
+The exact USB traffic observed in the guest was:
+
+* OUT endpoint 1: submit and successful completion of 19 bytes,
+  ``READM 0x40019000 4 `` (including the trailing space).
+* IN endpoint 0x81: requested 512 bytes, successful completion of exactly
+  four bytes ``00000000``. These are captured USB bytes, not an assumed
+  zero-filled receive buffer.
+* The driver logged raw 0x00000000, package 0, bus 0: U/USB.
+
+There was one bulk OUT command and one bulk IN response. No WRITEM, FILES,
+firmware, calibration, eFuse control or HCI request was sent. Standard USB
+passthrough/enumeration can reset the USB device and is not a power-cycle
+qualification. The device's power history was UNKNOWN. The result is
+**OBSERVATION_PASS_NOT_COLD**, not automatic-selection readiness. No result
+from the separate SparkLink U/E trials is counted as this project's pass.
+
+QMP removal produced a guest USB disconnect; the VM then exited with status
+zero. Post-exit serial, topology and descriptors matched the pre-attachment
+record, no host driver or usbfs owner remained, and no KASAN/UBSAN warning
+was found. This covers normal read completion and removal, not every URB
+race, allocation failure, module unload or natural recovery scenario.
+Cold-power U/E starts, other samples, read-validity conditions and runtime
+HCC comparison after this project's own firmware loading remain unexecuted.
+
+The local runner and initramfs sources, loader/libc hashes, binary, kernel,
+objects, configuration, command, QMP exchange and usbmon/kernel output are
+copied or hashed in the record. A separate immutable build proof binds later
+observations to the compiled source rather than a documentation HEAD.
+The trace verifier rejected 13 synthetic negative controls (short/long or
+failed transfers, wrong command/device/endpoint, ordering, absent data and
+duplicate records); two zero/nonzero positive fixtures passed. This limited
+observer check does not complete the full qualification-supervisor project.
+
+Preparation failures are retained: the first static init link lacked static
+libc (original output is in the tool conversation; the local failure note
+is explicitly retrospective), and the first VM preflight rejected missing
+PCI/xHCI support before launching QEMU. The latter is
+records/usb-observe-20261017T061108.177916Z. Corrected configuration used a
+new build log and new records; no hardware was attached during those failures.
+
+Artifact SHA-256 values for the physical observation::
+
+   .config
+   2937361d6190dec589c5bb1ebb01c83aa0cc64668638a193c1128c3fe988f6b1
+   bzImage
+   bc60e043c50c6dd55da742efe2ec8b26d8e3b714c24fe432a4e64efc31ee0947
+   usb.o
+   cb06d3c36ce066e20681190a497bc44d31e8ecd271de51d99cd11769d73eaef0
+   boot.o
+   b5cfec1e70b36bdfc7cc16d28d3dbae33ede411294f3af250d2c4b28f1cfb907
+   initramfs.cpio.gz
+   fe2a30a49b5c2e1b8e90133552805b2f0839a8ceed3e5e21dfdbe5ca412a9f80
+   run.py
+   a4128feff521c1cc9f635f314af3e719012ffdcde1f52d77b3f17f7b5fb0efae
+   kernel.log
+   08909edfd93a91fc7996962b0b463ed0ad4ebd6665dcedab56e176be7c41870d
+   manifest.json
+   4570495754abaeb4662e4fc6deb8180bf3878d39b2d0cbf7b97eec71f95b3f22
+
+24-case KUnit manifest SHA-256::
+
+   9c31a1d8c519f5f6d55f00e6e065b181e8b54f16db083bdae71e1be20f43aa53

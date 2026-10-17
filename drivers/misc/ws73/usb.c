@@ -37,7 +37,6 @@ void ws73_usb_fail(struct ws73_usb *ws, int error)
 	if (first)
 		schedule_work(&ws->stop);
 }
-
 EXPORT_SYMBOL_NS_GPL(ws73_usb_fail, "WS73_USB_OWNER");
 
 static u64 ws73_usb_now(void *context)
@@ -373,7 +372,6 @@ int ws73_usb_bind(struct usb_interface *interface, work_func_t initialize)
 	schedule_work(&ws->initialize);
 	return 0;
 }
-
 EXPORT_SYMBOL_NS_GPL(ws73_usb_bind, "WS73_USB_OWNER");
 
 void ws73_usb_unbind(struct usb_interface *interface)
@@ -402,7 +400,6 @@ void ws73_usb_unbind(struct usb_interface *interface)
 	usb_put_dev(ws->udev);
 	kfree(ws);
 }
-
 EXPORT_SYMBOL_NS_GPL(ws73_usb_unbind, "WS73_USB_OWNER");
 
 static int ws73_usb_probe(struct usb_interface *interface, const struct usb_device_id *id)

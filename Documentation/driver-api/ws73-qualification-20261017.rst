@@ -1888,3 +1888,70 @@ Local records and manifest SHA-256 (all attempts retained):
   ``eeed7d7f27cf303321e3e1503fb32c8f078944369cb81ed7b4c8af1c3f150bfc``.
 * ``usb-startup-static-20261017`` (CHECKED),
   ``bedb5b0d43e163c5c50956532cae5cd902c64af1bad5a1fdca05f76f6853e50b``.
+
+Native HCI initialization over actual virtual USB transfers
+----------------------------------------------------------
+
+Clean tested source: ``8877b3bcf78b480f76b608a40c68b5b784300f8a``.
+The shared startup test consumer gained a separate dummy_hcd-only identity
+that publishes the real auxiliary endpoint after acknowledged initialization
+and disable. The production native HCI adapter then executes setup and full
+initialization over the shared USB owner. All controller replies live in the
+explicit userspace fixture. Its minimal LE-only features and absent optional
+command bits are test inputs, not discovered WS73 capabilities or a Bluetooth
+conformance model. No physical driver bypass or generic default address is
+introduced.
+
+At each of full/high speed, three cases pass: native initialization and
+acknowledged auto-off, cancellation by USB removal while Reset has no reply,
+and another full initialization on a fresh instance. Each successful case
+requires a standard management configured-index event and a 289-byte Read
+Controller Information response with matching fixture address/version/
+manufacturer and LE-only settings. Native auto-off executes real class OUT
+message 26 plus independent q10 acknowledgement. The pending command is
+cancelled without a fabricated completion. Disconnect drains production
+callbacks and removes hci0 from sysfs.
+
+Per speed: 27 HCI commands, 26 replies in 78 USB/HCC fragments, 54 bulk OUT,
+101 bulk IN, 11 class actions, two management-info replies, two auto-off
+acknowledgements and three drains. Both speeds also pass the pre-existing
+seven startup cases. The HCI supervisor rejects 29 log and five artifact
+mutations; startup rejects 26 and five. The all-module build links the test
+consumer, owner, shared core and native HCI. SMP, KASAN, UBSAN, lockdep and
+DEBUG_ATOMIC_SLEEP are enabled and checked; no warnings or sanitizer reports
+occur. Checkpatch on the changed kernel code reports zero errors/warnings.
+The first HCI attempt passed; no failed attempt is omitted.
+
+This increment performs no physical USB operation: the physical owner and
+protocol helpers are unchanged, and prior actual-U observations are not
+relabeled as new qualification. Physical original-firmware startup, complete
+physical HCI, E, real BLE peer/AP, BlueZ and RF/security/data qualification
+remain open. Earlier KUnit, runtime/boot/download/loader and model-HCI results
+keep their own source identities; they are not claimed as rerun here.
+
+The SDK runtime-version audit binds four Host source files to clean reference
+``d5e68a58fe38c2b04a16769c69de1e8a80e86d74``. Platform SDK/ROM print strings
+are hardcoded; Wi-Fi Host and generated version constants differ. Neither
+establishes the expected runtime reply from the pinned images. The fixture
+firmware version must not become a physical whitelist. Audit receipt:
+``runtime-version-source-audit-20261017.json``, SHA-256
+``84d2f9a3fb365c93966a688be3a786214e99310d03d7f384be5c89b468ac9b58``.
+
+Local records and manifest SHA-256:
+
+* ``virtual-usb-build-20261017T124147.440651Z`` (PASS),
+  ``cec83434ba62fd65a7f6b11c5766e51e43037b4e08a9f7fd0fbbabdccab948b3``.
+* ``virtual-usb-20261017T124424.865630Z`` (PASS),
+  ``dab85a21fb625f99954ca0bb37059cfc77ce7aafa7e9b6354536f860029a6bc2``.
+* ``virtual-usb-20261017T124603.282200Z`` (PASS),
+  ``03d47f8e309f6773ff54a3f753e4f0c382b2bd477aa7cdb1d92cfa4d12ea1ce7``.
+* ``virtual-usb-negative-20261017T124604.322647Z`` (PASS),
+  ``1e9c10a286d2a273edf5ec97a123508140679b9228b6ac2b4e04ac6bf7a2412a``.
+* ``virtual-usb-20261017T124735.178653Z`` (PASS),
+  ``719e6aed45368eac2ee5012924d63a1d50be01527c73ce982ad72e5e815c1ddc``.
+* ``virtual-usb-20261017T124743.284795Z`` (PASS),
+  ``31d7fde5f4efa350262f9679240d4ec6b4b372738140787ecd66e881a6a13a00``.
+* ``virtual-usb-negative-20261017T124834.435094Z`` (PASS),
+  ``13690adb315f7c8afd746e082ecac4688f7b377f09b83104a554f486a254a672``.
+* ``hci-build-module-20261017T124833.313390Z`` (PASS),
+  ``005dcbc8f5ade683cd17206c098f0cf022f6177be9813f1d807a57d98427be83``.

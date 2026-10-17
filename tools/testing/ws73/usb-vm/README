@@ -16,6 +16,10 @@ the compiled init fixture directly on the host or add physical USB passthrough.
   python3 tools/testing/ws73/usb-vm/run.py --phase download --speed high
   python3 tools/testing/ws73/usb-vm/run.py --phase loader --speed full --firmware-root /path/to/ws73_SDK/firmware
   python3 tools/testing/ws73/usb-vm/run.py --phase loader --speed high --firmware-root /path/to/ws73_SDK/firmware
+  python3 tools/testing/ws73/usb-vm/run.py --phase startup --speed full
+  python3 tools/testing/ws73/usb-vm/run.py --phase startup --speed high
+  python3 tools/testing/ws73/usb-vm/run.py --phase hci --speed full
+  python3 tools/testing/ws73/usb-vm/run.py --phase hci --speed high
   python3 tools/testing/ws73/usb-vm/check-supervisor.py <full-speed-record>
 
 Do not use python -O: assertions form part of the verification and optimized
@@ -31,7 +35,8 @@ The runner requires the build's clean source commit to match the current
 worktree, including tools and documentation. Rebuild after committing changes.
 It checks the exact required artifact set and hashes before starting QEMU,
 including the BLE endpoint, runtime-link, shared USB IO, boot-loader and
-download-test objects. The fixture leaves publication gated; having those objects does not mean a BLE child was exercised.
+download-test and native HCI objects. Only the explicit HCI phase publishes
+a BLE child; building the objects alone does not exercise that path.
 ACPI and PCI are required for this Q35 guest to power off: ACPI's default
 PCI_Config region handler depends on PCI. Guest shutdown must terminate QEMU
 successfully; a fixture PASS line followed by a process timeout is a failure.
@@ -47,7 +52,7 @@ The negative checker corrupts a verified full-speed log in 32 ways and checks
 five invalid build manifests (stale source, failed build, missing/extra artifact
 and wrong hash). Every corruption must be rejected. It does not exercise a
 device. Run it once for each phase's full-speed PASS record. Boot mode checks
-22 log corruptions and the same five invalid build manifests. Download mode
+27 log corruptions and the same five invalid build manifests. Download mode
 checks 28 log corruptions and five invalid build manifests. Loader mode checks
 33 log corruptions, five build artifacts and four firmware provenance/hash
 corruptions. The six original files and the rehashed negative input are verified
@@ -86,7 +91,7 @@ parent's boot transfer limit remains 32768 bytes, with no runtime ZLP flag.
 This phase does not request original firmware, validate hashes, perform RAM/XO
 preparation or prove device identity. Those contracts have separate tests;
 this synthetic executor is not an alternative physical loading path. These
-USB tests do not execute armed startup/customization, BLE class-control, HCI
+The runtime/boot/download phases do not execute armed startup/customization, BLE class-control, HCI
 or Wi-Fi, nor qualify physical U/E, RF, PM or peers. Missing resources, failed
 configuration dependencies, malformed logs and unexpected driver records fail
 the run rather than broadening the accepted result.
@@ -146,3 +151,8 @@ address/version/LE-only identity. A separate case removes USB while Reset
 is pending, followed by a fresh successful instance. These tests supplement
 physical boot observations; they do not qualify physical HCI, BlueZ scanning,
 connections, L2CAP, security, ACL traffic or a real peer.
+
+The startup and HCI supervisors reject respectively 26 and 29 log mutations,
+each with five artifact mutations. All-module compilation also includes the
+startup/HCI test consumer and its USB-owner dependency. Bluetooth is enabled
+in the virtual fixture configuration; it has no NIC or physical USB connection.

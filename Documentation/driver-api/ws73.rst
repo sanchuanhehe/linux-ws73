@@ -17,7 +17,10 @@ requests on disconnect. It does not select/download firmware,
 register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
 Production code never generates controller completions. An explicit KUnit-only
 controller model now replies to two setup commands through the native HCI stack;
-its synthetic replies are not physical evidence. No hardware or SparkLink
+its synthetic replies are not physical evidence. A separate userspace
+FunctionFS peer now completes native HCI initialization through the shared
+USB owner and auxiliary endpoint, including standard management-channel
+identity checks and acknowledged automatic close. No hardware or SparkLink
 qualification is inherited.
 
 A failed boot observation now enters the same parent terminal/fault-work path
@@ -58,8 +61,8 @@ The owner must establish verified U/E USB identity, firmware epoch/version,
 board/address inputs and startup handshakes, then disable/drain the initial BLE
 session before publishing. These are constructor preconditions, not facts that
 an arbitrary caller can prove by passing a boolean. The current USB observer
-**does not call the publication operation**. Only explicit synthetic KUnit
-backends publish endpoints so far; they do not supply hardware qualification.
+**does not call the publication operation**. Explicit KUnit and dummy_hcd test backends publish endpoints; they do not
+supply hardware qualification.
 
 The owner must abort IO and join RX/fault producers before removal. Removal
 closes admission, joins active backend calls, clears backend pointers and
@@ -334,9 +337,11 @@ setup/data buffers. The driver already restricts binding to interface 0. The
 control URB shares disconnect admission, anchoring, bounded waiting and explicit
 completion joining with bulk transfers, and does not use bulk ZLP flags. Actual
 transfer length remains distinct from action success. This backend is installed
-in the per-device IO object but **is not called by current initialization**.
-There is no user-triggerable bypass or new ABI. This increment compiles the
-control-URB branch; it has not exercised it with a virtual or physical device.
+in the per-device IO object. The physical observation worker does not call it.
+The explicit dummy_hcd startup and HCI consumers now exercise it through
+actual control URBs and independent action replies. There is no
+user-triggerable physical bypass or new ABI; physical action qualification
+remains open.
 
 The caller still must establish firmware, board/customization and device epoch
 before invoking an action, and independently check boot/address/HCI setup before
@@ -831,7 +836,7 @@ quiet interval for additional bulk/class OUT. The supervisor rejects 26 log
 mutations and five build-artifact mutations.
 
 This is actual URB integration with an explicitly synthetic peer, not physical
-startup or BLE qualification. The test supplies no firmware, board profile,
+startup or BLE qualification. The startup-only test supplies no firmware, board profile,
 HCI completion, auxiliary publication or controller registration. Its all-zero
 customization is fixture input only. The physical U separately passed READM,
 VERSION and disconnect regression on the refactored owner; that observation
@@ -839,6 +844,55 @@ does not qualify the test peer's runtime responses. Source IDs, the initial
 supervisor failure and full evidence hashes are recorded in the qualification
 page. Physical loading still requires the board/INI, preparation and firmware
 epoch inputs; E hardware, a BLE peer, an AP and upstream review remain open.
+
+Native HCI initialization through the USB owner
+-----------------------------------------------
+
+The separate dummy_hcd-only ffff:3737 test identity runs startup and an
+acknowledged initial disable, then calls the actual auxiliary publication
+operation. ``btws73`` binds normally, enables BLE through the shared USB
+control backend, and performs its feature/address setup followed by native
+HCI initialization. The FunctionFS peer checks the complete HCC/USB commands
+and returns explicitly synthetic Command Complete events, split into three
+separate USB/HCC fragments. No completion generator is added to production
+code. The fixture advertises LE-only features, no optional command bits or
+optional LE features; it is not a claim of WS73 capabilities or Bluetooth
+conformance and provides no RF/link behavior.
+
+Both full and high speed pass a successful initialization, removal while
+native Reset waits for a withheld reply, and another successful initialization
+on a fresh device. In each successful case a standard Bluetooth management
+socket receives a configured index and a Read Controller Information reply
+with the expected fixture address, HCI version, manufacturer and LE-only
+settings. The native auto-off path sends message 26 and requires its real USB
+control completion plus a separate action acknowledgement. Removal joins the
+owner and HCI work and removes the sysfs HCI device. The pending-Reset case
+supplies no Reset completion; cancellation must come from teardown.
+
+Each speed checks 27 HCI commands, 26 synthetic replies in 78 fragments,
+54 bulk OUT, 101 bulk IN, 11 class action transfers, two management-info
+responses, two automatic-close acknowledgements and three drains. The HCI
+supervisor rejects 29 log mutations and five artifact mutations. All-module
+linking and the existing seven startup cases at both speeds also pass.
+These results qualify native HCI composition with a virtual USB controller;
+they do not qualify physical HCI, ACL/L2CAP traffic, BlueZ discovery, pairing,
+a real peer, or U/E firmware startup. Earlier physical U READM/VERSION and
+cold-read observations retain their own source identities and limited scope.
+
+Runtime version-source caution
+------------------------------
+
+At the pinned SDK110 source, the platform GET_VERSION printer extracts the
+high three bytes of the returned firmware word and omits its low byte. Its
+SDK-version and ROM-version log strings are literal Host strings, not decoded
+firmware-acceptance checks. The Wi-Fi Host helper still returns packed
+1.10.105.1, while the generated version header has a separate V/R/C/S/B tuple.
+Those conflicting Host constants cannot establish a runtime whitelist for the
+pinned original images. Keep the raw response and obtain the actual device
+producer/response relationship. The USB fixture's ``0x010a6e7f`` is a synthetic
+value only, never a physical acceptance rule. Four source files, the clean SDK
+commit and hashes are retained in ``runtime-version-source-audit-20261017.json``
+(SHA-256 ``84d2f9a3fb365c93966a688be3a786214e99310d03d7f384be5c89b468ac9b58``).
 
 USB observations and safety boundary
 ------------------------------------

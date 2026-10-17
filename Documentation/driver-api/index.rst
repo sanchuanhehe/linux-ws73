@@ -148,5 +148,6 @@ Subsystem-specific APIs
    tty/index
    wbrf
    wmi
+   ws73
    xilinx/index
    zorro

@@ -1,0 +1,230 @@
+.. SPDX-License-Identifier: GPL-2.0-only
+
+WS73 Wi-Fi / BLE development baseline
+====================================
+
+Status and scope
+----------------
+
+This branch is a development series based on Linux
+70dd4ee72eb2d5793c62e71c14e3aba78e5a4e56. The initial codec is executable
+kernel code, currently linked only by its KUnit test. It does not register a
+USB driver or hci_dev, download firmware, or provide functional BLE/Wi-Fi.
+Synthetic HCI event fixtures are parser inputs, never generated completions
+for an HCI device. No hardware or SparkLink qualification is inherited.
+
+The first batch checks source/firmware identities, implements bounded BLE
+wire parsing and encoding, and runs it in an independent instrumented VM.
+Its exit criteria are a reproducible build, all named codec tests passing,
+preserved failures, and an explicit list of missing integration gates.
+It is not the shared-core or upstream-RFC acceptance gate.
+
+Reference snapshots (2026-10-17)
+-------------------------------
+
+All four reference worktrees were clean when inspected:
+
+* ws73_SDK: d5e68a58fe38c2b04a16769c69de1e8a80e86d74,
+  https://github.com/sanchuanhehe/ws73_SDK
+* libws73-usb: f4d85d0e95af2d0043432e1301fd2f6b660a4906,
+  https://gitcode.com/goodspeed1/libws73-usb
+* communication_nearlink_service: f0872dfaac33ffa99b80b352f6c05fba2df6414e,
+  https://gitcode.com/openharmony/communication_nearlink_service.git
+* drivers_peripheral: 879984db5c71d6922e37a529ea467dcadcd46958,
+  https://gitcode.com/openharmony/drivers_peripheral
+
+The SDK paths below are protocol evidence. The codec is newly written;
+no SDK, libws73-usb, OpenHarmony host implementation, binary library or
+calibration bytes are copied into it. SDK file headers inspected say
+``All rights reserved`` and some modules declare ``MODULE_LICENSE("GPL")``;
+the latter does not establish a repository-wide grant. libws73-usb declares
+LGPL-3.0-or-later. The inspected OpenHarmony H4 implementation declares
+Apache-2.0; drivers_peripheral's root also describes separate dual-licensed
+chipset/HDF areas. Those scopes must not be conflated.
+
+The user confirms SDK use is authorized for this project. Local use proceeds;
+public firmware delivery still needs its actual license text and packaging
+review in UP-12. This is not a requirement to replace the selected SDK.
+
+Firmware selection
+------------------
+
+The user selected **1.10.110**, loading the original SDK files separately:
+``firmware/us/ws73.bin``, ``firmware/us/wifi_cali.bin`` and
+``firmware/us/btc_cali.bin``. These are the active input artifacts;
+combined files are not loader inputs. Their complete-file SHA-256 values are,
+respectively::
+
+   7ac0483476bd0c861125929b034a3b9fe5275e6ef8036d37b370eec3f41d1b23
+   3d4bfadb1b2a61e1206a68083cbed7b1b109a80cbccab4f4e7825f3a6bce7fc5
+   4010355847dc14d26c471d7be411c27c226ad3628ca2f1855678e6cfc21c5af4
+
+Each original file has a 64-byte lowercase ASCII SHA-256 header matching
+the remainder. Payload lengths are 143892, 20980 and 7708 bytes. This is an
+integrity header, not an authentication signature. The read-only checker
+rejects wrong-role, modified, truncated or missing files::
+
+   python3 tools/testing/ws73/check-firmware.py /path/to/ws73_SDK/firmware/us
+
+For offline comparison only, the 110 combined file is 172772 bytes, SHA-256::
+
+   09865cf9c42addb064079ac0953ee39770d31e63eb27268813bdfc804016266f
+
+It equals the byte concatenation of the pinned SDK's ``firmware/us/ws73.bin``,
+``wifi_cali.bin`` and ``btc_cali.bin`` in that order. Their sizes are 143956,
+21044 and 7772 bytes. The file named combined-1.10.111.bin is different:
+173388 bytes, SHA-256::
+
+   7a9bb91d00a94fb8fc146fe17f73a78976bee9a5525303da2d6d4a3f8becaef3
+
+111 is an inventory comparison, not an active experiment input. The SDK
+snapshot must not be called SDK111 based on the handoff's wording. Blob
+identity alone does not establish BLE features, board compatibility,
+calibration correctness or permission to publish it. No firmware is loaded
+by these tests. No board/MAC/trim constants are embedded in the codec.
+
+USB observations and safety boundary
+-----------------------------------
+
+The allocated WS73U (user-provided model) is at physical path ``1-1.1.1``,
+ffff:3733, under GenesysLogic 05e3:0610 hub ``1-1.1``. Initial sysfs inspection
+found one unbound interface with class/subclass/protocol e0/02/02 and two
+bulk endpoints, 0x81 and 0x01, each maximum packet size 64. Its current speed
+was 12 Mbps. The local record retains serial, descriptors, sysfs ancestry,
+bus/address and capture time. No chip revision or firmware stage is inferred
+from speed or class. Boot/runtime transition remains untested in this batch.
+
+Before any future device assignment, recheck physical path, parent hub,
+VID/PID, serial and all current owners. Device address is not persistent.
+On ambiguous topology, stop hardware work and continue offline work.
+Do not pass through or reset PCI controller 0000:c5:00.3: it is shared.
+Hub 1-2.1 and devices 1-2.1.1 through 1-2.1.4 belong to the SparkLink project.
+Its worktrees, plans, qualification records, VMs and build outputs are not
+modified. All experimental kernels/drivers run in a project-private VM.
+
+BLE wire contract
+-----------------
+
+At the pinned SDK revision, the relevant files are:
+
+* ``driver/platform/hcc/host/hcc_usb_host.h``: usb_package, RX message type 2,
+  8-byte USB TX alignment (not the 32-byte alignment mentioned in generic
+  HCC/SDIO comments).
+* ``driver/platform/hcc/comm/hcc_bus_usb_comm.h`` and
+  ``host/hcc_usb_host.c``: 92-byte RX aggregate header, 24 u16 record lengths,
+  4096-byte per-record allocation limit, outer queue in usb_package.reserve.
+* ``driver/platform/hcc/inc/hcc_comm.h``: four-byte HCC header; the stale
+  five-byte comment is not its layout. Byte 0 has service in the high nibble
+  and subtype in the low nibble; byte 1 is queue; bytes 2..3 are LE length.
+* ``driver/platform/drv/device/romable/include/hcc_cfg_comm.h``:
+  Bluetooth service 0 and queue 7; BSLE control service 5 and queue 10.
+* ``driver/platform/hcc/comm/hcc.c``: BLE length excludes the four-byte HCC
+  header, unlike some control messages. hcc_bt_tx_data uses bus alignment.
+* ``driver/bsle/ble_driver/linux/ble_host_hcc.c``: H4 type prefix and a
+  1500-byte transmit limit, pm_ble_enable/disable and asynchronous replies.
+* ``driver/platform/pm/plat_pm_wlan.c`` and ``cfg/customize_bsle.c``:
+  distinct BLE enable/disable requests and BSLE action-status replies.
+
+``btws73_hcc_decode`` validates one complete RX aggregate before publishing
+any fragment. It checks exact total length, message kind, full-width outer
+queue, contiguous record-length entries, each record's service/subtype/queue
+and payload bounds. At most 24 borrowed views are returned. Padding is not
+interpreted as HCI data. Unknown outer types/queues return EOPNOTSUPP;
+inconsistent inner identity returns EPROTO; bad bounds return EMSGSIZE.
+Output is unchanged on every error. Input and output must not alias.
+
+The decoder does not assume an HCC fragment is a complete HCI packet.
+``btws73_hci_validate`` checks exactly one already-assembled H4 command/ACL
+on TX or event/ACL on RX. SCO, ISO and direction-invalid types are rejected.
+``btws73_hcc_encode`` validates before writing, emits a BLE HCC record with
+zeroed 8-byte alignment padding, and leaves output untouched on failure.
+It does not emit USB descriptors, switch queues or submit transfers.
+
+The conservative 1500-byte fragment ceiling is an initial implementation
+limit, not a measured RX firmware maximum. Fragmentation across aggregates,
+USB short-transfer/reassembly semantics and actual BLE RX size distribution
+still need a 110 capture. No speculative re-synchronization or success is
+generated after malformed input.
+
+Architecture decision 0001 (provisional)
+---------------------------------------
+
+Keep this BLE-specific codec local to drivers/bluetooth. There is no
+exported registration API, auxiliary child or unused SLE interface. The
+eventual single USB owner will manage firmware, HCC, bounded transport and
+physical teardown. Only actual Wi-Fi/BLE consumer needs justify extraction
+into a shared directory. drivers/misc/ws73 and a wireless-tree core remain
+options, not maintainer-approved decisions. Existing btrsi/RSI and the
+auxiliary bus documentation are comparisons, not mandatory templates.
+
+For this pure codec there are no URBs, workers, module references, retries
+or allocated buffers to drain. Callers own both input and output. Future
+transport integration must add per-device state, bounded submission and
+timeouts, stop admission before kill/drain, and complete callback/worker
+drain before freeing the parent. Protocol HCI credits remain separate from
+USB queue slots. A BLE close must not reset an active Wi-Fi consumer.
+
+Wi-Fi MAC audit (initial, not a final selection)
+----------------------------------------------
+
+Paths in this list are below the pinned SDK's ``driver/wifi``:
+
+* Authentication/association: ``hmac/hmac_sme_sta.c`` drives Host state
+  transitions; ``hmac/hmac_mgmt_sta.c`` constructs and sends authentication
+  and association management frames. Direct cfg80211 FullMAC is not justified.
+* Data framing: ``forward/hmac_tx_data.c``, ``forward/hmac_rx_data.c`` and
+  ``frw/frw_hcc_adapt.c`` contain Host framing/transport work. Map exact
+  firmware TX/RX metadata before proposing mac80211 operations.
+* ACK/retry/rate and TX status: ``device/source/inc/romable/dmac_ext_if_type_rom.h``
+  has dmac_tx_status_stru; ``wal/release/linux/wal_linux_cfg80211.c`` handles
+  management TX status. Complete data-frame ACK/retry metadata is not yet
+  established. USB completion cannot stand in for it.
+* RX metadata: Host algorithms consume RSSI (``alg/host/alg_txbf.c``).
+  Per-frame channel, FCS/decrypt flags and firmware export details remain open.
+* Aggregation/reordering: ``hmac/hmac_blockack.c`` has Host reorder queues
+  and BA processing. Actual build switches/offloads need tracing.
+* Keys/PN: ``hmac/hmac_11i.c`` and ``feature/hmac_frag.c`` contain Host key
+  and PN-related work. Cipher-specific replay ownership is not yet resolved.
+* Scanning: ``hmac/hmac_scan.c`` and ``feature/hmac_roam_alg.c`` show Host
+  policy. Determine device scan offload and report ABI before using hw_scan.
+* Regulatory/power: ``mac/mac_regdomain.c``, cfg80211 custom-regulatory
+  setup, ``hmac/hmac_sta_pm.c`` and ``hmac/hmac_wow.c`` require a mapping to
+  standard regulatory and power-save interfaces, not an INI/private ioctl ABI.
+
+Evaluate mac80211 first to avoid importing the Host SME/reorder stack.
+Keep the choice provisional until data/status/security interfaces are traced
+and tested with a controlled AP. No AP or credentials are assumed here.
+
+Reproduction and remaining gates
+-------------------------------
+
+After checking the whole machine's build/VM load, reserve a share of the
+8-job budget when hardware regression is active, then run from this tree::
+
+   python3 tools/testing/ws73/run-kunit.py --jobs 4
+
+The runner uses a fixed sibling ``.dev/ws73-upstream/build-kunit`` directory,
+a private QMP socket, and timestamped records. QEMU uses KUnit's default accelerator selection, two virtual CPUs,
+no network device and no USB passthrough. KASAN and UBSAN execute the same
+codec objects that a subsequent driver can link. The runner records HEAD,
+dirty patch/untracked hashes, compiler/tool identities, exact command,
+config, binary/object hashes, raw serial log and all named test results.
+It rejects missing cases, skipped cases, source changes and absent artifacts.
+No firmware/board/device claim is made for this synthetic VM run.
+
+Still required: full USB envelope/notification codec, firmware/board checks
+and loader, independent device passthrough with before/after identity,
+bounded H4 stream reassembly, BLE enable/reply state machine, hci_dev
+integration, real command/event correlation, BlueZ and peer communication.
+The user reports no BLE peer available. PM, recovery, coexistence, multi-device,
+Wi-Fi STA, fuzzing and formal qualification remain separate open gates.
+
+Relevant upstream process references (checked 2026-10-17):
+
+* https://docs.kernel.org/process/license-rules.html
+* https://docs.kernel.org/driver-api/auxiliary_bus.html
+* https://wireless.docs.kernel.org/en/latest/en/developers/documentation/submittingpatches.html
+
+No maintainer endorsement or RFC submission is claimed. Issues #1--#15 in
+https://github.com/sanchuanhehe/linux-ws73 retain their existing scopes;
+UP-05 remains open, deferred and non-blocking.

@@ -107,3 +107,7 @@ with a separate dummy_hcd-only ID. Neither qualifies physical board setup.
 The physical USB parent remains observation-only: it does not
 publish BLE until firmware, board, identity and startup gates are integrated
 and qualified. Enabling BT_WS73 alone does not provide working physical BLE.
+
+See formal/README for conditional CBMC checks of the actual chip/version
+query and reply converters, their modeled kernel helpers, proof bounds and
+counterexample controls. These do not replace VM or physical tests.

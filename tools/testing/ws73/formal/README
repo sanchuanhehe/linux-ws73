@@ -1,0 +1,55 @@
+WS73 bounded C verification
+===========================
+
+  python3 tools/testing/ws73/formal/run.py
+
+Requires CBMC and a C preprocessor. The runner reserves the WS73 build lock,
+uses one solver process at a time, limits each invocation to 60 seconds and
+4 GiB address space, and records every attempt. It performs symbolic analysis
+on the host; it does not execute/install a kernel, driver or firmware there.
+Check other build/resource use before starting. Inputs must be committed and
+clean; inputs, tool candidates, commands, raw results and hashes are archived
+under ../.dev/ws73-upstream/records/cbmc-hcc-<timestamp>.
+
+hcc.c includes the actual production drivers/misc/ws73/hcc.c translation unit
+and include/linux/ws73.h types. Entry points verify chip/version query encoding
+and chip/version reply decoding for CBMC's i386 and x86_64 data models. Other
+functions in that production file are not covered by these entry points.
+
+Input byte values, length/capacity over the entire size_t domain, null-input
+and null-output alternatives, and initial output values are symbolic. Caller
+objects are valid, retained and non-overlapping. Input starts at an unaligned
+offset. Allocation is exactly min(declared length, inspected prefix)+1 for
+a one-byte leading guard: 18/24-byte reply prefixes or a 32-byte query output.
+For short declarations, an overread/overwrite crosses the allocation boundary;
+for longer declarations, this deliberately smaller object additionally checks
+that the converter does not access the uninspected suffix. An arbitrary index
+checks input preservation and failure-output preservation over that prefix.
+Reply output fields are checked directly, not through padding comparisons.
+
+Assertions check exact acceptance predicates, query bytes, error-output
+immutability and preservation of successful identity/version values. CBMC
+also checks pointers, bounds, pointer arithmetic, signed/unsigned overflow,
+conversion, division and allocation leaks. Loop unwind is 33, including an
+unwinding assertion for the 32-byte query comparison; incomplete unwinding
+cannot produce a positive result. Null allocated objects are excluded as the
+caller's valid-storage precondition; protocol NULL arguments are explored.
+
+The shim models only kernel scalar types, errno constants, module metadata,
+memset declarations and bytewise little-endian unaligned helpers. Kernel
+helper implementation equivalence, the CBMC frontend/solver/library models,
+preprocessor and retained-object assumptions form the trusted base. Scalar
+width assertions guard the type model. No SDK source or firmware is included.
+
+Five private negative controls mutate copies of production code: wrong query
+tag, wrong query role byte, partial chip-output publication, omitted record
+length bound, and wrong returned ROM value. Each must produce its specific
+counterexample; unrelated failures, warnings, missing properties, unknown
+results, timeouts and abnormal exits are not accepted. These copies are never
+compiled into a kernel or committed as production changes.
+
+This is conditional bounded C verification of four scalar converters, not
+firmware authenticity/compatibility, boot register reliability, USB aggregation,
+H4 streaming, concurrent lifetime/refinement, TLC/LKMM, liveness or hardware
+qualification. Passing these models does not close the KCSAN baseline reports
+or permit firmware loading on an unqualified physical device.

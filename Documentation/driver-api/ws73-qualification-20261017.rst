@@ -1955,3 +1955,26 @@ Local records and manifest SHA-256:
   ``13690adb315f7c8afd746e082ecac4688f7b377f09b83104a554f486a254a672``.
 * ``hci-build-module-20261017T124833.313390Z`` (PASS),
   ``005dcbc8f5ade683cd17206c098f0cf022f6177be9813f1d807a57d98427be83``.
+
+A subsequent supervisor audit tightened pending-Reset cancellation at clean
+source ``a4d9f9e45d9d112c17f960bef0ae09215b50e315``. Teardown completion alone was insufficient:
+the captured kernel disconnect/drain timestamps must differ by less than one
+second, and any Bluetooth command timeout in the kernel log is rejected.
+HCI_CMD_TIMEOUT is two seconds in this source. Two new negative controls
+cover late drain and a command timeout, giving **31 log plus five artifact**
+rejections. Fresh full/high HCI runs both pass; pending-Reset drain takes
+**18,305 / 17,622 microseconds** respectively. This is a bounded fixture
+cancellation check, not a physical performance guarantee. Kernel C and the
+fixture are unchanged; the previous module/startup results retain their
+``8877b3bcf78b`` source identity. No failure was found or omitted in this audit.
+
+Additional records and manifest SHA-256:
+
+* ``virtual-usb-build-20261017T125202.223036Z`` (PASS),
+  ``5efb6d14321c4fb1e15c0b93965bc8927e72cef0532088e892cec8f534e8e211``.
+* ``virtual-usb-20261017T125237.935315Z`` (PASS),
+  ``f3f73403694de9365fe1a8e0a9385b481ff2f18944b1c40fc129d3d4cb971827``.
+* ``virtual-usb-20261017T125246.200346Z`` (PASS),
+  ``d3136f8b526ca20a4ed6d62849640dcb7cec58d2046814f837bfd81ea97b454c``.
+* ``virtual-usb-negative-20261017T125309.383175Z`` (PASS),
+  ``7167654bd15afc5d103035f06cb2a5d0f35041770311c75c148237812b01b04a``.

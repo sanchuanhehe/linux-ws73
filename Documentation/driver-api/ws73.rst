@@ -872,7 +872,9 @@ supplies no Reset completion; cancellation must come from teardown.
 Each speed checks 27 HCI commands, 26 synthetic replies in 78 fragments,
 54 bulk OUT, 101 bulk IN, 11 class action transfers, two management-info
 responses, two automatic-close acknowledgements and three drains. The HCI
-supervisor rejects 29 log mutations and five artifact mutations. All-module
+supervisor rejects 31 log mutations and five artifact mutations. Pending
+Reset teardown must drain within one second of USB disconnect, before the
+two-second command timeout; any HCI timeout in the kernel log is rejected. All-module
 linking and the existing seven startup cases at both speeds also pass.
 These results qualify native HCI composition with a virtual USB controller;
 they do not qualify physical HCI, ACL/L2CAP traffic, BlueZ discovery, pairing,

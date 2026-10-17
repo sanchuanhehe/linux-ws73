@@ -2103,3 +2103,49 @@ records retain their original scope; this verifies target objects, not a
 cross-architecture kernel build. Record
 ``wifi-abi-20261017T132844.086882Z``, manifest SHA-256
 ``5b5f8d469c82576b8f9a20f92e5da44e40568183db49c487fff3201b586a790d``.
+
+One-shot admission for the physical RAM trial tool
+--------------------------------------------------
+
+Clean built/tested source: ``44fbb6c8b6890f9da262e122c677b648a37c75c2``.
+Review of the USB core matching path showed that absence of a module alias
+prevents autoloading, not matching after a driver is registered. The earlier
+trial registered before observing identity and had no module-lifetime probe
+limit. No unintended bind was observed in the failed physical attempt; that
+attempt never passed the normal observer. This is a trial-control correction,
+not a diagnosis of its READM timeout.
+
+Guest PID 1 now waits for identity/ROM observations, checks the device number
+captured from the boot enumeration and rechecks observer ownership before
+loading the trial. The module requires that number as well as the existing
+DMI/serial/port/descriptor checks. Probe requires global PID 1 and consumes
+an atomic admission before calling the shared bind. Automatic worker probes,
+a different device number and a repeated probe are rejected; even a failed
+first bind cannot replenish admission. Re-enumeration does not reset it.
+The production USB owner and firmware loader have not changed.
+
+The separate tagged-VM test module runs eight pure admission cases: automatic
+context, wrong enumeration, zero/out-of-range numbers, first admission,
+repeat, changed enumeration after admission and another repeat. Guest init
+also attempts module loading without a devnum and requires ENODEV, then
+requires the trial driver to be absent before READY. These checks do not
+register a USB driver or execute firmware loading. The trial module is loaded
+with valid inputs only after future actual observation checks pass.
+
+Four-job build and empty KVM preflight pass. The supervisor sees eight cases,
+exactly one no-driver readiness marker, only qmp_capabilities/quit commands,
+VM exit 0 and no kernel/lock/sanitizer warnings. The separate external test
+module gives the expected out-of-tree taint. No physical device was attached,
+no real probe/disconnect was exercised and no further cold or startup evidence
+is claimed. The single-device power-cycle question is still pending. The
+changed kernel C has zero checkpatch errors and one new-file MAINTAINERS
+reminder; the formal-series maintainer-entry work remains open.
+
+Private records and SHA-256:
+
+* ``hardware-build-20261017T133744.285944Z/manifest.json``,
+  ``c0682cbd49e8ed4c7f8f6fb4643cad15bae9695510f1e610ecdae076c90760c6``.
+* ``ram-trial-20261017T133810.412175Z/manifest.json``,
+  ``22113b5a06d2795ff92d21cf95f4ee9ddb511878fdce6fe95228373b44010076``.
+* ``ram-trial-20261017T133810.412175Z/guard-analysis.json``,
+  ``ca2ec6f5f887db072dd973568d68dfc817b46be7dc9e982972cb293454324a79``.

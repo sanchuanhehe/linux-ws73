@@ -851,8 +851,12 @@ Explicit allocated-U RAM trial
 ``tools/testing/ws73/hardware/`` provides a separate VM-only development
 loader consumer. It requires the trial DMI markers, an explicit allocated
 serial, the first guest USB port and the verified boot descriptor. It has
-no module autoload alias. The normal physical driver remains an observer;
-no universal board defaults or automatic physical loading are introduced.
+no module autoload alias. Registration is deferred until the guest has
+observed identity and ROM version, checked the same enumeration number and
+verified observer ownership. Probe additionally requires the global guest
+PID 1 and consumes one atomic admission before binding; failures cannot
+replenish it. The normal physical driver remains an observer; no universal
+board defaults or automatic physical loading are introduced.
 The experiment uses explicitly sourced SDK110 USB reference inputs: XO
 8/60 (0x3c08), temperature compensation disabled, fixed calibration-RAM
 preparation, and the three independently validated original U files.

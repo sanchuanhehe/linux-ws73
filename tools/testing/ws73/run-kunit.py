@@ -247,7 +247,7 @@ def main():
                                                      "ws73_hci_rx_fault_test", "ws73_hci_tx_nomem_test",
                                                      "ws73_hci_rx_nomem_test", "ws73_hci_link_data_test",
                                                      "ws73_hci_link_short_tx_test",
-                                                     "ws73_hci_link_short_action_test"}}
+                                                     "ws73_hci_link_short_action_test", "ws73_hci_link_abort_test"}}
             passed = len(groups) == len(expected_groups)
             seen = set()
             for group in groups:

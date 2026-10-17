@@ -811,6 +811,45 @@ static void ws73_hci_link_short_action_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, m->startup.state, WS73_STARTUP_DONE);
 }
 
+static void ws73_hci_link_abort_test(struct kunit *test)
+{
+	struct ws73_hci_model *m = ws73_model_create_path(test, true, true, false);
+	const u8 event[] = { HCI_EVENT_PKT, 0xff, 1, 0x73 };
+	struct auxiliary_device *held;
+	struct sk_buff *skb;
+	unsigned int before;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, m);
+	/* Reset is blocked inside USB TX; this accepted ACL must never follow it. */
+	skb = ws73_model_packet();
+	KUNIT_ASSERT_NOT_NULL(test, skb);
+	ret = m->hdev->send(m->hdev, skb);
+	if (ret)
+		kfree_skb(skb);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	before = m->hdev->stat.byte_rx;
+	held = m->adev;
+	get_device(&held->dev);
+	ws73_ble_link_abort(&m->link, -ENODEV);
+	complete_all(&m->release);
+	ws73_model_withdrawn(test, m);
+	KUNIT_EXPECT_EQ(test, ws73_model_fragment(m, event, sizeof(event)), 0);
+	KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, before);
+	KUNIT_EXPECT_EQ(test, m->acls, 0);
+	KUNIT_EXPECT_EQ(test, m->bulk_calls, 8);
+	KUNIT_EXPECT_EQ(test, m->tx.failure, -ENODEV);
+	KUNIT_EXPECT_EQ(test, m->link.error, -ENODEV);
+	ws73_ble_link_remove(&m->link);
+	KUNIT_EXPECT_PTR_EQ(test, m->link.child, NULL);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(held), -ENODEV);
+	KUNIT_EXPECT_EQ(test, ws73_ble_send(held, ws73_model_record, sizeof(ws73_model_record)),
+			-ENODEV);
+	KUNIT_EXPECT_EQ(test, m->controls, 3);
+	KUNIT_EXPECT_EQ(test, m->bulk_calls, 8);
+	put_device(&held->dev);
+}
+
 static struct kunit_case ws73_hci_data_cases[] = {
 	KUNIT_CASE(ws73_hci_data_test),
 	KUNIT_CASE(ws73_hci_queue_limit_test),
@@ -824,6 +863,7 @@ static struct kunit_case ws73_hci_data_cases[] = {
 	KUNIT_CASE(ws73_hci_link_data_test),
 	KUNIT_CASE(ws73_hci_link_short_tx_test),
 	KUNIT_CASE(ws73_hci_link_short_action_test),
+	KUNIT_CASE(ws73_hci_link_abort_test),
 	{}
 };
 

@@ -462,9 +462,11 @@ changed width/address/value, partial echoes and other suffixes. This is narrower
 than the SDK Host's prefix-only comparison. The same U ROM returned
 ``READY:FILE01:`` plus the entire issued FILES command and a NUL. READY accepts
 this exact tagged echo or the bare token with zero padding; mismatched block
-address, length, flag or tag is rejected before the payload. FILES OK retains
-its exact-token/NUL-padding rule pending physical evidence. No ambiguous write is automatically
-replayed; the preparation counter counts accepted ACKs, not submitted writes.
+address, length, flag or tag is rejected before the payload. The same U ROM
+returned ``FILES OK:`` plus the complete current FILES command and a NUL.
+Accept that exact echo or the bare token with NUL padding; reject stale or
+modified echoes before advancing acknowledged bytes. No ambiguous write is
+automatically replayed; counters distinguish accepted replies from transfers.
 The tagged hardware trial captures complete boot RX in bounded chunks because
 usbmon text alone retains only the first 32 bytes.
 Only NUL response padding is allowed. Actual-length, cancellation and deadline

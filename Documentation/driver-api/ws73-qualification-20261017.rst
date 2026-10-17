@@ -3002,3 +3002,120 @@ Overall KCSAN qualification and the separate release_task/blake2s unknown-writer
 report remain unresolved. No driver success is inferred from this analysis.
 Record ``kcsan-worker-field-analysis-20261017/manifest.json``, SHA-256
 ``1a2f004db3ea4760edc06a30303370b3340d07fec5a559f6bb912344e01f32b2``.
+
+
+Physical original-file download and runtime reply boundary (2026-10-18 SGT)
+-------------------------------------------------------------------------
+
+The user-confirmed READY-fix power cycle (device 118 to 119) was consumed by
+``ram-trial-20261017T170231.747329Z``, built at 62d7821cf856. Eleven preparation
+replies and the 42-byte tagged READY passed. The first 32768-byte code transfer
+completed successfully, 6858 us after READY. The ROM returned the complete
+38-byte ``FILES OK:FILES 1 0x400000 0x8000 0x0 `` plus NUL. Strict token-only
+parsing rejected it with -EPROTO, phase 3/stage 4/prep 11/image 0/ack 0.
+No next block or QUIT was sent. Zero acknowledged bytes does not mean zero
+transmitted bytes. Both owners drained and QEMU exited; original status FAIL
+is retained. Independent analysis checks all 16 OUT/16 IN transfers, 14 full
+trial replies, original input hashes and the consumed confirmation.
+
+Signed fix cd3d210661019f09b3f32b9268510a6834f5d771 accepts only the exact
+current FILES command after ``FILES OK:`` or the existing bare token, with
+optional NUL padding. KUnit covers every reply length 0..513, every byte
+mutation in 512 bytes and a stale first-block acknowledgement at the second
+block. All 91 KUnit cases passed under KASAN/UBSAN. Full/high-speed original
+U/E USB loader fixtures each passed ten cases, including seven FILES echoes
+and fifteen bare FILES replies over 22 payloads. Supervisor controls rejected
+45 log mutations and nine artifact corruptions. The private full-boot trace
+verifier rejected 26 corruptions. These are offline/VM results, not E hardware.
+
+The next user confirmation, explicitly without other supply (device 119 to
+120), was consumed by ``ram-trial-20261017T171116.336919Z`` at cd3d21066101.
+All eleven preparation writes, seven READY/payload/FILES OK exchanges and QUIT
+passed: original payloads 143892, 20980 and 7708 bytes, total 172580. Independent
+analysis checks all 29 OUT/28 IN completions, 26 full replies and each READY
+holdoff (6733..10819 us). TX capture remains a 32-byte prefix plus original
+input hashes, not a full payload wire comparison. The loader reached
+phase 4/stage 6/image 2/ack 7708, which means waiting for runtime, not Ready.
+
+The VM did not observe runtime within 30 seconds and the overall trial remains
+FAIL. Cleanup drained both owners and QEMU exited zero. After cleanup the
+same serial/topology exposed device 121, 480 Mbps and the five-endpoint runtime
+descriptors. This post-cleanup observation cannot prove when or why the switch
+occurred inside the original VM. The QEMU log retained libusb NO_DEVICE at
+release; the guest also logged a clocksource watchdog CPU-read timeout. Neither
+is suppressed or asserted to explain the transition. No automatic reload or
+alternate firmware was attempted.
+
+A separate VM, ``runtime-observe-20261017T171428.464520Z``, attached that runtime
+without firmware files or a loader module. It received BSP_READY, completed
+two 36-byte USB controls and a 128-byte query, then received 188 bytes into a
+98396-byte RX buffer. The captured outer prefix is type 2, length 188, queue 9,
+first record length 96. The driver returned -EMSGSIZE while processing the
+chip observation and did not query version. Only the first 32 bytes of this
+reply were retained, so its body and exact failing field are not established.
+One owner drained; QEMU exited zero and the device was unowned. This is a real
+runtime response, not verified chip identity, firmware version or BLE support.
+The original FAIL is retained; the independent partial-transcript audit does
+not promote it to PASS.
+
+Signed test-only change 44c5204b441fef293037bef4f3639a79e4ebdc66 adds binary
+usbmon recording inside the isolated guest: a 1 MiB ring, at most 512 copied
+bytes per event, explicit actual/captured/copied lengths, and drop detection.
+It leaves the production parser unchanged. Both guest recorders compile with
+-Wall/-Wextra/-Werror. The refreshed hardware build and empty VM preflight
+passed, including binary usbmon open and the eight existing admission guards.
+The private runtime verifier was corrected to the actual 98396-byte production
+RX capacity; its synthetic positive and fifteen corruption controls passed.
+
+The next prepared trial may explicitly detach the completed boot instance and
+reattach the same independently checked runtime device through QMP, preserving
+separate owners and drains. It must be labelled controlled handoff, not natural
+reenumeration or recovery. A new power cycle is required before another loader
+trial. The two confirmations above are consumed. Normal autoloading remains
+observation-only; U/E identity agreement, board applicability, E/peer/AP,
+BLE/STA and formal upstream gates remain open.
+
+Records and manifest SHA-256 (under the private evidence root):
+
+* ``power-cycle-confirmation-20261017T170217.602729Z``,
+  ``b81f66f196449faa42ba43a083ca77e7b54c562a5d89e5c79b290c692411e3d6``.
+* ``ram-trial-20261017T170231.747329Z``,
+  ``17b5d5a6e36ba3969084b075695afa8d87e55a6b2b04e2127ade4266d911b4e7``.
+* ``ram-trial-files-analysis-20261017``,
+  ``057ed9d071f4e2c582a316097d4ad35f588d0fb15e823c9cf3cb70ef4c0754ec``.
+* ``20261017T170731.111495Z``,
+  ``cecf4a2cdd6c8f9b119052397e993b8c150f286c71619620424f0f2f1ba7040c``.
+* ``virtual-usb-build-20261017T170817.352209Z``,
+  ``2080692469c344fad8ea72ad3d76087d36f56fdaf7fd17cabb22f70da4fcc753``.
+* ``virtual-usb-20261017T170847.795612Z``,
+  ``2170be16a291245bf57860fbd977f970861ddd96aa56f7f91adf4b676debea8e``.
+* ``virtual-usb-20261017T170905.532591Z``,
+  ``b27f54eeaf429fad784f44fef2e55d724c61fa1621d51753f0aae00d13dd9893``.
+* ``virtual-usb-negative-20261017T170906.626172Z``,
+  ``44cf96fd36166f54c2b7fad9d733cd30b4db5a2884835463ca2f342d97225a0f``.
+* ``hardware-build-20261017T170928.503885Z``,
+  ``164d52a13f579576ee5bdc189acf8626c05f0c7711d0bf1da624d71137f46a97``.
+* ``ram-trial-20261017T170955.502519Z``,
+  ``c323e46cb9c16336680249d0ad3a24fec8b464968af685bdee82b99cee112fe3``.
+* ``power-cycle-confirmation-20261017T171103.403865Z``,
+  ``7ea3418b8cb56d3174704150a27dc9b761feaa58d0dfd4c440f1704eff889356``.
+* ``ram-trial-20261017T171116.336919Z``,
+  ``93d49547d292bf424550750b0d60b607d6f1323d1894e9524d1d31e235190933``.
+* ``ram-trial-load-analysis-20261017``,
+  ``4dbac3262ac45c5b5726af792ac455bf47f83a3596723f02875d142221b3e7b2``.
+* ``runtime-verifier-20261017T171410.615236Z``,
+  ``e754a3e679091c95140f9cf5b813ca50f497107a178ddab71ae56573c816fac4``.
+* ``runtime-observe-20261017T171413.165356Z``,
+  ``d7b18a9652a8782d76bbc71eec89ea3cac3c357067b1d2c4469e30fb394517a8``.
+* ``runtime-observe-20261017T171428.464520Z``,
+  ``c562894257c35b60bdc2517dcee26530809c05d3c49c2c858e273a3eb1cf47e9``.
+* ``runtime-size-analysis-20261017``,
+  ``b557f81d612b4de0642887fa7fb476357f0f8bcc28f1363bb7bbbf13e2ca6c96``.
+* ``runtime-verifier-20261017T171641.368691Z``,
+  ``37dbe2cc3b9e8a17025adef4fb495c3eb9eb576f42e7142aec76bd2c6ea6b096``.
+* ``ram-trial-verifier-20261017T171748.195818Z``,
+  ``22a5621618edcb7762b9ab26312ca84022b25e3c4ddd7e9cc6e974e631dde44f``.
+* ``hardware-build-20261017T171747.137702Z``,
+  ``4c2f8c5a4582a44db50e91716f40df77fde721b3c7ea37e0f5813eff59930646``.
+* ``ram-trial-20261017T171833.202747Z``,
+  ``2a3624c37a51fe8453fe20c9978dce33ce50de9c188c7e4e76c21d6b1127e78c``.

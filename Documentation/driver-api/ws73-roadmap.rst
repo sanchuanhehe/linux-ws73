@@ -177,8 +177,11 @@ user-confirmed power cycles on the same allocated U also produced successful
 19-byte OUT and four-byte ``00000000`` IN, decoded U/USB, before preparation
 writes. These are this project's same-sample cold-read observations, without
 independent power instrumentation. The latest original-file trial verified
-all eleven preparation ACKs but stopped at the first READY reply before any
-payload or QUIT. See :doc:`ws73-qualification-20261017` for each attempt and
+all eleven preparation ACKs, seven original-file blocks and QUIT. The same
+physical device subsequently exposed runtime descriptors; a separate query VM
+received an HCC reply but rejected its length. Runtime identity/version and
+continuous in-VM reenumeration are still unverified. See
+:doc:`ws73-qualification-20261017` for each attempt and
 its consumed confirmation. Other-project U/E software-reset reports remain
 references only. E cold starts, additional samples, runtime identity agreement
 after this project's own downloads and full physical lifecycle qualification
@@ -252,8 +255,9 @@ malformed replies, cancellation or errors stop immediately; ambiguous writes
 are not replayed. In addition to bare tokens with optional NUL padding,
 WRITEM accepts a colon and the exact issued command, and READY accepts the
 observed ``:FILE01:`` tag and exact current FILES command. Complete allocated-U
-captures establish these two echo forms. FILES OK retains its strict token
-rule pending physical observation. Acknowledged preparation is not evidence
+captures establish those echoes and ``FILES OK:`` followed by the exact current
+FILES command. All forms retain strict length and NUL-padding checks, including
+stale-block rejection. Acknowledged preparation is not evidence
 of firmware execution or final RF calibration.
 
 One further SDK correction: MSG_FROM_DEV_QUIT_OK is the EMPTY string. USB

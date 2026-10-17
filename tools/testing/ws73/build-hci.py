@@ -29,8 +29,8 @@ with (work/'build.lock').open('a') as lock:
     cmd=['make','-C',str(source),f'O={build}','ARCH=x86_64','LLVM=1','W=1','-j4',target];result['commands'].append(cmd);save();subprocess.run(cmd,env=env,stdout=log,stderr=subprocess.STDOUT,check=True)
     if target=='allnoconfig':
      lines=(build/'.config').read_text().splitlines();assert {line for line in text.splitlines() if line.startswith(('CONFIG_', '# CONFIG_'))}<=set(lines),'unsatisfied config'
-  names=['.config','vmlinux','arch/x86/boot/bzImage','drivers/misc/ws73/ble.o','drivers/misc/ws73/ble-link.o','drivers/misc/ws73/usb.o','drivers/bluetooth/btws73.o','drivers/bluetooth/btws73_proto.o']
-  if args.mode=='module':names+=['Module.symvers','drivers/misc/ws73/ws73-core.ko','drivers/misc/ws73/ws73-usb.ko','drivers/bluetooth/btws73-hci.ko','drivers/bluetooth/btws73_proto.ko']
+  names=['.config','vmlinux','arch/x86/boot/bzImage','drivers/misc/ws73/ble.o','drivers/misc/ws73/ble-link.o','drivers/misc/ws73/usb.o','drivers/misc/ws73/usb-io.o','drivers/bluetooth/btws73.o','drivers/bluetooth/btws73_proto.o']
+  if args.mode=='module':names+=['Module.symvers','drivers/misc/ws73/ws73-core.ko','drivers/misc/ws73/ws73-usb.ko','drivers/misc/ws73/ws73-usb-io.ko','drivers/bluetooth/btws73-hci.ko','drivers/bluetooth/btws73_proto.ko']
   for name in names:
    dest=record/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(build/name,dest);result['artifacts'][name]=sha(dest)
   assert git('rev-parse','HEAD')==head and not git('status','--porcelain')

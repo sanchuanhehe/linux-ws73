@@ -8,6 +8,8 @@ ws73-test-y := test.o usb-wire-test.o usb-tx-test.o runtime-test.o service-test.
 ws73-test-y += customize-test.o customize-request-test.o
 ws73-test-y += startup-test.o
 ws73-test-y += board-test.o ble-test.o ble-link-test.o
+obj-$(CONFIG_WS73_USB_IO) += ws73-usb-io.o
+ws73-usb-io-y := usb-io.o
 obj-$(CONFIG_WS73_USB) += ws73-usb.o
 ws73-usb-y := usb.o
 

@@ -9,7 +9,7 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def validate_build(proofdir, proof, expected_head):
  required={'.config','arch/x86/boot/bzImage','vmlinux'}
  required.update('drivers/misc/ws73/'+name+'.o' for name in
-                 ['usb','boot','firmware','runtime','usb-tx','usb-wire','service',
+                 ['usb','usb-io','boot','firmware','runtime','usb-tx','usb-wire','service',
                   'ble-control','customize','customize-request','startup','ble','ble-link'])
  assert proof['status']=='PASS','failed/incomplete build'
  assert proof['source']==expected_head,'stale source artifact'

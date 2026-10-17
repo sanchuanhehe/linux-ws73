@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* WS73 boot/runtime identity observations. Firmware loading remains gated. */
-#include <linux/completion.h>
-#include <linux/delay.h>
-#include <linux/jiffies.h>
 #include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -12,6 +9,7 @@
 #include <linux/workqueue.h>
 
 #include "boot.h"
+#include "usb-io.h"
 #include "ble-link.h"
 #include "startup.h"
 #include "runtime.h"
@@ -29,6 +27,7 @@ struct ws73_usb {
 	struct ws73_usb_tx_io runtime_io;
 	struct ws73_ble_link ble;
 	struct ws73_boot_io boot_io;
+	struct ws73_usb_io io;
 	struct urb *rx_urb;
 	struct urb *interrupt_urb;
 	u8 *rx_buffer;
@@ -69,105 +68,6 @@ static void ws73_usb_fail(struct ws73_usb *ws, int error)
 	ws73_ble_link_abort(&ws->ble, error);
 	if (first)
 		schedule_work(&ws->stop);
-}
-
-struct ws73_usb_request {
-	struct completion done;
-	int status;
-	unsigned int actual;
-};
-
-static void ws73_usb_complete(struct urb *urb)
-{
-	struct ws73_usb_request *request = urb->context;
-
-	request->status = urb->status;
-	request->actual = urb->actual_length;
-	complete(&request->done);
-}
-
-static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
-			     unsigned int timeout_ms, bool receive, bool control)
-{
-	struct ws73_usb_request request;
-	struct usb_ctrlrequest *setup = NULL;
-	size_t limit = ws->runtime ? WS73_USB_TX_MAX :
-		       receive ? 512 : WS73_BOOT_CHUNK_SIZE;
-	struct urb *urb;
-	unsigned long flags;
-	u8 *buffer;
-	int ret;
-
-	if (!data || !size || size > limit ||
-	    !timeout_ms || timeout_ms > 2000)
-		return -EINVAL;
-	if (control && (!ws->runtime || receive || size != 4))
-		return -EINVAL;
-	urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!urb)
-		return -ENOMEM;
-	buffer = kmalloc(size, GFP_KERNEL);
-	if (!buffer) {
-		ret = -ENOMEM;
-		goto free_urb;
-	}
-	if (!receive)
-		memcpy(buffer, data, size);
-	init_completion(&request.done);
-	request.status = -EINPROGRESS;
-	request.actual = 0;
-	if (control) {
-		setup = kzalloc_obj(*setup);
-		if (!setup) {
-			ret = -ENOMEM;
-			goto free_buffer;
-		}
-		setup->bRequestType = USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE;
-		setup->wLength = cpu_to_le16(4);
-		/* SDK110: request/value/index are all zero; only interface 0 binds. */
-		usb_fill_control_urb(urb, ws->udev, usb_sndctrlpipe(ws->udev, 0),
-				     (u8 *)setup, buffer, size, ws73_usb_complete, &request);
-	} else {
-		usb_fill_bulk_urb(urb, ws->udev,
-				  receive ? usb_rcvbulkpipe(ws->udev, ws->in) :
-				 usb_sndbulkpipe(ws->udev, ws->out),
-				 buffer, size, ws73_usb_complete, &request);
-		if (ws->runtime && !receive)
-			urb->transfer_flags |= URB_ZERO_PACKET;
-	}
-
-	spin_lock_irqsave(&ws->lock, flags);
-	if (ws->disconnected || ws->error) {
-		ret = ws->disconnected ? -ENODEV : ws->error;
-	} else {
-		usb_anchor_urb(urb, &ws->submitted);
-		ret = usb_submit_urb(urb, GFP_ATOMIC);
-		if (ret)
-			usb_unanchor_urb(urb);
-	}
-	spin_unlock_irqrestore(&ws->lock, flags);
-	if (ret)
-		goto free_buffer;
-
-	if (!wait_for_completion_timeout(&request.done, msecs_to_jiffies(timeout_ms)))
-		ret = -ETIMEDOUT;
-	/* Join completion even if disconnect already removed it from the anchor. */
-	usb_kill_urb(urb);
-	if (!ret)
-		ret = request.status;
-	if (!ret && request.actual > size)
-		ret = -EOVERFLOW;
-	if (!ret) {
-		if (receive)
-			memcpy(data, buffer, request.actual);
-		ret = request.actual;
-	}
-free_buffer:
-	kfree(setup);
-	kfree(buffer);
-free_urb:
-	usb_free_urb(urb);
-	return ret;
 }
 
 static u64 ws73_usb_now(void *context)
@@ -301,28 +201,26 @@ static void ws73_usb_rx_complete(struct urb *urb)
 
 static int ws73_usb_send(void *context, const u8 *data, size_t size, unsigned int timeout)
 {
-	return ws73_usb_transfer(context, (void *)data, size, timeout, false, false);
+	struct ws73_usb *ws = context;
+
+	return ws73_usb_io_transfer(&ws->io, (void *)data, size, timeout, false, false);
 }
 
 static int ws73_usb_receive(void *context, u8 *data, size_t size, unsigned int timeout)
 {
-	return ws73_usb_transfer(context, data, size, timeout, true, false);
+	struct ws73_usb *ws = context;
+
+	return ws73_usb_io_transfer(&ws->io, data, size, timeout, true, false);
 }
 
 static int ws73_usb_ble_send(void *context, const u8 command[4], unsigned int timeout)
 {
+	struct ws73_usb *ws = context;
 	u32 message = get_unaligned_le32(command);
 
 	if (message != 25 && message != 26)
 		return -EINVAL;
-	return ws73_usb_transfer(context, (void *)command, 4, timeout, false, true);
-}
-
-static void ws73_usb_wait_ready(void *context)
-{
-	/* SDK requires at least 5 ms between READY and the payload submission. */
-	usleep_range(5000, 6000);
-	/* The boot executor rechecks cancellation/deadline before sending. */
+	return ws73_usb_io_transfer(&ws->io, (void *)command, 4, timeout, false, true);
 }
 
 static void ws73_usb_initialize(struct work_struct *work)
@@ -427,13 +325,18 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	ws73_usb_tx_init(&ws->tx);
 	ws73_platform_init(&ws->identity);
 	ws73_startup_init(&ws->startup);
+	ws->io = (struct ws73_usb_io) {
+		.udev = ws->udev, .runtime = runtime, .in = ws->in, .out = ws->out,
+		.lock = &ws->lock, .submitted = &ws->submitted,
+		.disconnected = &ws->disconnected, .error = &ws->error,
+	};
 	ws->boot_io = (struct ws73_boot_io) {
 		.context = ws,
 		.now_ms = ws73_usb_now,
 		.cancelled = ws73_usb_cancelled,
 		.send = ws73_usb_send,
 		.receive = ws73_usb_receive,
-		.wait_ready = ws73_usb_wait_ready,
+		.wait_ready = ws73_usb_io_wait_ready,
 	};
 	ws->ble_io = (struct ws73_ble_control_io) {
 		.context = ws,
@@ -520,3 +423,4 @@ module_usb_driver(ws73_usb_driver);
 MODULE_DESCRIPTION("WS73 USB boot and runtime identity observations");
 MODULE_LICENSE("GPL");
 MODULE_IMPORT_NS("WS73");
+MODULE_IMPORT_NS("WS73_USB_IO");

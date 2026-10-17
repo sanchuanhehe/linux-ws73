@@ -148,7 +148,7 @@ def main():
         if not args.core_only:
             required.update({"drivers/bluetooth/btws73_proto.o",
                              "drivers/bluetooth/btws73_test.o",
-                             "drivers/misc/ws73/usb.o"})
+                             "drivers/misc/ws73/usb.o", "drivers/misc/ws73/usb-io.o"})
         if args.hci_only:
             required = {name for name in required if not name.endswith(("-test.o", "/test.o"))}
             required.update({"drivers/misc/ws73/ble-hci-test.o", "drivers/misc/ws73/ble-hci-data-test.o",

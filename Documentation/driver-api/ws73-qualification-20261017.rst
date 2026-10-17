@@ -2602,3 +2602,53 @@ Records and manifest SHA-256:
 
 * ``virtual-usb-negative-20261017T152424.354078Z`` (PASS),
   ``03af8c34059f06a920328a6501e9939f1a585016557e8928ce24023b69a1789c``.
+
+
+Wi-Fi descriptor declarations and key-transaction audit
+-------------------------------------------------------
+
+At source ``c0df1f02e8981f884ad9a391ee3d7c12197cbf24``, the extended
+``tools/testing/ws73/wifi/check-abi.py`` byte-compared six SDK headers to
+``d5e68a58fe38c2b04a16769c69de1e8a80e86d74`` and compiled their scalar
+RX/TX-status declarations along with the existing FRW/control declarations.
+All five targets passed: x86-64, i386, arm64, RISC-V32 and PowerPC64 big endian.
+Recorded ELF class, endianness, machine/type, exact independently specified
+sentinel bytes and size/offset assertions agree. RX info/status/statistics
+occupy 20/4/8 bytes in the 32-byte control; TX status is eight bytes. The four
+little-endian targets agree, while big-endian integers and bitfields differ.
+The exact layout result is not original-firmware ABI or architecture support.
+
+The single new matrix attempt passed; no object was executed and no kernel
+was built or run for this increment. Original pack scopes are modeled around
+extracted declarations; compiler layout and this extraction are the evidence
+boundary. Neither the two-bit RX tid field nor latency fields establish a
+complete QoS TID or CCMP PN export. The status declaration alone contains no
+retry/rate report. All artifact hashes were rechecked after execution.
+
+A further source audit byte-compared 16 Host SDK files at the same pin and
+recorded 11 findings. It traces HAL key setup to multi-register operations,
+void error-reporting wrappers, FRW writes with discarded errors, all-ones read
+error sentinels, a possible 16-bit write fallback, PN clearing, global replay
+control and a polling counter that excludes register-transaction time. The
+CCMP helper only reports IV length; it is not a software CCMP implementation.
+These findings constrain the future driver transaction design; they are not
+claims of a verified firmware exploit or absence of all alternative firmware
+interfaces. Exact call-chain details and implementation consequences are in
+``ws73-wifi-interface.rst``. No SDK source excerpts or objects are added to the
+kernel repository; they remain in private records.
+
+Production kernel code is unchanged. The existing HCI/USB runtime tests were
+not rerun for this probe/documentation change and retain their exact source
+identities. The physical READM failure, new power-cycle confirmation, original
+firmware startup, board/E, peer/AP, ordinary-data completion, RX security,
+regulatory application, KCSAN and upstream review gates remain open. No Wi-Fi
+adapter or speculative firmware capability is registered.
+
+Records and manifest SHA-256:
+
+* ``wifi-abi-20261017T153238.893347Z``
+  (COMPILER_LAYOUT_CHECK_PASS_NOT_FIRMWARE_ABI_PROOF),
+  ``763a2085d1002a8e3290bd79e1eca335753ece1b9697b73fa8c95b04215c889c``.
+* ``wifi-key-contract-20261017T153417.711242Z``
+  (SOURCE_AUDIT_NOT_DEVICE_PROOF),
+  ``380cc780bb673851f5ce244b996b652bf8d4b6469848a9de2abdd3f4af1f1b58``.

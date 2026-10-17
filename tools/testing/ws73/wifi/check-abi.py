@@ -22,6 +22,9 @@ FILES = {
     "osal_types.h": "driver/platform/osal/include/osal_types.h",
     "frw_msg_rom.h": "driver/wifi/device/source/inc/romable/frw_msg_rom.h",
     "frw_hmac.h": "driver/wifi/inc/frw/frw_hmac.h",
+    "hal_rx.h": "driver/wifi/device/source/inc/romable/device_common/hal_common_ops_device_rom.h",
+    "dmac_rx.h": "driver/wifi/device/source/inc/romable/device_common/dmac_ext_if_device_rom.h",
+    "tx_status.h": "driver/wifi/device/source/inc/romable/dmac_ext_if_type_rom.h",
 }
 TARGETS = {
     "x86_64-linux-gnu": (8, False),
@@ -36,6 +39,7 @@ ELF_MACHINES = {"x86_64-linux-gnu": 62, "i386-linux-gnu": 3,
 PROBE = r'''
 #include "frw_msg_rom.h"
 #include "comm-excerpt.h"
+#include "descriptor-excerpt.h"
 #define SECTION(name) __attribute__((section(name), used))
 /* Deliberate field sentinels, not valid commands for transmission. */
 const frw_hcc_extend_hdr_stru ext SECTION(".ws73_ext") = {
@@ -56,11 +60,54 @@ const unsigned char sizes[] SECTION(".ws73_sizes") = {
 _Static_assert(sizeof(ext) == 8, "FRW extension");
 _Static_assert(sizeof(comm) == 28, "fixed-width communication envelope");
 _Static_assert(__builtin_offsetof(frw_msg_adapt_comm, cfg) == 12, "cfg offset");
+const dmac_rx_ctl_stru rx SECTION(".ws73_rx") = {
+    .rx_info = { .vap_id = 17, .amsdu_enable = 1, .is_first_buffer = 1,
+        .msdu_in_buffer = 2, .ta_user_idx = 19, .tid = 2, .is_key_frame = 1,
+        .mac_header_len = 26, .is_last_buffer = 1, .frame_len = 0x1234,
+        .mac_vap_id = 5, .buff_nums = 3, .channel_number = 11,
+        .ftm_frame = 1, .stream_id = 5, .xwGROzPmwOmPIOzoR3_ = 0xabc,
+        .latency_timestamp_us = 0x123456, .latency_index = 0x78,
+        .da_user_idx = 0x3456, .pul_mac_hdr_start_addr = 0x89abcdef },
+    .rx_status = { .cipher_protocol_type = 3, .dscr_status = 10,
+        .channel_code = 1, .stbc = 2, .gi = 1, .ampdu = 1, .sounding_mode = 2,
+        .ext_spatial_streams = 2, .smoothing = 1, .freq_bandwidth_mode = 9,
+        .preabmle = 1, .rsp_flag = 1, .he_flag = 1, .last_mpdu_flag = 1,
+        .he_ltf_type = 2, .dcm = 1 },
+    .rx_statistic = { .rssi_dbm = -42, .nss_rate.legacy_rate = {
+        .legacy_rate = 11, .protocol_mode = 2 }, .snr_ant0 = 7, .snr_ant1 = -8,
+        .ant0_rssi = -43, .ant1_rssi = -44, .phase_incr = -1234 },
+};
+const dmac_tx_status_stru tx_status SECTION(".ws73_tx_status") = {
+    .dscr_status = 0x10203040, .frame_type = 5, .mgmt_frame_id = 9,
+    .user_idx = 0x1234,
+};
+_Static_assert(sizeof(hal_rx_ctl_stru) == 20, "RX info size");
+_Static_assert(sizeof(hal_rx_status_stru) == 4, "RX status size");
+_Static_assert(sizeof(hal_rx_statistic_stru) == 8, "RX statistics size");
+_Static_assert(sizeof(dmac_rx_ctl_stru) == 32, "RX control size");
+_Static_assert(__builtin_offsetof(dmac_rx_ctl_stru, rx_status) == 20, "RX status offset");
+_Static_assert(__builtin_offsetof(dmac_rx_ctl_stru, rx_statistic) == 24, "RX statistics offset");
+_Static_assert(__builtin_offsetof(hal_rx_ctl_stru, frame_len) == 4, "RX frame length offset");
+_Static_assert(__builtin_offsetof(hal_rx_ctl_stru, pul_mac_hdr_start_addr) == 16, "device address offset");
+_Static_assert(sizeof(dmac_tx_status_stru) == 8, "TX status size");
+_Static_assert(__builtin_offsetof(dmac_tx_status_stru, user_idx) == 6, "TX user offset");
 '''
 
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def declaration(text, name, start="typedef struct {"):
+    """Extract one pinned scalar declaration, preserving nested struct bodies."""
+    end = "} " + name + ";" if start == "typedef struct {" else "};\ntypedef struct mac_rx_ctl  hal_rx_ctl_stru;"
+    assert text.count(end) == 1, "ambiguous declaration: " + name
+    last = text.index(end) + len(end)
+    first = text.rfind(start, 0, last)
+    assert first >= 0
+    body = text[first:last]
+    assert body.count("{") == body.count("}"), "unbalanced declaration: " + name
+    return body
 
 
 def main():
@@ -78,6 +125,7 @@ def main():
             ["git", "-C", str(SOURCE), "rev-parse", "HEAD"], text=True).strip()
         manifest["driver_status"] = subprocess.check_output(
             ["git", "-C", str(SOURCE), "status", "--porcelain"], text=True)
+        assert not manifest["driver_status"], "commit sources before qualification"
         for tool in ("clang", "llvm-objcopy"):
             path = Path(shutil.which(tool)).resolve()
             manifest["tools"][tool] = {
@@ -103,6 +151,15 @@ def main():
             assert len(matches) == 1, "ambiguous declaration: " + name
             declarations.append(matches[0])
         (record / "comm-excerpt.h").write_text("\n".join(declarations) + "\n")
+        # These three HAL declarations each have an explicit pack(1) scope
+        # in the pinned header. The two DMAC outer declarations are unpacked.
+        hal = (record / "hal_rx.h").read_text()
+        rx = [declaration(hal, "hal_rx_ctl_stru", "struct mac_rx_ctl {"),
+              declaration(hal, "hal_rx_status_stru"), declaration(hal, "hal_rx_statistic_stru")]
+        outer = [declaration((record / "dmac_rx.h").read_text(), "dmac_rx_ctl_stru"),
+                 declaration((record / "tx_status.h").read_text(), "dmac_tx_status_stru")]
+        (record / "descriptor-excerpt.h").write_text("#pragma pack(push, 1)\n" +
+            "\n".join(rx) + "\n#pragma pack(pop)\n" + "\n".join(outer) + "\n")
         (record / "probe.c").write_text(PROBE)
         shutil.copyfile(__file__, record / "check-abi.py")
         for target, (pointer_size, big_endian) in TARGETS.items():
@@ -121,7 +178,7 @@ def main():
                            "encoding": 2 if big_endian else 1,
                            "type": 1, "machine": ELF_MACHINES[target]}, (target, elf)
             extract_cmd = ["llvm-objcopy"]
-            for field in ("ext", "comm", "sizes"):
+            for field in ("ext", "comm", "sizes", "rx", "tx_status"):
                 extract_cmd += [f"--dump-section=.ws73_{field}={record / (target + '.' + field)}"]
             extract_cmd += [str(obj), str(record / (target + "-copy.o"))]
             subprocess.run(extract_cmd, check=True, capture_output=True, text=True)
@@ -131,6 +188,10 @@ def main():
                          else "6824070385ffffff674523010000000000000000100020000000255a"),
                 "sizes": bytes([pointer_size, 8, 16, 28, 24 if pointer_size == 8 else 16,
                                 40 if pointer_size == 8 else 28, 16 if pointer_size == 8 else 12]).hex(),
+                "rx": ("8e029d691234530bdabc12345678345689abcdef3aceb3bad6b207f8d5d4fb2e"
+                       if big_endian else
+                       "7102d39a3412350bcbab563412785634efcdab89a3adce6dd68b07f8d5d42efb"),
+                "tx_status": "1020304005091234" if big_endian else "4030201005093412",
             }
             observed = {field: (record / (target + "." + field)).read_bytes().hex() for field in expected}
             manifest["targets"][target] = {"compile": compile_cmd, "extract": extract_cmd,

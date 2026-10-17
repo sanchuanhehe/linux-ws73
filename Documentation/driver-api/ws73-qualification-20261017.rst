@@ -2149,3 +2149,64 @@ Private records and SHA-256:
   ``22113b5a06d2795ff92d21cf95f4ee9ddb511878fdce6fe95228373b44010076``.
 * ``ram-trial-20261017T133810.412175Z/guard-analysis.json``,
   ``ca2ec6f5f887db072dd973568d68dfc817b46be7dc9e982972cb293454324a79``.
+
+Bounded USB byte mutation and H4 state sequences
+------------------------------------------------
+
+Clean VM-tested source: ``3bed68629b6524c53902532359546369751393e0``.
+The existing USB aggregate truncation checks often supplied a larger backing
+allocation than the declared length. New mutation tests use an unaligned input
+with exactly the requested allocation extent, so the KASAN boundary follows
+that input rather than a large reusable scratch buffer. Four fixed xorshift32
+seeds generate 16,384 inputs from valid BLE/platform/notification aggregates,
+including short/large records, bit mutations, length/table changes, truncated
+inputs and trailing bytes. The production ws73_usb_aggregate_decode is called
+directly. Checks cover immutable input, unchanged output on failure, and
+bounded contiguous borrowed records/notification values on acceptance.
+
+The production H4 reassembler separately runs 16,384 state steps with the
+same four seeds: valid fragments, malformed/random input and explicit resets.
+An independent accumulator compares complete output byte-for-byte with the
+consumed input across partial feeds. Failed streams must remain byte-identical
+and reject input until reset; partial/error calls cannot publish packet output.
+The test is serialized and does not prove concurrent RX drain or lifecycle
+behavior. Its generated HCI bytes are synthetic, not controller replies.
+
+All **83 KUnit cases in 14 suites** pass with SMP, KASAN, UBSAN, lockdep and
+DEBUG_ATOMIC_SLEEP. USB totals are 3,533 accepted / 12,851 rejected inputs.
+H4 totals are 2,211 completed / 1,870 partial / 1,266 first errors / 9,009
+terminal rejections / 2,028 resets, totaling 16,384 steps. All four seeds
+exercise each required category. No kernel warning, sanitizer or lock report
+occurs. Checkpatch reports zero errors/warnings on changed kernel test code.
+The build emits the existing Documentation/.renames.txt gitignore warning,
+which is not a compiler or runtime diagnostic. Four build jobs were reserved
+and the two-vCPU VM had no hardware passthrough or network device.
+
+The first build at c7ae363e945f failed because a KUnit pointer assertion was
+passed an array expression. Its FAIL record is retained. The follow-up changes
+that expression to an element address; the subsequent build/VM run passes.
+No failed runtime input or minimized production-code counterexample was found.
+
+Supervisor source ``9db3aaeb29f3`` additionally requires all four seed counters
+for each applicable suite, exact 4,096 totals, positive coverage categories,
+and no malformed/duplicate/unexpected marker. Its parser was checked against
+the retained actual VM log: three positive counter views and twenty negative
+controls pass, including missing/duplicate seeds, wrong totals, zero categories,
+truncation, old case-name-only text, trailing corruption and unexpected modes.
+These are counter-parser tests, not fresh core-only/HCI-only VM runs. Kernel C
+is unchanged after 3bed68629b65; its VM evidence is not relabeled to the later
+supervisor source.
+
+This is bounded deterministic mutation, not coverage-guided fuzzing, arbitrary
+state-space coverage, KCSAN or formal proof. The physical READM failure remains
+unresolved and the new power-removal confirmation is still pending. No physical
+USB operation, firmware load, RF or support-qualification milestone was added.
+
+Records and manifest SHA-256:
+
+* ``20261017T134907.771248Z`` (FAIL),
+  ``8deb275401b14d86758b650eee7514197af8bc9ebb9a676895a43380549e29c9``.
+* ``20261017T134954.268196Z`` (PASS),
+  ``1345f905e49657a89eb9b8ac41522a795f2c0bd0ceceec42a5e8364e0d4cc5c4``.
+* ``mutation-supervisor-20261017T135303.863717Z`` (PASS),
+  ``e928b2a8062bcf2ae4f7ade1099d14a720b0dec7f0124e9cc3527841729d5e87``.

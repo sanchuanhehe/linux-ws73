@@ -1707,3 +1707,95 @@ Local record: ``records/usb-observe-20261017T114201.435882Z``; manifest SHA-256
 The final runner trace-verifier receipt is ``observer-trace-negative-current-v4.json``,
 SHA-256 ``b1afd34c9bed6e1127d7cd069b4baa0acc6de49fb848b19b736cfdc19936b4a2`` (two accepted
 fixtures, 13 negative controls rejected; verifier scope only).
+
+Boot VERSION with actual U evidence
+----------------------------------
+
+Clean compiled source **6c9cffe6cac65dfbc15e52c8200698bdc5714b20** adds the
+fixed SDK110 VERSION command after successful boot HCC identity, sharing one
+four-second absolute deadline. Replies are opaque actual bytes (1..64), with
+no implied NUL terminator, version acceptance table or firmware compatibility.
+The SDK helper and command dispatcher exist; the inspected default download
+table itself does not schedule VERSION. Trim remains an explicit board input;
+SDK INI ``8,60`` was not installed as a universal default.
+
+Review before execution corrected the receive capacity to the SDK's 64 bytes.
+A full-speed 64-byte reply without an extra zero packet need not terminate a
+512-byte read. The final implementation keeps the actual transfer boundary;
+it rejects counts outside the buffer contract but does not claim it can detect
+arbitrarily queued extra packets. Physical firmware loading remains unopened.
+
+All **81 KUnit cases** pass, including response counts 0..513, non-terminated
+64-byte data, failure output preservation, short TX, errors, cancellation and
+deadline checks. The actual USB boot fixture passes **14 cases at each of full
+and high speed**, with seven VERSION exchanges per speed. Two per speed send
+64 bytes and five send three bytes; the FunctionFS fixture does not enable
+zero packets. Failed identity sends no VERSION. Both speeds retain 14 drains
+and 13 no-extra-OUT checks. The supervisor rejects **27 log** and **five artifact**
+negative controls. The all-module core/USB/BLE build links successfully.
+SMP, KASAN, UBSAN, lockdep and DEBUG_ATOMIC_SLEEP remain enabled and checked.
+No unchanged native-HCI model or unrelated USB phase is claimed as rerun.
+
+The allocated physical U at ``1-1.1.1`` was independently checked for topology,
+serial, exact descriptors, ownership and access, then attached only to this
+project's private two-vCPU, 1-GiB KVM. Its actual traffic was:
+
+* READM OUT 19 bytes completed successfully; IN capacity 512 returned exactly
+  four bytes ``00000000``, decoded as U/USB.
+* VERSION OUT eight bytes completed successfully; IN capacity 64 returned
+  exactly 12 bytes ``424f4f545645523030310000``: ``BOOTVER001`` plus two NULs.
+* QMP removal was followed by guest disconnect and one production callback
+  drain message. QEMU exited 0; identity/descriptors still matched and no
+  host driver or usbfs owner remained. No sanitizer or kernel warning appeared.
+
+This attempt is **OBSERVATION_PASS_NOT_COLD**: no fresh power cycle was requested
+or counted. The earlier user-confirmed cold U observation keeps its own source
+and evidence identity. No WRITEM, FILES, QUIT, original firmware payload or
+HCI command was sent. The ROM string does not prove firmware execution,
+version compatibility, BLE/Wi-Fi functionality, E behavior or natural recovery.
+
+The first attempt with this kernel failed before device_add: kernel printk
+interleaved with the recorder's READY marker on the same serial console.
+Its log, timeout and exit 0 remain recorded. The corrected recorder uses
+separate serial outputs for kernel messages and usbmon/READY, with sources,
+initramfs, command and hashes retained. This removes the observed mixed-output
+failure without weakening the transcript checks. A separate verifier accepts
+two fixtures (including full 64-byte data) and rejects 20 negative controls.
+usbmon text records at most 32 data bytes; the verifier checks all available
+bytes plus the full length-bounded driver observation, rather than fabricating
+uncaptured bytes. The physical reply here is only 12 bytes, all captured.
+
+The resource wait before building was verified against the active external
+12-job build. No duplicate test was launched; once it ended, the pending
+four-job KUnit run proceeded. All subsequent builds used fixed project output
+directories and four jobs, without loading any host module.
+
+Local records and manifest SHA-256:
+
+* ``20261017T120858.101745Z`` (PASS),
+  ``afaa94d71866454390f141792c56d21cb174284caa4f83d795237ec0fcc509f5``.
+* ``observe-build-20261017T120949.552883Z`` (PASS),
+  ``16e1854f09282f16da5b8be0280568d9e34c44a1ac6d35b52910af35ddde69c3``.
+* ``usb-observe-20261017T121034.683222Z`` (FAIL),
+  ``f9c83e4014d74742bb40a3a5cc07de548729619d32855c6aa7dec2accaf7bbc4``.
+* ``usb-observe-20261017T121229.870719Z`` (OBSERVATION_PASS_NOT_COLD),
+  ``05a4bd55e87c839b6f3fda9041d8ed5d786d3e28ca5f0bd66bc8554a6d3a14e1``.
+* ``virtual-usb-build-20261017T121251.608052Z`` (PASS),
+  ``b00623e5f274428a48c28b3ad131ac205734bdb3425cf5e1f47a85c6e78f1f05``.
+* ``virtual-usb-20261017T121320.104147Z`` (PASS),
+  ``bcd545e73b0aa066450d04e26db5f6e3d3e780346f5028df04541ed964458b06``.
+* ``virtual-usb-20261017T121343.322038Z`` (PASS),
+  ``acf9a8cb6a0bd87bcff6c1b1737d8e10718f39c1b717259e7669733d217929e6``.
+* ``virtual-usb-negative-20261017T121344.393697Z`` (PASS),
+  ``0f5e243f784fd7bf168a7d5121d9495ab3d2df4d3534395f99d3e1d6da54eb86``.
+* ``hci-build-module-20261017T121355.497867Z`` (PASS),
+  ``20bd18fd70da37461340e71d9052f170957d642dd41c8b824dc95bb1dd2bb90e``.
+
+Final private trace-verifier receipt: ``observer-boot-info-negative-v4.json``,
+SHA-256 ``02f332029c3e01cfda88c23b03344e9e26d4198e6fc310c42f80fe94d9ab60ed``.
+SDK query/trim provenance: ``boot-version-provenance.json``, SHA-256
+``77e73034a01672ad92ec632a921ba77a14ba2da2dcf4522da2c1a0d2ed2caf87``.
+The board-model/INI source question remains unanswered. Generated CLDO
+register definitions and board/trim applicability still need resolution before
+physical loading; the loader/startup/native-HCI work must continue toward real
+function communication. These are open dependencies, not substituted passes.

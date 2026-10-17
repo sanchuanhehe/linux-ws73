@@ -792,6 +792,10 @@ The data are opaque bytes, logged as length-bounded hex without assuming a NUL
 terminator or accepting a textual version as proof of compatibility. This adds
 no general register interface, firmware selection or function publication.
 The boot-loader entry remains unchanged and does not yet consume this version.
+The assigned U returned 12 actual bytes ``424f4f545645523030310000``
+(``BOOTVER001`` plus two NUL bytes) in this project's VM at compiled source
+``6c9cffe6cac6``. This is a sample observation, not an accepted-ROM table or
+proof of compatibility with either original firmware profile.
 
 USB observations and safety boundary
 ------------------------------------
@@ -963,6 +967,45 @@ Its nine files were byte-compared against the pinned commit before hashing.
 Continue the approved mac80211 route without importing Host SME/reorder logic.
 Do not replace missing status with USB completion or inferred ACK. A FullMAC
 change requires the agreed architecture review. No AP or credentials are assumed.
+
+A separate RX/security trace at the same pinned SDK gives concrete Host-side
+metadata candidates:
+
+* ``frw/frw_hmac.c:frw_hmac_rcv_netbuf`` removes the HCC header and calls
+  ``frw_hmac_rcv_mgnt_data``. That path removes the FRW header, copies
+  ``OAL_MAX_CB_LEN`` (32) bytes to the netbuf control block, then removes the
+  control block and compacts the 36-byte reserved MAC-header area before
+  setting the actual frame length. This is consumer evidence, not a traced
+  device producer or a safe parser to copy without bounds checks.
+* ``romable/frw_msg_rom.h`` declares a packed FRW extension with fields
+  totaling eight bytes despite its ``4B`` comment. ``romable/oal_netbuf_common_rom.h``
+  defines the 32-byte control and 36-byte MAC-header reservations. In
+  ``device_common/dmac_ext_if_device_rom.h``, the RX control combines 20-byte
+  info, four-byte status and eight-byte statistics declarations.
+* The info declaration has channel number at byte 7 and a device virtual
+  header address at bytes 16..19; that address must never become a Host
+  pointer. Status declares cipher/result, GI/STBC/AMPDU and bandwidth fields.
+  Statistics declare signed RSSI, protocol/rate, antenna SNR/RSSI and phase
+  increment. Target compiler/endian layout, actual wire export, frame FCS
+  retention and IV/MIC handling remain to be validated.
+* ``forward/hmac_rx_data_filter.c`` consumes descriptor status, including
+  FCS/MIC/key-search and replay failures. Its error handling permits some
+  paths to continue, so generic status alone cannot justify a claim that
+  the Host checked replay protection.
+* ``hmac/hmac_11i.c:hmac_11i_update_key_to_ce`` temporarily disables replay
+  detection for certain non-PTK updates and arms a timer to re-enable it.
+  The conditional fragment check in ``feature/hmac_frag.c`` uses
+  ``latency_index``; it does not establish a general 48-bit CCMP PN export.
+  A new driver must establish key/replay ownership across rekey, reinstall,
+  reordering and failure before setting mac80211 DECRYPTED, IV_STRIPPED or
+  PN_VALIDATED flags. In particular, IV_STRIPPED removes the stack's ability
+  to perform replay detection itself.
+
+The local ``records/wifi-rx-security-audit-20261017/manifest.json`` pins nine
+SDK source files and six findings (SHA-256
+``4756762ad412703cde842e1a18b42e78f961591e7e4ad1168a2d0b7e7e2a9ea3``).
+No Wi-Fi parser, firmware metadata producer, STA or security capability is
+qualified by this static audit. The mac80211 implementation route is unchanged.
 
 Reproduction and remaining gates
 --------------------------------

@@ -39,6 +39,20 @@ connections, BlueZ and peer behavior remain unqualified. Codec tests also run.
 The checked-in KUnit configuration enables SMP, KASAN, UBSAN, lockdep and
 DEBUG_ATOMIC_SLEEP. Expected suite/case sets reject missing or skipped tests.
 
+The USB aggregate and H4 tests also run bounded deterministic mutation campaigns
+with four fixed xorshift32 seeds each. USB supplies 16,384 unaligned inputs in
+exact-sized allocations, including valid seeds, bit/length/table mutations,
+truncation and extra bytes. It checks immutable input, no partial publication
+on errors, and bounded contiguous views on success. H4 runs 16,384 steps mixing
+fragments, malformed/random bytes and explicit resets. An independent byte
+accumulator checks emitted packets against all consumed fragments, and failed
+streams must reject further input without changing state until reset. Each
+campaign must exercise acceptance/partial/error/terminal/reset paths as relevant;
+the runner rejects missing, duplicate or malformed seed counters and wrong totals.
+These are fixed-budget mutation checks of production functions in the VM, not
+coverage-guided fuzzing, concurrent lifecycle stress, formal proof or hardware
+qualification. State reset in this single-threaded test does not prove RX drain.
+
 build-hci.py compiles/links the WS73 core, USB and HCI driver either built-in
 or as modules, in the separate fixed build-hci directory. It builds bzImage
 before modules so modpost has the matching kernel symbols; unresolved symbols

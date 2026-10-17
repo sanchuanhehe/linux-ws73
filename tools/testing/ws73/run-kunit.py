@@ -8,6 +8,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,6 +16,37 @@ import sys
 
 
 SOURCE = Path(__file__).resolve().parents[3]
+
+
+def mutation_summary(raw, usb=True, h4=True):
+    """Require the bounded campaigns' actual counters, not just case names."""
+    seeds = {"0073e110", "00387373", "deadbeef", "10203040"}
+    specs = {
+        "usb": (usb, "mutation seed=", r"mutation seed=([0-9a-f]{8}) inputs=(\d+) "
+                r"accepted=(\d+) rejected=(\d+)", ("inputs", "accepted", "rejected")),
+        "h4": (h4, "H4 seed=", r"H4 seed=([0-9a-f]{8}) steps=(\d+) complete=(\d+) "
+               r"partial=(\d+) errors=(\d+) sticky=(\d+) resets=(\d+)",
+               ("steps", "complete", "partial", "errors", "sticky", "resets")),
+    }
+    result = {}
+    for name, (required, marker, pattern, fields) in specs.items():
+        matches = re.findall(pattern, raw)
+        if raw.count(marker) != len(matches):
+            raise ValueError(f"malformed {name} mutation marker")
+        if not required:
+            if matches:
+                raise ValueError(f"unexpected {name} mutation campaign")
+            continue
+        if len(matches) != 4 or {item[0] for item in matches} != seeds:
+            raise ValueError(f"missing/duplicate {name} mutation seed")
+        rows = []
+        for seed, *values in matches:
+            counts = [int(value) for value in values]
+            if counts[0] != 4096 or sum(counts[1:]) != 4096 or min(counts[1:]) <= 0:
+                raise ValueError(f"incomplete {name} mutation campaign: {seed}")
+            rows.append({"seed": seed, **dict(zip(fields, counts))})
+        result[name] = rows
+    return result
 
 
 def digest(path):
@@ -270,6 +302,13 @@ def main():
                                   for line in lines))
         passed = (passed and run.returncode == 0 and before == manifest["source_after"]
                   and required <= manifest["artifacts"].keys())
+        try:
+            manifest["mutation_counts"] = mutation_summary(
+                (record / "artifacts/test.log").read_text(),
+                usb=not args.hci_only, h4=not args.core_only)
+        except (OSError, ValueError) as error:
+            manifest["mutation_error"] = str(error)
+            passed = False
         manifest["status"] = "PASS" if passed else "FAIL"
         manifest["evidence_sha256"] = {
             str(p.relative_to(record)): digest(p)

@@ -390,8 +390,9 @@ void ws73_usb_unbind(struct usb_interface *interface)
 	usb_kill_urb(ws->rx_urb);
 	usb_kill_urb(ws->interrupt_urb);
 	cancel_work_sync(&ws->initialize);
-	cancel_work_sync(&ws->stop);
 	ws73_ble_link_remove(&ws->ble);
+	/* A backend call can still queue stop until child removal has joined it. */
+	cancel_work_sync(&ws->stop);
 	dev_dbg(&interface->dev, "device callbacks drained\n");
 	usb_free_urb(ws->rx_urb);
 	usb_free_urb(ws->interrupt_urb);

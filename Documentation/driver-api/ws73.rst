@@ -1,7 +1,7 @@
 .. SPDX-License-Identifier: GPL-2.0-only
 
-WS73 Wi-Fi / BLE development baseline
-=====================================
+WS73U / WS73E Wi-Fi / BLE development baseline
+=============================================
 
 Status and scope
 ----------------
@@ -69,7 +69,7 @@ the remainder. Payload lengths are 143892, 20980 and 7708 bytes. This is an
 integrity header, not an authentication signature. The read-only checker
 rejects wrong-role, modified, truncated or missing files::
 
-   python3 tools/testing/ws73/check-firmware.py /path/to/ws73_SDK/firmware/us
+   python3 tools/testing/ws73/check-firmware.py --variant us /path/to/ws73_SDK/firmware/us
 
 For offline comparison only, the 110 combined file is 172772 bytes, SHA-256::
 
@@ -87,6 +87,82 @@ snapshot must not be called SDK111 based on the handoff's wording. Blob
 identity alone does not establish BLE features, board compatibility,
 calibration correctness or permission to publish it. No firmware is loaded
 by these tests. No board/MAC/trim constants are embedded in the codec.
+
+WS73E has a separate pinned profile in ``firmware/e/``. Its code, Wi-Fi
+calibration and BTC calibration complete-file SHA-256 values are::
+
+   6a0c322668d67a7e8c5cab9bff5d7af1f737e30ed4d9258975e8068054e4377b
+   ac55f1a2e1d1466a02123c21e50204e108fe4660c587566e63798de648bd1390
+   601b143db64ef6e70bf882fd5a998ecff59f19ede85f477cdc8967b21a8a472f
+
+Their full sizes are 137644, 21060 and 34120 bytes. Check them separately::
+
+   python3 tools/testing/ws73/check-firmware.py --variant e /path/to/ws73_SDK/firmware/e
+
+``--variant`` chooses an offline validation profile, not a device identity.
+The live loader must first obtain a valid HCC chip identity before selecting
+U/E inputs. Never substitute the U files for E or infer a package from USB IDs.
+No WS73E hardware has been assigned or qualified in this batch.
+
+SDK loading sequence and identity gate
+-------------------------------------
+
+The pinned SDK's ``driver/platform/pm/plat_pm_board_ws73.c`` function
+``ws73_board_service_enter`` establishes this order. The items below are
+requirements for the forthcoming loader, not implemented transport states:
+
+#. Obtain the per-device PM/bus context; power up and prepare patch loading.
+   Reinitialize the bus. USB ``hcc_usb_reinit`` waits for the boot probe.
+#. Apply calibration memory setup when enabled: RAM2/RAM3 under
+   ``ON_CHIP_LINUX_SDK`` and BTC EM-buffer/RAM4 reuse under
+   ``BT_EM_BUFFER_CALI_SUPPORT``. These are build/board-dependent operations;
+   their applicability must be resolved before porting writes.
+#. ``firmware_download_function`` serializes download and holds a wake lock.
+   ``firmware_download/plat_firmware.c`` prepares the board CMU XO trim
+   WRITEM, optional ROMBIN, code at 0x400000, Wi-Fi calibration at 0x430000,
+   and, when enabled, BTC calibration at 0x440000, in that order.
+   These addresses are SDK evidence, not permission to write unknown boards.
+#. Check each original file, strip its 64-byte hash header, and send bounded
+   chunks. Each FILES command needs READY before payload, then FILES_OK;
+   increment the address and verify the total payload count. A short USB
+   transfer or missing acknowledgement cannot count as success. Send QUIT
+   only after all required images succeed and check its response.
+#. PATCH_LAUCH refreshes the bus state. USB ``hcc_usb_reload`` waits for the
+   runtime probe before enabling HCC traffic. The SDK distinguishes two
+   boot endpoints from three runtime endpoints; the new driver must also
+   validate types/directions and physical identity across re-enumeration.
+#. Apply platform PM parameters and XO temperature compensation, initialize
+   device addresses, then start/enable heartbeat. BLE enable/action-status
+   exchange is a further step before HCI traffic, not implied by download.
+
+USB details are in ``driver/platform/hcc/host/hcc_usb_host.c`` and
+``hcc_usb_host_ops.c``. ``build/config/ws73_usb_light.config`` enables BTC
+calibration; other configurations differ. Do not silently omit BTC because
+one SDK build excludes it, or copy board-specific trim/address constants.
+The SDK exit path stops heartbeat, forbids HCC and powers down. Its fixed
+sleep and global objects are not a substitute for per-device stop admission,
+URB cancellation, callback/worker drain and reverse-order partial-init cleanup.
+
+Identity evidence is in ``driver/platform/drv/plat_misc.c``, ``plat_misc.h``,
+``include/plat_hcc_msg_type.h`` and ``plat_hcc_adapt/plat_hcc_srv.c``.
+GET_CHIP_TYPE uses OAM service 1, subtype 9, queue 9, request ID 16 and reply
+ID 10. The request is a 32-byte padded HCC record carrying one zero byte.
+The reply contains status u32, returned length u32, then package and bus u8;
+U/S/E are 0/1/2 and USB/SDIO/UART are 0/1/2. The new record codec validates
+these fields, bounds and status before publishing an identity. Parsing S
+or non-USB wire values does not enable support for those devices.
+
+This query is found in the SDK's runtime platform message path. No evidence
+yet establishes that its boot firmware accepts it before initial loading.
+The cold-start identity gate therefore remains OPEN: do not guess U/E,
+load a guessed image to obtain an identity, or treat synthetic replies as a
+live detection. Trace the HCC boot transport/identity mechanism and validate
+it in the allocated device's VM before enabling the loader. Runtime identity
+must also be checked after loading and before registering consumers.
+A future transaction owner must validate the outer USB queue, allow only
+one pending query per device, enforce a deadline, and invalidate pending and
+cached identities at disconnect. The wire format has no transaction token;
+a late reply must not satisfy a new query after timeout or re-enumeration.
 
 USB observations and safety boundary
 ------------------------------------
@@ -158,8 +234,12 @@ Keep this BLE-specific codec local to drivers/bluetooth. There is no
 exported registration API, auxiliary child or unused SLE interface. The
 eventual single USB owner will manage firmware, HCC, bounded transport and
 physical teardown. Only actual Wi-Fi/BLE consumer needs justify extraction
-into a shared directory. drivers/misc/ws73 and a wireless-tree core remain
-options, not maintainer-approved decisions. Existing btrsi/RSI and the
+into a shared directory. The preferred shared-layer location is now
+``drivers/misc/ws73/``: USB ownership, chip identity, firmware, HCC routing
+and device lifecycle belong there; BLE and Wi-Fi adapters remain in their
+subsystems. This avoids making BLE-only builds depend on a Wi-Fi Host.
+A wireless-tree core remains an alternative for upstream discussion. Neither
+location has maintainer approval. Existing btrsi/RSI and the
 auxiliary bus documentation are comparisons, not mandatory templates.
 
 For this pure codec there are no URBs, workers, module references, retries

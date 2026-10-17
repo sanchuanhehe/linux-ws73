@@ -126,6 +126,7 @@ def main():
                 "btws73_rx_lengths", "btws73_rx_maximum", "btws73_hci_types",
                 "btws73_hci_lengths", "btws73_tx_bytes", "btws73_tx_limits",
                 "btws73_null_args",
+                "btws73_chip_query", "btws73_chip_reply", "btws73_chip_invalid",
             }
             for group in groups:
                 cases = group.get("test_cases", [])

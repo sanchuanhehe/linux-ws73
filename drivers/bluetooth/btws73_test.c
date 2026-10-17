@@ -246,6 +246,74 @@ static void btws73_null_args(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, btws73_hcc_encode(data, len, NULL, 0), -EINVAL);
 }
 
+static void btws73_chip_query(struct kunit *test)
+{
+	static const u8 expected[32] = { 0x19, 9, 32, 0, 16, 0, 1, 0 };
+	u8 out[33];
+	unsigned int i;
+
+	memset(out, 0xa5, sizeof(out));
+	for (i = 0; i < 32; i++) {
+		KUNIT_EXPECT_EQ(test, btws73_chip_query_encode(out, i), -ENOSPC);
+		KUNIT_EXPECT_PTR_EQ(test, memchr_inv(out, 0xa5, sizeof(out)), NULL);
+	}
+	KUNIT_EXPECT_EQ(test, btws73_chip_query_encode(out, sizeof(out)), 32);
+	KUNIT_EXPECT_MEMEQ(test, out, expected, sizeof(expected));
+	KUNIT_EXPECT_EQ(test, out[32], 0xa5);
+	KUNIT_EXPECT_EQ(test, btws73_chip_query_encode(NULL, 32), -EINVAL);
+}
+
+static void btws73_chip_reply(struct kunit *test)
+{
+	u8 storage[33] = {};
+	u8 *data = storage + 1;
+	struct btws73_chip_identity identity;
+	unsigned int package, bus;
+
+	data[0] = 0x19;
+	data[1] = 9;
+	put_unaligned_le16(32, data + 2);
+	put_unaligned_le16(10, data + 4);
+	put_unaligned_le16(10, data + 6);
+	put_unaligned_le32(2, data + 12);
+	for (package = 0; package < 3; package++) {
+		for (bus = 0; bus < 3; bus++) {
+			data[16] = package;
+			data[17] = bus;
+			KUNIT_ASSERT_EQ(test, btws73_chip_reply_decode(data, 32, &identity), 0);
+			KUNIT_EXPECT_EQ(test, identity.package, package);
+			KUNIT_EXPECT_EQ(test, identity.bus, bus);
+		}
+	}
+}
+
+static void btws73_chip_invalid(struct kunit *test)
+{
+	static const u8 valid[32] = { 0x19, 9, 32, 0, 10, 0, 10, 0,
+				    0, 0, 0, 0, 2, 0, 0, 0, 2, 0 };
+	const struct btws73_chip_identity before = { 0xa5, 0x5a };
+	struct btws73_chip_identity identity = before;
+	u8 data[32];
+	unsigned int i;
+
+	for (i = 0; i < sizeof(valid); i++) {
+		KUNIT_EXPECT_EQ(test, btws73_chip_reply_decode(valid, i, &identity), -EMSGSIZE);
+		KUNIT_EXPECT_MEMEQ(test, &identity, &before, sizeof(before));
+	}
+	/* Corrupt each identity-bearing header byte independently. */
+	for (i = 0; i < 18; i++) {
+		memcpy(data, valid, sizeof(data));
+		data[i] = 0xff;
+		KUNIT_EXPECT_LT(test, btws73_chip_reply_decode(data, sizeof(data), &identity), 0);
+		KUNIT_EXPECT_MEMEQ(test, &identity, &before, sizeof(before));
+	}
+	KUNIT_EXPECT_EQ(test, btws73_chip_reply_decode(NULL, 32, &identity), -EINVAL);
+	KUNIT_EXPECT_EQ(test, btws73_chip_reply_decode(valid, 32, NULL), -EINVAL);
+	KUNIT_EXPECT_EQ(test, btws73_chip_reply_decode(valid, 4097, &identity), -EMSGSIZE);
+	KUNIT_EXPECT_EQ(test, btws73_chip_reply_decode(valid, 32, &identity), 0);
+	KUNIT_EXPECT_EQ(test, identity.package, 2);
+}
+
 static struct kunit_case btws73_cases[] = {
 	KUNIT_CASE(btws73_rx_valid),
 	KUNIT_CASE(btws73_rx_truncated),
@@ -257,6 +325,9 @@ static struct kunit_case btws73_cases[] = {
 	KUNIT_CASE(btws73_tx_bytes),
 	KUNIT_CASE(btws73_tx_limits),
 	KUNIT_CASE(btws73_null_args),
+	KUNIT_CASE(btws73_chip_query),
+	KUNIT_CASE(btws73_chip_reply),
+	KUNIT_CASE(btws73_chip_invalid),
 	{}
 };
 

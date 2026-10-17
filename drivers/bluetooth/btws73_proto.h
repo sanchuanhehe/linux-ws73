@@ -22,6 +22,17 @@ struct btws73_rx {
 	struct btws73_fragment fragment[BTWS73_RX_MAX_RECORDS];
 };
 
+/* SDK wire values: package U/S/E = 0/1/2; bus USB/SDIO/UART = 0/1/2. */
+struct btws73_chip_identity {
+	u8 package;
+	u8 bus;
+};
+
+/* These encode/decode HCC records, not USB transactions or live identity. */
+int btws73_chip_query_encode(u8 *out, size_t capacity);
+int btws73_chip_reply_decode(const u8 *data, size_t len,
+			     struct btws73_chip_identity *identity);
+
 /*
  * Decode one complete USB aggregate on the BLE queue. The returned views
  * borrow the input: it must remain immutable and alive until consumed.

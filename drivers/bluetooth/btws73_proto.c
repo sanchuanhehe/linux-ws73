@@ -15,6 +15,57 @@
 #define BTWS73_BLE_QUEUE		7
 #define BTWS73_TX_ALIGNMENT	8
 
+int btws73_chip_query_encode(u8 *out, size_t capacity)
+{
+	if (!out)
+		return -EINVAL;
+	if (capacity < 32)
+		return -ENOSPC;
+
+	/* OAM service 1 / platform subtype 9, queue 9, padded total length. */
+	memset(out, 0, 32);
+	out[0] = 0x19;
+	out[1] = 9;
+	put_unaligned_le16(32, out + 2);
+	put_unaligned_le16(16, out + 4); /* GET_CHIP_TYPE */
+	put_unaligned_le16(1, out + 6);
+	/* One zero request byte at offset 8; remaining bytes are padding. */
+	return 32;
+}
+
+int btws73_chip_reply_decode(const u8 *data, size_t len,
+			     struct btws73_chip_identity *identity)
+{
+	struct btws73_chip_identity parsed;
+	u16 record_len;
+
+	if (!data || !identity)
+		return -EINVAL;
+	if (len < 18 || len > BTWS73_RX_MAX_RECORD_SIZE)
+		return -EMSGSIZE;
+	if (data[0] != 0x19 || data[1] != 9)
+		return -EPROTO;
+	/* Platform pay_len includes the HCC header, unlike BLE pay_len. */
+	record_len = get_unaligned_le16(data + 2);
+	if (record_len < 18 || record_len > len)
+		return -EMSGSIZE;
+	if (get_unaligned_le16(data + 4) != 10) /* GET_CHIP_TYPE_COMPLETE */
+		return -EPROTO;
+	/* Status u32, returned length u32, package u8, bus u8. */
+	if (get_unaligned_le16(data + 6) != 10 ||
+	    get_unaligned_le32(data + 12) != 2)
+		return -EMSGSIZE;
+	if (get_unaligned_le32(data + 8))
+		return -EREMOTEIO;
+	parsed.package = data[16];
+	parsed.bus = data[17];
+	if (parsed.package > 2 || parsed.bus > 2)
+		return -EOPNOTSUPP;
+
+	*identity = parsed;
+	return 0;
+}
+
 int btws73_hcc_decode(const u8 *data, size_t len, struct btws73_rx *rx)
 {
 	struct btws73_rx parsed = {};

@@ -30,6 +30,9 @@
 #ifndef WS73_TEST_LOADER
 #define WS73_TEST_LOADER 0
 #endif
+#ifndef WS73_TEST_STARTUP
+#define WS73_TEST_STARTUP 0
+#endif
 static int disconnected;
 static volatile sig_atomic_t alarm_seen;
 
@@ -475,6 +478,118 @@ static void loader_trials(int control, int *eps, int log, const char *udc)
   for (unsigned int i = 0; i < 3; i++) free(blobs[m][i].data);
  free(mutant.data);
 }
+static void startup_notification(int in, unsigned int kind, int malformed)
+{
+ unsigned char wire[108] = {0};
+ le32(wire, 2); le32(wire + 4, sizeof(wire)); le32(wire + 8, 10);
+ le16(wire + 12, 16); wire[92] = 0x50; wire[93] = 10;
+ le16(wire + 94, 8); le16(wire + 96, kind < 2 ? 2 : 4);
+ le16(wire + 98, malformed ? 3 : 4);
+ le32(wire + 100, kind < 2 ? kind + 1 : kind - 2);
+ if (write(in, wire, sizeof(wire)) != sizeof(wire)) die("startup notification");
+ printf("WS73_STARTUP_NOTIFY kind=%u actual=108 malformed=%d synthetic\n", kind, malformed);
+}
+static void startup_customization(int out)
+{
+ for (unsigned int step = 4; step <= 6; step++) {
+  unsigned char got[1024], expected[864] = {0};
+  unsigned int length = step < 6 ? 36 : 864;
+  le32(expected, step < 6 ? 3 : 0); le32(expected + 4, step < 6 ? 0 : 864);
+  le32(expected + 8, step);
+  if (step < 6) { le32(expected + 12, step == 4 ? 1 : 0); le32(expected + 16, step == 4 ? 10 : 0); }
+  else {
+   expected[64] = 0x50; expected[65] = 10; le16(expected + 66, 800);
+   le16(expected + 70, 140);
+  }
+  ssize_t n = read(out, got, sizeof(got));
+  if (n != length || memcmp(got, expected, length)) die("startup customization OUT");
+  printf("WS73_STARTUP_OUT step=%u actual=%zd verified\n", step, n);
+ }
+}
+static void startup_action(int control, unsigned int message, int stall)
+{
+ struct usb_functionfs_event event;
+ unsigned char got[4], expected[4];
+ for (;;) {
+  if (read(control, &event, sizeof(event)) != sizeof(event)) die("startup control event");
+  if (event.type == FUNCTIONFS_SETUP) break;
+  if (event.type != FUNCTIONFS_RESUME && event.type != FUNCTIONFS_SUSPEND)
+   die("unexpected startup control event");
+ }
+ static const unsigned char setup[] = {0x21, 0, 0, 0, 0, 0, 4, 0};
+ if (memcmp(&event.u.setup, setup, sizeof(setup))) die("startup class SETUP bytes");
+ puts("WS73_STARTUP_SETUP 2100000000000400 verified");
+ if (stall) {
+  /* Wrong direction on ep0 explicitly stalls this pending OUT request. */
+  if (write(control, "", 0) != -1 || errno != EL2HLT) die("startup ep0 STALL");
+  puts("WS73_STARTUP_CONTROL_STALL");
+  return;
+ }
+ le32(expected, message);
+ ssize_t n = read(control, got, sizeof(got));
+ if (n != sizeof(got) || memcmp(got, expected, sizeof(got))) die("startup action data");
+ printf("WS73_STARTUP_ACTION message=%u actual=%zd verified\n", message, n);
+}
+static void startup_trials(int control, int *eps, int log, const char *udc)
+{
+ struct sigaction action = { .sa_handler = quiet_alarm };
+ if (sigemptyset(&action.sa_mask) || sigaction(SIGALRM, &action, NULL)) die("startup signal");
+ for (unsigned int trial = 0; trial < 7; trial++) {
+  unsigned char reply[124] = {0}, interrupt[8] = {0};
+  printf("WS73_STARTUP_CASE %u BEGIN\n", trial); disconnected = 0;
+  setting(G "UDC", udc); enabled(control);
+  for (unsigned int step = 0; step < 3; step++) transaction(eps[1], step);
+  le32(reply, 2); le32(reply + 4, sizeof(reply)); le32(reply + 8, 9);
+  le16(reply + 12, 32); reply[92] = 0x19; reply[93] = 9;
+  le16(reply + 94, 32); le16(reply + 96, 10); le16(reply + 98, 10);
+  le32(reply + 104, 2);
+  if (write(eps[0], reply, sizeof(reply)) != sizeof(reply)) die("startup chip reply");
+  puts("WS73_TEST_IN kind=chip actual=124 synthetic");
+  transaction(eps[1], 3);
+  le16(reply + 96, 7); le16(reply + 98, 16); le32(reply + 104, 8);
+  le32(reply + 108, 0x010a6e7f); le32(reply + 112, 0x12345678);
+  if (write(eps[0], reply, sizeof(reply)) != sizeof(reply)) die("startup version reply");
+  puts("WS73_TEST_IN kind=version actual=124 synthetic");
+  wait_kernel(log, "synthetic runtime identity verified");
+  if (trial != 5) startup_notification(eps[0], 0, 0); /* Early BOOT. */
+  unsigned int bits = trial == 5 ? 0x41 : 1;
+  le32(interrupt, bits); le32(interrupt + 4, 0xabcdef12);
+  if (write(eps[2], interrupt, 8) != 8) die("startup BSP interrupt");
+  printf("WS73_STARTUP_INT actual=8 bits=%08x synthetic\n", bits);
+  if (trial != 5) {
+   startup_customization(eps[1]);
+   startup_notification(eps[0], 1, trial == 3);
+   if (trial != 3) {
+    startup_action(control, 25, trial == 2);
+    if (trial == 0 || trial == 6) {
+     startup_notification(eps[0], 2, 0);
+     startup_action(control, 26, 0);
+     startup_notification(eps[0], 3, 0);
+    } else if (trial == 1) puts("WS73_STARTUP_WITHHOLD_ACTION_REPLY");
+    else if (trial == 4) { puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); }
+   }
+  }
+  wait_kernel(log, "synthetic startup result=");
+  if (trial != 4) {
+   unsigned char got[1024];
+   struct itimerval timer = { .it_value = { .tv_usec = 100000 } };
+   alarm_seen = 0;
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("startup quiet timer");
+   ssize_t n = read(eps[1], got, sizeof(got)); int saved = errno;
+   timer.it_value.tv_usec = 0;
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("startup stop timer");
+   if (n != -1 || saved != EINTR || !alarm_seen) die("extra startup bulk OUT");
+   struct pollfd p = { .fd = control, .events = POLLIN };
+   if (poll(&p, 1, 0) != 0) die("extra startup class request");
+   puts("WS73_STARTUP_NO_EXTRA_OUT window_ms=100");
+   puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n");
+  }
+  if (!disconnected) wait_kernel(log, "USB disconnect");
+  wait_kernel(log, "device callbacks drained");
+  printf("WS73_STARTUP_CASE %u PASS\n", trial);
+ }
+}
+
 int main(void)
 {
  if (getpid() != 1) return 2;
@@ -505,7 +620,7 @@ int main(void)
  }
  closedir(dir);
  if (!udc[0]) die("missing dummy UDC");
- directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", WS73_TEST_LOADER ? "0x3735" : WS73_TEST_DOWNLOAD ? "0x3734" : "0x3733");
+ directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", WS73_TEST_STARTUP ? "0x3736" : WS73_TEST_LOADER ? "0x3735" : WS73_TEST_DOWNLOAD ? "0x3734" : "0x3733");
  setting(G "bcdUSB", "0x0200");
  directory(G "strings/0x409"); setting(G "strings/0x409/serialnumber", "WS73-VM-SYNTHETIC");
  directory(G "configs/c.1"); directory(G "functions/ffs.ws73"); directory("/dev/ffs");
@@ -521,7 +636,8 @@ int main(void)
   if (eps[i] < 0) die(path);
  }
  if (symlink(G "functions/ffs.ws73", G "configs/c.1/ffs.ws73")) die("function link");
- if (WS73_TEST_LOADER) loader_trials(control, eps, log, udc);
+ if (WS73_TEST_STARTUP) startup_trials(control, eps, log, udc);
+ else if (WS73_TEST_LOADER) loader_trials(control, eps, log, udc);
  else if (WS73_TEST_DOWNLOAD) download_trials(control, eps, log, udc);
  else if (WS73_TEST_BOOT) boot_trials(control, eps, log, udc);
  else for (unsigned int trial = 0; trial < 17; trial++) {

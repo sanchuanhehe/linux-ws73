@@ -9,7 +9,7 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def validate_build(proofdir, proof, expected_head):
  required={'.config','arch/x86/boot/bzImage','vmlinux'}
  required.update('drivers/misc/ws73/'+name+'.o' for name in
-                 ['usb','usb-io','usb-boot-test','boot','boot-loader','firmware','runtime','usb-tx','usb-wire','service',
+                 ['usb','usb-io','usb-boot-test','usb-startup-test','boot','boot-loader','firmware','runtime','usb-tx','usb-wire','service',
                   'ble-control','customize','customize-request','startup','ble','ble-link'])
  assert proof['status']=='PASS','failed/incomplete build'
  assert proof['source']==expected_head,'stale source artifact'
@@ -67,6 +67,65 @@ def validate(kernel, log, speed="full"):
   assert re.findall(r'WS73_TEST_IN kind=(\w+) actual=(\d+) synthetic',part)==incoming,number
  assert len(re.findall(r'WS73_TEST_KMSG ',log))==67+removal_errors,'missing/extra captured kernel records'
  return {'cases':17,'out_transfers':65,'in_transfers':30,'interrupt_transfers':8,'disconnects':17,'drains':17,'removal_interrupt_errors':removal_errors}
+def validate_startup(kernel, log, speed="full"):
+ bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL|SKIP',kernel+'\n'+log)
+ assert not bad,bad.group(0) if bad else ''
+ assert len(re.findall(r'new '+speed+r'-speed USB device',kernel))==7,'startup enumeration count/speed'
+ assert log.count('WS73_VIRTUAL_USB_PASS')==1
+ assert re.findall(r'WS73_STARTUP_CASE (\d+) BEGIN',log)==list(map(str,range(7)))
+ assert re.findall(r'WS73_STARTUP_CASE (\d+) PASS',log)==list(map(str,range(7)))
+ parts=re.findall(r'WS73_STARTUP_CASE (\d+) BEGIN(.*?)WS73_STARTUP_CASE \1 PASS',log,re.S)
+ assert [int(n) for n,_ in parts]==list(range(7))
+ kernel_results=re.findall(r'synthetic startup result=([^\r\n]*)',kernel)
+ log_results=re.findall(r'synthetic startup result=([^\r\n]*)',log)
+ assert kernel_results==log_results and len(kernel_results)==7,'actual/captured results'
+ assert kernel.count('synthetic runtime identity verified')==7
+ assert kernel.count('device callbacks drained')==7
+ for number,part in parts:
+  n=int(number); records=re.findall(r'WS73_TEST_KMSG ([^\r\n]*)',part)
+  results=re.findall(r'synthetic startup result=(-?\d+) stage=(\w+) state=(\d+) action=(\d+)',part)
+  assert len(results)==1,number
+  result,stage,state,action=results[0]
+  if n in (0,6):assert (result,stage,state,action)==('0','disable','6','4'),number
+  else:
+   assert stage=='startup' and state=='7' and action=='5',number
+   assert int(result) in ({4:{-19,-108,-71}}.get(n, {[-1,-110,-32,-90,-1,-5,-1][n]})),number
+  assert re.findall(r'WS73_TEST_OUT step=(\d) actual=(\d+) verified',part)==[('0','36'),('1','36'),('2','128'),('3','128')],number
+  assert re.findall(r'WS73_TEST_IN kind=(\w+) actual=(\d+) synthetic',part)==[('chip','124'),('version','124')],number
+  assert part.count('synthetic runtime identity verified')==1,number
+  assert re.findall(r'WS73_STARTUP_OUT step=(\d) actual=(\d+) verified',part)==([] if n==5 else [('4','36'),('5','36'),('6','864')]),number
+  assert re.findall(r'WS73_STARTUP_INT actual=(\d+) bits=([0-9a-f]+) synthetic',part)==[('8','00000041' if n==5 else '00000001')],number
+  notifications=[] if n==5 else [('0','108','0'),('1','108',str(int(n==3)))]
+  if n in (0,6):notifications += [('2','108','0'),('3','108','0')]
+  assert re.findall(r'WS73_STARTUP_NOTIFY kind=(\d+) actual=(\d+) malformed=(\d+) synthetic',part)==notifications,number
+  actions=[] if n in (2,3,5) else [('25','4')]
+  if n in (0,6):actions += [('26','4')]
+  assert re.findall(r'WS73_STARTUP_ACTION message=(\d+) actual=(\d+) verified',part)==actions,number
+  setups=len(actions)+int(n==2)
+  assert re.findall(r'WS73_STARTUP_SETUP (\w+) verified',part)==['2100000000000400']*setups,number
+  assert part.count('WS73_STARTUP_CONTROL_STALL')==int(n==2),number
+  assert part.count('WS73_STARTUP_WITHHOLD_ACTION_REPLY')==int(n==1),number
+  delivered=re.findall(r'function notification observation (\d+); delivered to armed request',part)
+  assert delivered==([] if n==5 else ['0'] if n==3 else ['0','1','2','3'] if n in (0,6) else ['0','1']),number
+  assert 'no request completion' not in part,number
+  assert sum('BSP notification observation' in x for x in records)==int(n!=5),number
+  assert sum('USB disconnect' in x for x in records)==1,number
+  assert sum('device callbacks drained' in x for x in records)==1 and 'device callbacks drained' in records[-1],number
+  assert part.count('WS73_TEST_REMOVE')==1,number
+  assert part.index('WS73_TEST_REMOVE')<part.index('device callbacks drained'),number
+  assert part.index('synthetic startup result=')<part.index('device callbacks drained'),number
+  assert part.count('WS73_STARTUP_NO_EXTRA_OUT window_ms=100')==int(n!=4),number
+  if n!=4:assert part.index('synthetic startup result=')<part.index('WS73_STARTUP_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE'),number
+  else:assert part.index('WS73_TEST_REMOVE')<part.index('synthetic startup result='),number
+  errors=re.findall(r'interrupt observation failed: (-\d+)',part)
+  removal=[e for e in errors if e in ('-19','-108','-71')]
+  assert len(removal)<=1,number
+  if removal:assert part.index('WS73_TEST_REMOVE')<part.index('interrupt observation failed: '+removal[0]),number
+  assert [e for e in errors if e not in removal]==(['-5'] if n==5 else []),number
+  expected_records=4+int(n!=5)+len(delivered)+int(n==5)+len(removal)
+  assert len(records)==expected_records,number
+ return {'cases':7,'bulk_out':46,'bulk_in':30,'class_setups':7,'class_payloads':6,'interrupts':7,'disconnects':7,'drains':7,'no_extra_out_checks':6}
+
 def validate_boot(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL',kernel+'\n'+log)
  assert not bad, bad.group(0) if bad else ''
@@ -291,7 +350,7 @@ def archive(init_binary, firmware):
  item('TRAILER!!!',0)
  return gzip.compress(bytes(result),mtime=0),{str(path):sha(path) for path in files.values()}
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');parser.add_argument('--phase',choices=['runtime','boot','download','loader'],default='runtime');parser.add_argument('--firmware-root',type=pathlib.Path);args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');parser.add_argument('--phase',choices=['runtime','boot','download','loader','startup'],default='runtime');parser.add_argument('--firmware-root',type=pathlib.Path);args=parser.parse_args()
  assert bool(args.firmware_root)==(args.phase=='loader'),'loader phase requires the local SDK firmware root; other phases take no firmware'
  with (WORK/'build.lock').open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -309,7 +368,7 @@ def main():
     manifest['tools'][tool]['path_candidates_sha256']={str(p):sha(p) for p in sorted(candidates)}
    for source,name in [(proofdir/'manifest.json','build-proof.json'),(proofdir/'arch/x86/boot/bzImage','bzImage'),(proofdir/'.config','.config'),(TOOLS/'init.c','init.c'),(TOOLS/'run.py','run.py'),(TOOLS/'build.py','build.py')]:
     shutil.copyfile(source,record/name);manifest['materials'][name]=sha(record/name)
-   compile_cmd=['gcc','-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-DWS73_TEST_DOWNLOAD='+('1' if args.phase=='download' else '0'),'-DWS73_TEST_LOADER='+('1' if args.phase=='loader' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
+   compile_cmd=['gcc','-DWS73_TEST_STARTUP='+('1' if args.phase=='startup' else '0'),'-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-DWS73_TEST_DOWNLOAD='+('1' if args.phase=='download' else '0'),'-DWS73_TEST_LOADER='+('1' if args.phase=='loader' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
    manifest['init_compile']=compile_cmd
    with (record/'init-build.log').open('w') as build_log:
     subprocess.run(compile_cmd,check=True,stdout=build_log,stderr=subprocess.STDOUT,env=dict(os.environ,CCACHE_DISABLE='1'))
@@ -325,7 +384,7 @@ def main():
    with (record/'kernel.log').open('w') as log:
     result=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,timeout=45)
    manifest['exit_code']=result.returncode;assert result.returncode==0
-   manifest['observed']=(validate_loader if args.phase=='loader' else validate_download if args.phase=='download' else validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
+   manifest['observed']=(validate_startup if args.phase=='startup' else validate_loader if args.phase=='loader' else validate_download if args.phase=='download' else validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
    assert source_identity()==before,'source changed during VM test'
    manifest['status']='PASS'
   except BaseException as error:

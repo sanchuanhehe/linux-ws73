@@ -114,3 +114,20 @@ runtime identity agreement. Original-file rejection is exercised through the
 kernel API, but cancellation/latency during filesystem acquisition itself is
 not fault-injected. Missing local runner inputs produce a FAIL manifest before
 QEMU starts; they cannot be interpreted as a skipped or successful hardware run.
+
+Runtime startup / USB action integration
+---------------------------------------
+Run `python3 tools/testing/ws73/usb-vm/run.py --phase startup --speed full`
+(and `--speed high`) after building this revision. The ffff:3736 test
+consumer binds only dummy_hcd and reuses the production USB owner's
+allocation, RX/interrupt callbacks, control transfers and disconnect drain.
+Seven cases cover startup with early BOOT and acknowledged BLE disable,
+missing enable reply, ep0 STALL, malformed customization acknowledgment,
+removal while waiting for enable, simultaneous BSP/panic, and a fresh
+successful instance. Check exact bulk bytes, class SETUP/data, independent
+q10 replies, terminal failure, and absence of further bulk/class OUT.
+The all-zero customization is an explicit fixture, not a physical board
+profile. This test registers no HCI controller and supplies no hardware,
+firmware execution, BLE peer or RF qualification. Keep physical observations
+and actual function qualification separate. The physical USB ID still uses
+the observation worker; no startup test parameter enables hardware loading.

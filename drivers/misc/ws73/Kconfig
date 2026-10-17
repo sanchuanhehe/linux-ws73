@@ -60,3 +60,12 @@ config WS73_USB_BOOT_TEST
 	  URBs to a synthetic FunctionFS peer. Only the dummy_hcd controller and
 	  separate test USB IDs can bind. Run only in a hardware-free VM.
 	  This does not qualify real firmware, board setup or boot identity.
+
+config WS73_USB_STARTUP_TEST
+	tristate "WS73 synthetic USB runtime startup test"
+	depends on WS73_USB && USB_DUMMY_HCD && DEBUG_KERNEL
+	help
+	  Exercise the production USB owner's startup and BLE action paths
+	  against a FunctionFS peer in a hardware-free VM. The separate test
+	  USB ID binds only on dummy_hcd. Synthetic replies and parameters
+	  do not qualify firmware, boards, HCI readiness or BLE communication.

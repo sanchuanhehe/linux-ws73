@@ -170,8 +170,9 @@ static void ws73_usb_rx_complete(struct urb *urb)
 				continue;
 			ws->notifications_seen |= bit;
 			dev_info(&ws->interface->dev,
-				 "function notification observation %u; no request completion\n",
-				 rx.notification[i]);
+				 "function notification observation %u; %s\n",
+				 rx.notification[i], ret == -ENOENT ?
+				 "no request completion" : "delivered to armed request");
 		}
 	}
 	if (!ret && rx.queue == 7)

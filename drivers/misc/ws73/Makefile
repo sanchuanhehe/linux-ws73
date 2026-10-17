@@ -20,3 +20,6 @@ ws73-hci-test-y := ble-hci-test.o ble-hci-data-test.o
 
 obj-$(CONFIG_WS73_USB_BOOT_TEST) += ws73-usb-boot-test.o
 ws73-usb-boot-test-y := usb-boot-test.o
+
+obj-$(CONFIG_WS73_USB_STARTUP_TEST) += ws73-usb-startup-test.o
+ws73-usb-startup-test-y := usb-startup-test.o

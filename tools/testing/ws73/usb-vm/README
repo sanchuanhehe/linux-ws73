@@ -1,0 +1,37 @@
+WS73 hardware-free USB regression
+================================
+
+Run from a clean committed kernel worktree on an x86-64 Linux host with
+Python 3, GCC/glibc, Clang/LLD, make, QEMU and permission to use KVM.
+Reserve four build jobs and two VM CPUs within the shared machine budget.
+These scripts do not install a kernel or load a host module. Never execute
+the compiled init fixture directly on the host or add physical USB passthrough.
+
+  python3 tools/testing/ws73/usb-vm/build.py
+  python3 tools/testing/ws73/usb-vm/run.py --speed full
+  python3 tools/testing/ws73/usb-vm/run.py --speed high
+  python3 tools/testing/ws73/usb-vm/check-supervisor.py <full-speed-record>
+
+Do not use python -O: assertions form part of the verification and optimized
+execution is explicitly rejected. The kernel is built from allnoconfig plus
+usb.config; every requested configuration line must be satisfied. No earlier
+test archive or private baseline configuration is needed. The build output is
+fixed at ../.dev/ws73-upstream/build-virtual-usb relative to the source tree;
+a shared build.lock excludes the other WS73 build/test scripts. Observation
+hardware kernels in build-observe are not touched. The accepted build record
+pointer and timestamped artifacts live under ../.dev/ws73-upstream.
+
+The VM has no host USB, disk or network connection. It uses FunctionFS and
+dummy_hcd to enumerate synthetic runtime devices, with separate kernel and
+fixture serial logs. Each speed exercises 17 cases covering identity/version,
+notifications, IRQ faults, injected disconnect and callback drain. A process
+timeout kills only the VM started by the runner. Source, configuration,
+tool, runtime library, kernel and fixture hashes accompany each attempt.
+The negative checker corrupts a verified full-speed log in 32 ways and requires
+every corruption to be rejected. It does not exercise a device.
+
+These tests do not execute boot firmware download, 32-KiB boot TX, the READY
+delay, armed startup/customization, BLE class-control, HCI or Wi-Fi. They are
+not physical U/E, RF, PM or peer qualification. Missing resources, failed
+configuration dependencies, malformed logs and unexpected driver records fail
+the run rather than broadening the accepted result.

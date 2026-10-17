@@ -94,9 +94,13 @@ Command Complete or Hardware Error event is sent. Withdrawal cancels pending
 native synchronous commands before unregistering HCI. Removal preserves any
 existing local error in the shared endpoint, unbinds callbacks, drains TX and
 fault work, unregisters HCI and releases its state. The explicit model verifies
-ACL TX, fragmented event RX ownership after an empty flush, packet/byte quotas
-and invalid ACL rejection. Full HCI initialization, ACL RX, queued active flush,
-allocation-failure injection and physical enable/disable remain unqualified.
+ACL TX, fragmented event/ACL RX ownership, packet/byte quotas and invalid ACL
+rejection. An active flush waiting for TX still admits RX, then becomes terminal
+when purging accepted queued data. RX parse/allocation failures close TX admission
+under the same lock before deferred withdrawal. Task-scoped FAILSLAB tests cover
+the first allocation in TX/RX, including error retention and caller ownership.
+ACL is checked at the HCI receive queue; HCI_INIT drops it before L2CAP. Full HCI
+initialization, connection traffic and physical enable/disable remain unqualified.
 
 The codec is built once as a hidden shared component, with its own BTWS73
 namespace, avoiding duplicate definitions when both the consumer and codec
@@ -760,7 +764,8 @@ each transfer joins its completion before freeing its request storage.
 The worker does not retry failed reads or register functions. Runtime USB
 queue sequencing and RX/IRQ callback drain are implemented. The new BLE
 endpoint and HCI queue/stop contracts still need connection to the qualified
-USB startup path and positive data-path integration tests.
+USB startup path. The native consumer has explicit synthetic positive data-path
+checks; these are not USB integration or hardware qualification.
 Protocol HCI credits remain separate from
 USB queue slots. A BLE close must not reset an active Wi-Fi consumer.
 
@@ -795,9 +800,39 @@ Paths in this list are below the pinned SDK's ``driver/wifi``:
   setup, ``hmac/hmac_sta_pm.c`` and ``hmac/hmac_wow.c`` require a mapping to
   standard regulatory and power-save interfaces, not an INI/private ioctl ABI.
 
-Evaluate mac80211 first to avoid importing the Host SME/reorder stack.
-Keep the choice provisional until data/status/security interfaces are traced
-and tested with a controlled AP. No AP or credentials are assumed here.
+A further static trace distinguishes scheduling from packet status:
+
+* ``frw/frw_thread.c:frw_host_rcv_msg_callback`` sends
+  ``WLAN_MSG_D2H_C_CFG_TX_COMP_SCHEDULE`` to the TX-data thread.
+  ``hmac/hmac_config.c:hmac_config_tx_comp_schedule`` calls
+  ``forward/hmac_tx_mpdu_queue.c:hmac_tx_schedule``. The message type
+  ``tx_comp_schedule`` in ``device/source/inc/romable/dmac_common_inc_rom.h``
+  contains only ``ac_num``. This notification supplies no per-packet result.
+* The WS73 branch of ``hmac_tx_schedule`` uses ``hcc_get_tx_sched_num``.
+  In ``driver/platform/hcc/comm/hcc.c`` that function subtracts three Host
+  software queue lengths from a queue high-water mark. That calculation does
+  not establish a device-advertised credit or a wireless acknowledgement.
+* ``WLAN_MSG_D2H_C_CFG_CFG80211_DATA_TX_STATUS`` dispatches to
+  ``hmac_config_tx_complete_data``. Its ``dmac_tx_status_stru`` carries
+  descriptor status, frame type, management/frame marker and user index;
+  it contains no retry-count or final-rate field. The inspected handler checks
+  descriptor success, handles the EAPOL key 4/4 marker and deferred PTK install,
+  and has an ALWAYS_TX result path. A general ordinary-data per-MPDU completion
+  contract is not established by this handler.
+* Management status traverses ``hmac_mgmt_tx_event_status_etc`` and
+  ``wal_cfg80211_mgmt_tx_status_etc`` to update a management waiter and its frame
+  identifier. This does not qualify ordinary-data status either.
+
+These are Host source call-chain findings at the pinned SDK revision. Device
+producer behavior, exact USB wire layout and complete ordinary-data status
+remain to be traced; the findings do not prove absence across all firmware.
+The source/hash record is ``wifi-tx-status-audit-20261017/manifest.json``, SHA-256
+``efbe625c2310178433ceae5fb1a9112fbb0cfe64fcce34309f413eb1672cbc51``.
+Its nine files were byte-compared against the pinned commit before hashing.
+
+Continue the approved mac80211 route without importing Host SME/reorder logic.
+Do not replace missing status with USB completion or inferred ACK. A FullMAC
+change requires the agreed architecture review. No AP or credentials are assumed.
 
 Reproduction and remaining gates
 --------------------------------

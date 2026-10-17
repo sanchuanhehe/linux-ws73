@@ -1256,3 +1256,57 @@ publish a BLE endpoint. Cold U/E identity, trusted board/trim inputs, parent
 firmware/startup integration, BLE peer and AP resources, Wi-Fi and upstream
 review remain open. No physical device operation or external submission occurred.
 The later documentation commit is not a replacement tested-source identity.
+
+Native HCI active flush, ACL receive ownership and allocation faults
+------------------------------------------------------------------
+
+Functional source ``66029e3033d6e2da258d49aeac63ebce66c41f23`` closes TX admission
+under the RX-state lock on parsing/receive failure, before scheduling deferred
+withdrawal. The earlier path released the lock before marking the error, allowing
+an intervening TX admission. Shared fault notification still runs in the worker
+and never reenters the shared callback lock.
+
+Three added cases pass with the existing tests (24 total). ACL RX is split at
+every header/payload boundary and its source overwritten; the copied skb at the
+native HCI queue retains the exact type and bytes. A separate thread flushes with
+Reset blocked in the backend and an ACL queued behind it. The test observes the
+thread's uninterruptible wait before releasing Reset, verifies that RX remains
+admitted during the wait, then checks -ECANCELED, discarded queued ACL, HCI
+withdrawal and retained first error. Oversized ACL RX is followed immediately by
+TX and valid RX; TX rejects with the first error and RX cannot revive the instance.
+The flush wait has a bounded observation deadline and cleanup releases the
+backend and joins the test thread even if an assertion fails.
+
+Final test source ``d1b4669fba3ac17b95b13763471f138f9d4fc326`` adds two real
+allocation-failure cases using FAILSLAB and the calling task's fail_nth. Injection
+is cleared before KUnit assertions and the test checks that it was consumed.
+The first allocation in skb_copy_expand (TX) or bt_skb_alloc (RX) fails; the
+original TX skb stays caller-owned, RX publishes no packet, and both paths
+withdraw HCI with terminal -ENOMEM. No production allocation hook or global
+failure probability was added. This does not cover every later allocation site.
+
+All 26 cases pass: 16 codec, one failed-enable lifecycle, nine native model
+cases. SMP, KASAN, UBSAN, PROVE_LOCKING, DEBUG_ATOMIC_SLEEP, FAULT_INJECTION and
+FAILSLAB are enabled. Raw guest logs contain the two expected fault-injection
+traces, and the named tests pass. The public all-module build also passes at the
+same final source; production modules do not require fault injection. No new
+failed build or VM attempt occurred in this increment.
+
+Evidence manifests (SHA-256):
+
+* ``20261017T101455.054155Z`` (24 HCI/codec KUnit PASS),
+  ``8f8c2428f16a31cbb36647b115643c8cd17a79f76f4eb61a5a498cd1e46724ec``.
+* ``20261017T101609.844536Z`` (26 HCI/codec KUnit PASS with FAILSLAB),
+  ``b3b2ac492fae615b951edf19047256ec8efceb6bcdb5a267baaeb4291518846d``.
+* ``hci-build-module-20261017T101942.351421Z`` (all-module compile/link PASS),
+  ``eaf6cdaef16b6afcbfd8636430b99c1dd02978b4cece079ff690ff207e08eae2``.
+
+The model still deliberately withholds Reset: no full HCI initialization or
+connection exists. HCI_INIT discards ACL after the tested receive queue, so
+there is no L2CAP or peer-data qualification. This flush test is a specific
+controlled interleaving, not an exhaustive concurrency proof. Actual module
+load/unload, USB publication/startup integration, cold U/E, board/trim, peer/AP,
+Wi-Fi and upstream gates remain open. The Wi-Fi TX-status source audit in
+ws73.rst was advanced independently during this build; it provides no runtime
+firmware qualification. No physical device operation or external submission
+occurred. Documentation commits do not replace the exact tested source above.

@@ -155,7 +155,8 @@ static void ws73_ble_reply_failure_test(struct kunit *test)
 			ws73_ble_control_set(&mock.control, &mock.io, true, 1), errors[i]);
 		KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_FAILED);
 		KUNIT_EXPECT_EQ(test,
-			ws73_ble_control_receive(&mock.control, WS73_NOTIFY_BLE_OPEN, 0), errors[i]);
+			ws73_ble_control_receive(&mock.control, WS73_NOTIFY_BLE_OPEN, 0),
+			errors[i]);
 		KUNIT_EXPECT_EQ(test,
 			ws73_ble_control_set(&mock.control, &mock.io, true, 100), errors[i]);
 		KUNIT_EXPECT_EQ(test, mock.calls, 1);

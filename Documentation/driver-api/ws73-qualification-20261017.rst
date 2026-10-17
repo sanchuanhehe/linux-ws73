@@ -734,3 +734,71 @@ BSP observation remains separate from customization/action/HCI completion.
 Cold U identity evidence, E/peer/AP resources, board-derived customization,
 actual BLE request/waiters, firmware integration, auxiliary/HCI and Wi-Fi
 consumers, portable USB test tooling and formal upstream submission remain open.
+
+BLE action state machine and prepared USB backend
+------------------------------------------------
+
+Commit ``a61a278ef3d7`` implements the per-device action transaction engine,
+registers its RX/abort side in the USB parent and adds five KUnit cases. An
+unknown controller is not assumed closed. Successful open/close actions can
+alternate, while one command mutex excludes concurrent callers and rejects
+redundant stable-state requests. A transaction needs both exactly four bytes
+of successful local transmission and one matching action reply, within a shared
+absolute deadline capped to 2000 ms. Wrong/duplicate reply, short/long/failed TX,
+timeout, cancellation or abort is terminal. A failed close does not publish
+DISABLED, and a successful reply cannot hide a failed send. Ordinary boot/custom
+status messages cannot satisfy the action waiter. Device failures abort it;
+BLE action rejection alone does not reset an active sibling or stop shared RX.
+
+That source passes 51 KUnit in ``20261017T075356.646006Z`` (manifest SHA-256
+``0cb4d4dc4fa8388b1f0572a82ce202afc1ae507b502fd1da41e9c7818fe63f46``).
+The new tests run 100 alternating synthetic actions, check exact LE32 25/26
+commands, reject concurrent/redundant/unarmed close admission, retain first
+terminal errors, exercise actual bounded reply timeout, inject late/opposite/
+duplicate replies and test cancellation before and after submission. A separate
+kernel RX thread completes a sleeping caller. Deadline tests include a distant
+caller deadline, the 2000-ms cap and U64_MAX arithmetic. Other mock instances
+retain their state. These are production-engine tests with injected IO, not
+physical repetitions or same-chip BLE/Wi-Fi isolation qualification.
+
+Commit ``6d618efe84caea6d3840c2c967f0ffa5cf732eec`` prepares the fixed USB
+class/interface transport. It accepts messages 25/26 only, builds request 0,
+request type 0x21, value/index 0 and four-byte data length, allocates setup/data
+buffers, and shares URB admission, cancellation and completion joining with
+existing bulk IO. **Current initialization does not call this backend.** The
+control-URB branch is compiled but has not run in the virtual USB fixture or on
+hardware. Caller registration, firmware/board/customization prerequisites and
+auxiliary/HCI lifetime management remain necessary before invocation.
+
+The final functional source passes 51 KUnit again in
+``20261017T075609.537623Z`` (manifest SHA-256
+``8216891586a4073fc9cf66f08fce416ae82d3ee388fd01b4db8d411bd1cf353c``).
+The separate KASAN/UBSAN/lockdep/DEBUG_ATOMIC_SLEEP USB kernel and both speed
+regressions below bind that same clean source:
+
+* ``virtual-usb-build-20261017T075722.158160Z``, manifest SHA-256
+  ``f2f58a97a478d7c1f5f49425eb9857fb73254201cc0be370a4a63f5dda84107b``.
+* ``virtual-usb-20261017T075835.450667Z``, manifest SHA-256
+  ``30d7452c210fb9887589d506d88489318511b2190bc766acaa177c7255020613``.
+* ``virtual-usb-20261017T075917.129556Z``, manifest SHA-256
+  ``c52016d59255752c91b7a57027dc1409d53543c91e5541096d7c59e2837fbbe4``.
+
+Each speed passes the existing 17 cases (65 bulk OUT, 30 bulk IN, eight
+interrupt IN, 17 removals/drains). They exercise unarmed notification routing,
+shared fault abort and bulk/interrupt teardown after the transport refactor.
+They do not exercise an armed BLE action or the new class-request branch.
+The unchanged verifier hash matches the prior 32-negative-control qualification
+in ``virtual-usb-supervisor-negative-v7.json``; those controls were not relabeled
+as new executions. No sanitizer, lockdep or atomic-sleep error was reported.
+The documentation increment also wraps one overlong assertion without changing
+behavior; its HEAD is not substituted for the compiled source above. The final
+new files are checkpatch-clean; the initial new-file MAINTAINERS reminder remains
+pending the actual-consumer submission series.
+
+Tokenless notifications still assume ordered one-reply-per-command device
+behavior. The engine cannot authenticate an old same-kind reply delayed across
+multiple successful action cycles. Synthetic success does not discharge that
+hardware/epoch requirement or prove boot, customization, address or HCI setup.
+There were no physical USB operations, BLE requests, firmware downloads or
+external submissions. Cold U, E/peer/AP, board inputs, actual action invocation,
+auxiliary/HCI, Wi-Fi and portable USB test tooling remain open.

@@ -147,8 +147,8 @@ closes admission and cancels both receive URBs. Disconnect explicitly joins
 both URBs, including completions that already left their anchors, then joins
 initialization and fault work before freeing either buffer. An optional dynamic
 debug message marks that actual drain boundary for lifecycle verification.
-Register endpoints, real BLE control requests/waiters, firmware readiness and
-auxiliary/HCI consumers remain pending.
+Register endpoints, invoking BLE controls from validated initialization,
+firmware readiness and auxiliary/HCI consumers remain pending.
 
 Function notification reception
 -------------------------------
@@ -174,8 +174,55 @@ valid statuses. The USB parent currently records each of the four notification
 kinds at most once per device object; this bounded observation is not a request
 completion, persistent readiness state or a function registration. New USB
 instances start with no observations. Queue-10 TX remains closed until valid
-customization input and transaction sequencing are implemented. The actual
-BLE control request and its completion waiter are still pending.
+customization input and transaction sequencing are implemented. The BLE action transaction engine and USB send backend are described below;
+initialization does not invoke them until their prerequisites are established.
+
+BLE action transactions
+-----------------------
+
+``ble-control.c`` implements an independent per-device action state machine.
+Its initial state is UNKNOWN, not DISABLED: a close before the first successful
+open returns -EAGAIN. A command mutex admits one caller (-EBUSY otherwise).
+After successful opposite actions, open/close can alternate; a redundant
+request for the stable state returns -EALREADY without another transfer.
+Before sending, the target, deadline and completion are armed under a spinlock.
+The command is exactly LE32 25 (open) or 26 (close). Both actual four-byte TX and
+one matching BLE action reply must succeed before the state is committed.
+
+BOOT_FINISH and CUSTOMIZE_RECEIVED cannot complete this action waiter. RX can
+complete independently while the sender sleeps. Wrong/duplicate action replies,
+short/oversized/failed TX, expiry, cancellation and abort enter an immutable
+failure state and wake the waiter. A valid reply cannot hide failed TX. A close
+timeout never publishes DISABLED or permits another open. The first terminal
+error is retained; there is no reset or blind retry. The common absolute deadline
+covers send and wait and is capped to 2000 ms total without addition overflow.
+An asynchronous caller must be aborted and joined before freeing its object.
+
+The USB parent now routes validated action notifications to this state machine
+and aborts it on shared device failure/disconnect. Before any action is armed,
+notifications remain observations. A rejected action fails BLE locally without
+resetting an active sibling or stopping shared RX; malformed shared wire input
+and device-level faults retain their separate shared failure policy. No physical
+coexistence guarantee is inferred from this distinction.
+
+The prepared USB send backend accepts only messages 25/26. It builds request
+0, class/interface OUT (0x21), value/index 0, wLength 4, with separate allocated
+setup/data buffers. The driver already restricts binding to interface 0. The
+control URB shares disconnect admission, anchoring, bounded waiting and explicit
+completion joining with bulk transfers, and does not use bulk ZLP flags. Actual
+transfer length remains distinct from action success. This backend is installed
+in the per-device IO object but **is not called by current initialization**.
+There is no user-triggerable bypass or new ABI. This increment compiles the
+control-URB branch; it has not exercised it with a virtual or physical device.
+
+The caller still must establish firmware, board/customization and device epoch
+before invoking an action, and independently check boot/address/HCI setup before
+publishing readiness. Tokenless replies cannot authenticate an old epoch or an
+old same-kind reply delayed across multiple successful action cycles. Ordered
+one-reply-per-command device behavior remains a qualification assumption, not
+something the synthetic repeated-action tests prove. Auxiliary/HCI registration
+and its caller lifetime/drain remain pending; no action caller is currently
+registered in the USB parent.
 
 BLE initialization audit (SDK110)
 --------------------------------
@@ -384,9 +431,10 @@ unknown, so cold-start read validity remains OPEN. Do not guess firmware
 or equate a decoded observation with qualified automatic selection.
 Runtime identity must also be checked after loading and before registering
 consumers; no firmware was downloaded in this observation.
-A future transaction owner must validate the outer USB queue, allow only
-one pending query per device, enforce a deadline, and invalidate pending and
-cached identities at disconnect. The wire format has no transaction token;
+The current runtime transaction owner validates the outer USB queue, permits
+one pending platform query, enforces a deadline, and invalidates pending state
+at disconnect. Functional action callers must remain behind that initialization
+sequence and its firmware/board gates. The wire format has no transaction token;
 a late reply must not satisfy a new query after timeout or re-enumeration.
 
 USB observations and safety boundary

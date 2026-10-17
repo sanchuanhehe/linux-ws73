@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config WS73_WIFI_KUNIT_TEST
+	tristate "WS73 Wi-Fi configuration codec tests" if !KUNIT_ALL_TESTS
+	depends on KUNIT
+	default KUNIT_ALL_TESTS
+	help
+	  Check bounded byte-oriented FRW configuration encoding and reply
+	  parsing in a hardware-free VM. No adapter or USB consumer is
+	  registered. These tests do not qualify the original firmware ABI,
+	  radio, security or Wi-Fi connectivity.

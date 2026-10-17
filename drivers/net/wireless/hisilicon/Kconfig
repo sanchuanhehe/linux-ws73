@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config WLAN_VENDOR_HISILICON
+	bool "HiSilicon devices"
+	default y
+	help
+	  Enable configuration options for HiSilicon wireless devices.
+
+if WLAN_VENDOR_HISILICON
+source "drivers/net/wireless/hisilicon/ws73/Kconfig"
+endif

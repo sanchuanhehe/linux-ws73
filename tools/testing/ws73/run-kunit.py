@@ -208,7 +208,7 @@ def main():
                     "ws73_profiles_test", "ws73_file_test", "ws73_boot_sequence_test",
                     "ws73_boot_faults_test", "ws73_boot_admission_test",
                     "ws73_chip_word_test", "ws73_chip_query_test",
-                    "ws73_chip_query_faults_test",
+                    "ws73_chip_query_faults_test", "ws73_boot_version_test",
                 },
                 "ws73-usb-wire": {
                     "ws73_usb_control_test", "ws73_usb_single_test",

@@ -33,7 +33,7 @@ config WS73_USB
 	select WS73_USB_IO
 	select WS73_CORE
 	help
-	  Issue fixed HCC READM on a boot interface, or a one-shot HCC chip
+	  Issue fixed HCC READM then VERSION on a boot interface, or an HCC chip
 	  and version query with independent RX on a five-endpoint runtime
 	  interface. Validated function notifications are observations only.
 	  This development path does not select firmware or enable

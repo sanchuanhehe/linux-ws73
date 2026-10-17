@@ -82,7 +82,7 @@ def validate_boot(kernel, log, speed="full"):
  for number,part in parts:
   n=int(number)
   records=re.findall(r'WS73_TEST_KMSG ([^\r\n]*)',part)
-  assert len(records)==3,'missing/extra boot kernel record '+number
+  assert len(records)==(4 if n<5 or n>11 else 3),'missing/extra boot kernel record '+number
   observations=[x for x in records if 'boot chip observation' in x]
   assert len(observations)==1,number
   observed=observations[0]
@@ -98,17 +98,26 @@ def validate_boot(kernel, log, speed="full"):
   assert re.findall(r'WS73_BOOT_OUT actual=(\d+) (\w+) verified',part)==[('19','READM_40019000_4')],number
   incoming=[] if n in (10,11) else [(str(lengths[n]),f'{words[n]:08x}')]
   assert re.findall(r'WS73_BOOT_IN actual=(\d+) word=([0-9a-f]+) synthetic',part)==incoming,number
+  version_ok = n<5 or n>11
+  assert part.count('WS73_BOOT_VERSION_OUT actual=8 verified')==int(version_ok),number
+  assert part.count('WS73_BOOT_VERSION_IN actual=3 hex=563100 synthetic')==int(version_ok),number
+  versions=[x for x in records if 'boot version observation' in x]
+  assert len(versions)==int(version_ok),number
+  if version_ok:
+   assert versions[0].endswith('boot version observation: 3 bytes 563100'),number
+   assert part.index('boot chip observation')<part.index('WS73_BOOT_VERSION_OUT')<part.index('boot version observation')<part.index('WS73_BOOT_NO_EXTRA_OUT'),number
   assert part.count('WS73_BOOT_WITHHOLD_REPLY')==(1 if n==10 else 0),number
   assert part.count('WS73_BOOT_NO_EXTRA_OUT window_ms=100')==(0 if n==11 else 1),number
   assert part.count('WS73_TEST_REMOVE')==1,number
   assert part.index('WS73_TEST_REMOVE')<part.index('USB disconnect')<part.index('device callbacks drained'),number
   if n==11:assert part.index('WS73_TEST_REMOVE')<part.index('boot chip observation failed:')<part.index('device callbacks drained'),number
   else:assert part.index('boot chip observation')<part.index('WS73_BOOT_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE'),number
- assert log.count('WS73_TEST_KMSG ')==42,'extra captured boot records'
+ assert log.count('WS73_TEST_KMSG ')==49,'extra captured boot records'
+ assert len(re.findall(r'boot version observation: 3 bytes 563100',kernel))==7,'version observation count'
  assert len(re.findall(r'boot chip observation(?: failed:| 0x)',kernel))==14,'extra/missing actual boot observations'
  assert log.count('WS73_BOOT_OUT ')==14 and log.count('WS73_BOOT_IN ')==12
  assert 'runtime chip observation' not in kernel and 'WS73_TEST_CASE' not in log
- return {'cases':14,'out_transfers':14,'in_transfers':12,'disconnects':14,'drains':14,'timeout_cases':1,'no_extra_out_checks':13}
+ return {'cases':14,'out_transfers':21,'in_transfers':19,'version_queries':7,'disconnects':14,'drains':14,'timeout_cases':1,'no_extra_out_checks':13}
 def validate_download(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL',kernel+'\n'+log)
  assert not bad,bad.group(0) if bad else ''

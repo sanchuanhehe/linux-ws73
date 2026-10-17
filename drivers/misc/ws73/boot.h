@@ -43,6 +43,11 @@ struct ws73_boot_io {
 	void (*wait_ready)(void *context); /* Sleep at least 5 ms, per SDK. */
 };
 
+struct ws73_boot_version {
+	u8 data[64];
+	u8 length;
+};
+
 struct ws73_chip_observation {
 	u32 raw;
 	struct btws73_chip_identity chip;
@@ -61,6 +66,13 @@ int ws73_chip_word_decode(u32 value, struct btws73_chip_identity *chip);
  */
 int ws73_boot_read_chip(const struct ws73_boot_io *io, u64 deadline_ms,
 			struct ws73_chip_observation *observation);
+
+/* Fixed VERSION query; opaque 1..64 actual bytes, not firmware compatibility.
+ * Serialize with other boot commands; discard the session after any failure.
+ * Output is unchanged on failure. No NUL termination is assumed.
+ */
+int ws73_boot_read_version(const struct ws73_boot_io *io, u64 deadline_ms,
+			   struct ws73_boot_version *version);
 
 /*
  * Caller must have verified identity, validated ALL immutable images and

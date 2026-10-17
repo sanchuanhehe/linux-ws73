@@ -346,6 +346,7 @@ static void ws73_chip_word_test(struct kunit *test)
 }
 
 struct ws73_chip_mock {
+	bool version;
 	struct kunit *test;
 	u32 word;
 	u64 now;
@@ -386,14 +387,15 @@ static int ws73_chip_result(struct ws73_chip_mock *mock, unsigned int timeout, i
 
 static int ws73_chip_send(void *context, const u8 *data, size_t len, unsigned int timeout)
 {
-	static const u8 expected[] = "READM 0x40019000 4 ";
 	struct ws73_chip_mock *mock = context;
+	const char *expected = mock->version ? "VERSION " : "READM 0x40019000 4 ";
+	size_t size = strlen(expected);
 
 	KUNIT_EXPECT_EQ(mock->test, mock->calls, 0);
-	KUNIT_EXPECT_EQ(mock->test, len, sizeof(expected) - 1);
-	if (len == sizeof(expected) - 1)
+	KUNIT_EXPECT_EQ(mock->test, len, size);
+	if (len == size)
 		KUNIT_EXPECT_MEMEQ(mock->test, data, expected, len);
-	return ws73_chip_result(mock, timeout, sizeof(expected) - 1);
+	return ws73_chip_result(mock, timeout, size);
 }
 
 static int ws73_chip_receive(void *context, u8 *data, size_t capacity, unsigned int timeout)
@@ -402,7 +404,9 @@ static int ws73_chip_receive(void *context, u8 *data, size_t capacity, unsigned 
 
 	KUNIT_EXPECT_EQ(mock->test, mock->calls, 1);
 	KUNIT_EXPECT_EQ(mock->test, capacity, 512);
-	if (capacity >= 4)
+	if (mock->version)
+		memset(data, 0x56, capacity);
+	else if (capacity >= 4)
 		put_unaligned_le32(mock->word, data);
 	return ws73_chip_result(mock, timeout, 4);
 }
@@ -487,6 +491,62 @@ static void ws73_chip_query_faults_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, mock.calls, 0);
 }
 
+static void ws73_boot_version_test(struct kunit *test)
+{
+	struct ws73_chip_mock mock = { .test = test, .version = true };
+	struct ws73_boot_io io = {
+		.context = &mock, .now_ms = ws73_chip_now, .cancelled = ws73_chip_cancelled,
+		.send = ws73_chip_send, .receive = ws73_chip_receive,
+	};
+	struct ws73_boot_version before, observed;
+	unsigned int i, step, fault;
+
+	memset(&before, 0xa5, sizeof(before));
+	for (i = 0; i <= 513; i++) {
+		mock.calls = 0;
+		mock.fail_at = 2;
+		mock.result = i;
+		observed = before;
+		KUNIT_EXPECT_EQ(test, ws73_boot_read_version(&io, 100, &observed),
+				i && i <= 64 ? 0 : -EMSGSIZE);
+		KUNIT_EXPECT_EQ(test, mock.calls, 2);
+		if (!i || i > 64) {
+			KUNIT_EXPECT_MEMEQ(test, &observed, &before, sizeof(before));
+		} else {
+			KUNIT_EXPECT_EQ(test, observed.length, i);
+			KUNIT_EXPECT_PTR_EQ(test, memchr_inv(observed.data, 0x56, i), NULL);
+			KUNIT_EXPECT_PTR_EQ(test, memchr_inv(observed.data + i, 0, 64 - i), NULL);
+		}
+	}
+	for (step = 1; step <= 2; step++) {
+		for (fault = 0; fault < 3; fault++) {
+			mock = (struct ws73_chip_mock) { .test = test, .version = true,
+				.fail_at = step, .result = step == 1 ? 8 : 4,
+				.expire = fault == 1, .cancel = fault == 2 };
+			if (!fault)
+				mock.result = -EPIPE;
+			observed = before;
+			KUNIT_EXPECT_EQ(test, ws73_boot_read_version(&io, 100, &observed),
+					!fault ? -EPIPE : fault == 1 ? -ETIMEDOUT : -ENODEV);
+			KUNIT_EXPECT_EQ(test, mock.calls, step);
+			KUNIT_EXPECT_MEMEQ(test, &observed, &before, sizeof(before));
+		}
+	}
+	mock = (struct ws73_chip_mock) { .test = test, .version = true,
+		.fail_at = 1, .result = 7 };
+	observed = before;
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_version(&io, 100, &observed), -EREMOTEIO);
+	KUNIT_EXPECT_EQ(test, mock.calls, 1);
+	KUNIT_EXPECT_MEMEQ(test, &observed, &before, sizeof(before));
+	mock.calls = 0;
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_version(&io, 0, &observed), -ETIMEDOUT);
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_version(NULL, 100, &observed), -EINVAL);
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_version(&io, 100, NULL), -EINVAL);
+	io.receive = NULL;
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_version(&io, 100, &observed), -EINVAL);
+	KUNIT_EXPECT_EQ(test, mock.calls, 0);
+}
+
 static struct kunit_case ws73_cases[] = {
 	KUNIT_CASE(ws73_profiles_test),
 	KUNIT_CASE(ws73_file_test),
@@ -495,6 +555,7 @@ static struct kunit_case ws73_cases[] = {
 	KUNIT_CASE(ws73_boot_admission_test),
 	KUNIT_CASE(ws73_chip_word_test),
 	KUNIT_CASE(ws73_chip_query_test),
+	KUNIT_CASE(ws73_boot_version_test),
 	KUNIT_CASE(ws73_chip_query_faults_test),
 	{}
 };

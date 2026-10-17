@@ -227,12 +227,13 @@ static void ws73_usb_initialize(struct work_struct *work)
 {
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	struct ws73_chip_observation observation;
+	struct ws73_boot_version boot_version;
 	struct btws73_chip_identity identity;
 	struct ws73_version version;
+	u64 deadline = ws73_usb_now(ws) + 4000;
 	int ret;
 
 	if (ws->runtime) {
-		u64 deadline = ws73_usb_now(ws) + 4000;
 		const char *stage = "chip";
 
 		ret = ws73_usb_submit_rx(ws, ws->interrupt_urb);
@@ -261,7 +262,7 @@ static void ws73_usb_initialize(struct work_struct *work)
 		}
 		return;
 	}
-	ret = ws73_boot_read_chip(&ws->boot_io, ws73_usb_now(ws) + 4000, &observation);
+	ret = ws73_boot_read_chip(&ws->boot_io, deadline, &observation);
 	if (ret) {
 		ws73_usb_fail(ws, ret);
 		dev_err(&ws->interface->dev, "boot chip observation failed: %d\n", ret);
@@ -272,6 +273,15 @@ static void ws73_usb_initialize(struct work_struct *work)
 	dev_info(&ws->interface->dev,
 		 "boot chip observation %#010x: package %u bus %u; cold-read qualification pending\n",
 		 observation.raw, observation.chip.package, observation.chip.bus);
+	ret = ws73_boot_read_version(&ws->boot_io, deadline, &boot_version);
+	if (ret) {
+		ws73_usb_fail(ws, ret);
+		dev_err(&ws->interface->dev, "boot version observation failed: %d\n", ret);
+		return;
+	}
+	if (!ws73_usb_cancelled(ws))
+		dev_info(&ws->interface->dev, "boot version observation: %u bytes %*phN\n",
+			 boot_version.length, boot_version.length, boot_version.data);
 	/* No profile selection, calibration writes, download or child registration. */
 }
 

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -116,6 +117,40 @@ int ws73_boot_read_chip(const struct ws73_boot_io *io, u64 deadline_ms,
 	return 0;
 }
 EXPORT_SYMBOL_NS_GPL(ws73_boot_read_chip, "WS73");
+
+int ws73_boot_read_version(const struct ws73_boot_io *io, u64 deadline_ms,
+			   struct ws73_boot_version *version)
+{
+	static const u8 command[] = "VERSION ";
+	struct ws73_boot_version parsed = {};
+	u8 reply[512];
+	int ret, timeout;
+
+	if (!io || !version || !io->now_ms || !io->cancelled ||
+	    !io->send || !io->receive)
+		return -EINVAL;
+	ret = ws73_boot_send(io, command, sizeof(command) - 1, deadline_ms);
+	if (ret)
+		return ret;
+	/* SDK firmware_check_version waits 1 ms before receiving. */
+	usleep_range(1000, 2000);
+	timeout = ws73_boot_remaining(io, deadline_ms);
+	if (timeout < 0)
+		return timeout;
+	ret = io->receive(io->context, reply, sizeof(reply), timeout);
+	if (ret < 0)
+		return ret;
+	if (!ret || ret > sizeof(parsed.data))
+		return -EMSGSIZE;
+	parsed.length = ret;
+	memcpy(parsed.data, reply, ret);
+	ret = ws73_boot_remaining(io, deadline_ms);
+	if (ret < 0)
+		return ret;
+	*version = parsed;
+	return 0;
+}
+EXPORT_SYMBOL_NS_GPL(ws73_boot_read_version, "WS73");
 
 static int ws73_boot_images_validate(const struct ws73_fw_view image[WS73_FW_COUNT])
 {

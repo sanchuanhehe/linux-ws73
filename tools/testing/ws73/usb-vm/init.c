@@ -233,6 +233,14 @@ static void boot_trials(int control, int *eps, int log, const char *udc)
             trial == 10 ? "boot chip observation failed: -110" :
             trial == 11 ? "boot chip observation failed: " : expected[trial - 12];
   wait_kernel(log, message);
+  if (trial < 5 || trial > 11) {
+   n = read(eps[1], got, sizeof(got));
+   if (n != 8 || memcmp(got, "VERSION ", 8)) die("boot VERSION bytes/length");
+   puts("WS73_BOOT_VERSION_OUT actual=8 verified");
+   if (write(eps[0], "V1", 3) != 3) die("boot VERSION reply");
+   puts("WS73_BOOT_VERSION_IN actual=3 hex=563100 synthetic");
+   wait_kernel(log, "boot version observation: 3 bytes 563100");
+  }
   if (trial != 11) {
    /* FunctionFS O_NONBLOCK only governs locks/enable, not queued IO.
     * Interrupt this read after a 100-ms quiet window; FunctionFS dequeues

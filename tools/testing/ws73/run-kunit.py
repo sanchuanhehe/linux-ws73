@@ -32,8 +32,10 @@ def sanitizer_summary(raw, config, kcsan=False):
                 "CONFIG_DEBUG_ATOMIC_SLEEP=y", "CONFIG_UBSAN=y", "# CONFIG_KASAN is not set"}
     if not required <= set(config.splitlines()):
         raise ValueError("missing KCSAN instrumentation configuration")
-    if raw.count("kcsan: enabled early") != 1 or raw.count("kcsan: selftest: 3/3 tests passed") != 1:
-        raise ValueError("missing/duplicate KCSAN activation or selftest")
+    for marker in ("kcsan: enabled early", "kcsan: strict mode configured",
+                   "kcsan: selftest: 3/3 tests passed"):
+        if raw.splitlines().count(marker) != 1 or raw.count(marker) != 1:
+            raise ValueError("missing/duplicate/malformed KCSAN marker: " + marker)
     return {"early_enabled": True, "selftests_passed": 3, "skip_watch": 1000,
             "scope": "sampled detection only; no race-freedom proof"}
 

@@ -1671,3 +1671,39 @@ Unchanged codec, synthetic USB and native HCI-model tests retain their previous
 source qualifications; they were not rerun for this documentation update.
 The next physical gate is a confirmed power-cycle observation, followed by
 qualified board/trim inputs and this project's own firmware/runtime path.
+
+First U observation after user-confirmed power removal
+----------------------------------------------------
+
+After the non-cold test above had released the device and exited its VM, the
+user confirmed physically unplugging/replugging only the assigned WS73U and
+that it had no other power supply. This statement is the power-history evidence;
+no software reset or QMP detach is substituted for it. A fresh topology and
+ownership check found the same port, serial, VID/PID and exact descriptors,
+with host USB address changed from 105 to 116. The new private VM used the
+same compiled source **517bc7a13ebda6225f3b0bf329ed7988bebf6e20**. Worktree HEAD
+was ``64152b4cd99a944ae263b455e64ac4c73c2f1b09``; the runner verified that its
+only differences from the compiled source were two documentation files.
+
+Before any calibration/register write or firmware transfer, the production
+USB parent sent exactly the 19-byte fixed READM. Its OUT completed successfully;
+the 512-byte-capacity IN completed successfully with exactly four bytes
+``00000000``. The driver decoded U/USB. This supports the observed zero value
+being a valid returned value on this U sample after power removal, rather than
+merely a value observed following previously loaded firmware. It does not prove
+all inaccessible-register/failure behaviors or the mapping for other hardware.
+
+QMP removal again produced disconnect and one drain record, QEMU exited 0, and
+post-exit checks found the same device identity with no driver/usbfs owner.
+No sanitizer, lock or kernel warning was found. Result:
+**COLD_OBSERVATION_PASS_USER_CONFIRMED_SINGLE_U**. This is one cold observation
+on one U sample, not the planned repeated U/E qualification. No firmware,
+WRITEM, FILES, QUIT, BLE or Wi-Fi transaction was issued. The E device, repeated
+cold starts, board/trim applicability, firmware/runtime identity comparison
+and native function communication remain open gates.
+
+Local record: ``records/usb-observe-20261017T114201.435882Z``; manifest SHA-256
+``23556a4c23445fd043278b97b6d3a1894a3749153452359fd4a49a88748e9565``.
+The final runner trace-verifier receipt is ``observer-trace-negative-current-v4.json``,
+SHA-256 ``b1afd34c9bed6e1127d7cd069b4baa0acc6de49fb848b19b736cfdc19936b4a2`` (two accepted
+fixtures, 13 negative controls rejected; verifier scope only).

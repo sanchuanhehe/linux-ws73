@@ -42,7 +42,7 @@ int ws73_startup_interrupt(struct ws73_startup *startup,
 int ws73_startup_receive(struct ws73_startup *startup,
 			 enum ws73_notification notification, u64 now_ms);
 /*
- * One-shot BSP -> platform configuration -> customization -> BLE enable -> BOOT handshakes after arm.
+ * One-shot BSP -> platform configuration -> customization -> BLE enable -> BOOT.
  * A current BOOT can precede its wait, including while identity is checked.
  * Caller must establish firmware epoch, identity/version and board validity.
  * All clocks must use the same monotonic millisecond domain. No locks may be

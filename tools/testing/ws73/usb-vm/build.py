@@ -81,7 +81,7 @@ def main():
             names += ["drivers/bluetooth/btws73.o", "drivers/bluetooth/btws73_proto.o"]
             names += [f"drivers/misc/ws73/{name}.o" for name in
                       ("usb", "usb-io", "usb-boot-test", "usb-startup-test", "boot", "boot-loader", "firmware", "runtime", "usb-tx", "usb-wire",
-                       "service", "ble-control", "customize", "customize-request", "startup", "ble", "ble-link")]
+                       "platform-config", "service", "ble-control", "customize", "customize-request", "startup", "ble", "ble-link")]
             for name in names:
                 dest = record / name
                 dest.parent.mkdir(parents=True, exist_ok=True)

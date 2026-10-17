@@ -283,7 +283,8 @@ static int ws73_model_start_link(struct ws73_hci_model *m)
 	if (!ret)
 		ret = ws73_startup_interrupt(&m->startup, &bsp, 0);
 	if (!ret)
-		ret = ws73_startup_run(&m->startup, &m->tx, &bulk, &control, &platform, &parameters);
+		ret = ws73_startup_run(&m->startup, &m->tx, &bulk, &control,
+				       &platform, &parameters);
 	if (!ret)
 		ret = ws73_ble_control_set(&m->startup.ble, &control, false, 2000);
 	/* The synchronous model has no outstanding old data after disable. */

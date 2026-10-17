@@ -294,7 +294,8 @@ static void ws73_startup_admission_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_startup_arm(&mock->startup, 0, 100), -ETIMEDOUT);
 	KUNIT_EXPECT_EQ(test, ws73_startup_arm(NULL, 0, 100), -EINVAL);
 	KUNIT_EXPECT_EQ(test, ws73_startup_run(NULL, &mock->tx, &mock->bulk,
-					       &mock->control, &mock->platform, &mock->parameters), -EINVAL);
+					       &mock->control, &mock->platform,
+					       &mock->parameters), -EINVAL);
 }
 
 static int ws73_start_rx_thread(void *context)

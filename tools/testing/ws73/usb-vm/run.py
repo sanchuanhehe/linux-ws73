@@ -89,6 +89,8 @@ def validate_hci(kernel, log, speed="full"):
   assert re.findall(r'WS73_TEST_OUT step=(\d) actual=(\d+) verified',part)==[('0','36'),('1','36'),('2','128'),('3','128')]
   assert re.findall(r'WS73_TEST_IN kind=(\w+) actual=(\d+) synthetic',part)==[('chip','124'),('version','124')]
   assert part.count('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified') == 1
+  if 'WS73_STARTUP_PLATFORM' in part:
+   assert part.index('WS73_STARTUP_PLATFORM') < part.index('WS73_STARTUP_OUT')
   assert re.findall(r'WS73_STARTUP_OUT step=(\d) actual=(\d+) verified',part)==[('5','36'),('6','36'),('7','864')]
   assert re.findall(r'WS73_HCI_QUEUE step=(\d) actual=(\d+) verified',part)==[('8','36'),('9','36')]
   commands=12 if good else 3; replies=12 if good else 2
@@ -156,6 +158,8 @@ def validate_startup(kernel, log, speed="full"):
   assert re.findall(r'WS73_TEST_IN kind=(\w+) actual=(\d+) synthetic',part)==[('chip','124'),('version','124')],number
   assert part.count('synthetic runtime identity verified')==1,number
   assert part.count('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified') == int(n != 5)
+  if 'WS73_STARTUP_PLATFORM' in part:
+   assert part.index('WS73_STARTUP_PLATFORM') < part.index('WS73_STARTUP_OUT')
   assert re.findall(r'WS73_STARTUP_OUT step=(\d) actual=(\d+) verified',part)==([] if n==5 else [('5','36'),('6','36'),('7','864')]),number
   assert re.findall(r'WS73_STARTUP_INT actual=(\d+) bits=([0-9a-f]+) synthetic',part)==[('8','00000041' if n==5 else '00000001')],number
   notifications=[] if n==5 else [('0','108','0'),('1','108',str(int(n==3)))]

@@ -521,11 +521,14 @@ static void startup_notification(int in, unsigned int kind, int malformed)
 static void startup_customization(int out)
 {
  unsigned char pm[1024], pm_expected[128] = {0};
+ ssize_t actual;
+
  le32(pm_expected + 4, 128); le32(pm_expected + 8, 4);
  pm_expected[64] = 0x19; pm_expected[65] = 9;
  le16(pm_expected + 66, 32); le16(pm_expected + 70, 4);
- ssize_t actual = read(out, pm, sizeof(pm));
- if (actual != sizeof(pm_expected) || memcmp(pm, pm_expected, sizeof(pm_expected))) die("startup PM OUT");
+ actual = read(out, pm, sizeof(pm));
+ if (actual != sizeof(pm_expected) || memcmp(pm, pm_expected, sizeof(pm_expected)))
+  die("startup PM OUT");
  puts("WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified");
  for (unsigned int step = 5; step <= 7; step++) {
   unsigned char got[1024], expected[864] = {0};

@@ -210,6 +210,7 @@ def main():
                     "drivers/misc/ws73/customize.o", "drivers/misc/ws73/customize-test.o",
                     "drivers/misc/ws73/customize-request.o",
                     "drivers/misc/ws73/customize-request-test.o",
+                    "drivers/misc/ws73/platform-config.o", "drivers/misc/ws73/platform-config-test.o",
                     "drivers/misc/ws73/startup.o", "drivers/misc/ws73/startup-test.o",
                     "drivers/misc/ws73/board-test.o", "drivers/misc/ws73/boot-loader-test.o", "drivers/misc/ws73/ble.o",
                     "drivers/misc/ws73/ble-test.o", "drivers/misc/ws73/ble-link.o",

@@ -195,6 +195,7 @@ if proof.get('phase')=='startup':
  trials={
   'missing_platform':(k,s.replace('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified','',1)),
   'short_platform':(k,s.replace('sequence=4 actual=128 sleep=0','sequence=4 actual=127 sleep=0',1)),
+  'late_platform':(k,s.replace('WS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified','',1).replace('WS73_STARTUP_OUT step=7 actual=864 verified','WS73_STARTUP_OUT step=7 actual=864 verified\nWS73_STARTUP_PLATFORM sequence=4 actual=128 sleep=0 verified',1)),
   'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
   'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
   'missing_case':(k,s.replace('WS73_STARTUP_CASE 4 PASS','')),

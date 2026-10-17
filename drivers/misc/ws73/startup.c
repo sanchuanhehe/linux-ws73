@@ -178,7 +178,8 @@ int ws73_startup_run(struct ws73_startup *startup, struct ws73_usb_tx *tx,
 	int ret;
 
 	if (!startup || !tx || !bulk || !bulk->now_ms || !bulk->cancelled || !bulk->send ||
-	    !control || !control->now_ms || !control->cancelled || !control->send || !platform || !parameters)
+	    !control || !control->now_ms || !control->cancelled || !control->send ||
+	    !platform || !parameters)
 		return -EINVAL;
 	if (parameters->calibration_count > 8 || platform->wake_gpio > U8_MAX)
 		return -ERANGE;

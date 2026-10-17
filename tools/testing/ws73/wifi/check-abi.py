@@ -30,6 +30,9 @@ TARGETS = {
     "riscv32-unknown-elf": (4, False),
     "powerpc64-linux-gnu": (8, True),
 }
+ELF_MACHINES = {"x86_64-linux-gnu": 62, "i386-linux-gnu": 3,
+                "aarch64-linux-gnu": 183, "riscv32-unknown-elf": 243,
+                "powerpc64-linux-gnu": 21}
 PROBE = r'''
 #include "frw_msg_rom.h"
 #include "comm-excerpt.h"
@@ -108,6 +111,15 @@ def main():
                            "-Wall", "-Wextra", "-Werror", "-c", str(record / "probe.c"), "-o", str(obj)]
             subprocess.run(compile_cmd, check=True, capture_output=True, text=True,
                            env=dict(os.environ, CCACHE_DISABLE="1"))
+            header = obj.read_bytes()[:20]
+            assert len(header) == 20 and header[:4] == b"\x7fELF", "missing ELF object"
+            byte_order = "big" if big_endian else "little"
+            elf = {"class": header[4], "encoding": header[5],
+                   "type": int.from_bytes(header[16:18], byte_order),
+                   "machine": int.from_bytes(header[18:20], byte_order)}
+            assert elf == {"class": 2 if pointer_size == 8 else 1,
+                           "encoding": 2 if big_endian else 1,
+                           "type": 1, "machine": ELF_MACHINES[target]}, (target, elf)
             extract_cmd = ["llvm-objcopy"]
             for field in ("ext", "comm", "sizes"):
                 extract_cmd += [f"--dump-section=.ws73_{field}={record / (target + '.' + field)}"]
@@ -122,7 +134,7 @@ def main():
             }
             observed = {field: (record / (target + "." + field)).read_bytes().hex() for field in expected}
             manifest["targets"][target] = {"compile": compile_cmd, "extract": extract_cmd,
-                                            "expected": expected, "observed": observed}
+                                            "elf": elf, "expected": expected, "observed": observed}
             assert observed == expected, (target, observed, expected)
         for relative, digest in manifest["sources"].items():
             assert sha(SDK / relative) == digest, "SDK changed during audit"

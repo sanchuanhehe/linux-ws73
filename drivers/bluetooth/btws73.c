@@ -24,6 +24,7 @@ struct btws73 {
 	unsigned int packets;
 	unsigned int bytes;
 	bool running;
+	bool flushing;
 	bool registered;
 	int error;
 	struct btws73_h4 rx;
@@ -68,7 +69,7 @@ static void btws73_tx_work(struct work_struct *work)
 
 	for (;;) {
 		spin_lock_irqsave(&bt->lock, flags);
-		skb = bt->running ? __skb_dequeue(&bt->tx) : NULL;
+		skb = bt->running && !bt->flushing ? __skb_dequeue(&bt->tx) : NULL;
 		spin_unlock_irqrestore(&bt->lock, flags);
 		if (!skb)
 			return;
@@ -101,19 +102,17 @@ static int btws73_flush_locked(struct hci_dev *hdev)
 	struct btws73 *bt = hci_get_drvdata(hdev);
 	struct sk_buff_head discard;
 	unsigned long flags;
-	bool running;
 
 	skb_queue_head_init(&discard);
 	spin_lock_irqsave(&bt->lock, flags);
-	running = bt->running;
-	bt->running = false;
+	bt->flushing = true;
 	spin_unlock_irqrestore(&bt->lock, flags);
 	cancel_work_sync(&bt->tx_work);
 	spin_lock_irqsave(&bt->lock, flags);
 	skb_queue_splice_init(&bt->tx, &discard);
 	bt->packets = 0;
 	bt->bytes = 0;
-	bt->running = running && !bt->error;
+	bt->flushing = false;
 	spin_unlock_irqrestore(&bt->lock, flags);
 	skb_queue_purge(&discard);
 	return 0;
@@ -218,6 +217,8 @@ static int btws73_send(struct hci_dev *hdev, struct sk_buff *skb)
 		return -EOPNOTSUPP;
 	spin_lock_irqsave(&bt->lock, flags);
 	ret = bt->error ?: (bt->running ? 0 : -ENETDOWN);
+	if (!ret && bt->flushing)
+		ret = -EAGAIN;
 	if (ret)
 		goto unlock;
 	if (bt->packets >= BTWS73_TX_PACKETS || length > BTWS73_TX_BYTES - bt->bytes) {

@@ -28,8 +28,12 @@ HCI receive queue; HCI_INIT drops it before L2CAP processing.
 HCI-only enables FAILSLAB and uses the calling test task's fail_nth for one
 allocation in TX or RX; it resets injection before assertions and verifies
 actual consumption plus terminal ENOMEM. Worker tasks are not injected.
-The explicit test controller supplies synthetic
-Features/BD_ADDR replies; production code never manufactures completions.
+Four additional HCI cases compose the real runtime backend and native consumer:
+startup/disable/open, USB wire sequencing and action replies, setup/ACL transport,
+coalesced fragmented RX, short action/data completions and parent abort with TX
+blocked. The model's I/O callbacks replace actual USB submissions; neither class
+setup packets nor URBs are executed. The explicit test controller supplies
+synthetic Features/BD_ADDR replies; production code never manufactures completions.
 Reset is deliberately left unanswered, so full HCI initialization, Bluetooth
 connections, BlueZ and peer behavior remain unqualified. Codec tests also run.
 The checked-in KUnit configuration enables SMP, KASAN, UBSAN, lockdep and

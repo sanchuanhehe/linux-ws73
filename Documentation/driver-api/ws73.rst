@@ -136,9 +136,19 @@ returns the retained error. Registration does not imply HCI initialization.
 
 The physical observer still never invokes publication, startup arm/run or the
 loader. The adapter's action/data operations execute in injected-I/O KUnit,
-including a synchronous auxiliary probe; real control URBs and an end-to-end
-USB-to-native-HCI session remain unexecuted. No firmware gate, default address,
-board override or user ABI was added.
+including a synchronous auxiliary probe. A further explicit model now composes
+this backend with the actual native HCI consumer: startup/customization,
+acknowledged disable, publication and native open precede two setup queries and
+ACL TX. Exact USB queue-control/data framing is checked independently, while
+synthetic action and HCI replies traverse the aggregate decoder and RX routing.
+Coalesced event/ACL data split across HCC records retains skb ownership after
+source overwrite. Short action and data transfers exercise different fault
+scopes; parent abort drains an in-flight command and prevents queued ACL TX.
+
+That model still withholds Reset completion. It does not qualify full HCI
+initialization, L2CAP, actual USB URBs or peer behavior; control tests check the
+four-byte payload, not a submitted control setup packet. No firmware gate,
+default address, board override or user ABI was added.
 
 Runtime USB framing baseline
 ----------------------------

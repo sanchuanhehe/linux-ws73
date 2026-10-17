@@ -1387,3 +1387,55 @@ external submission occurred. Cold U/E, trusted board/trim and epoch, hardware
 data drain, parent loader/startup integration and publication, real USB class
 requests, full HCI initialization, BLE peer/AP, Wi-Fi and upstream review remain
 open. Documentation-only commits do not replace the tested source identities.
+
+Native HCI composed with the runtime BLE backend
+-----------------------------------------------
+
+Source ``27358a7b9dacf800cae013365d78ab245fa7bceb`` adds an explicit controller
+model path through the actual startup, runtime BLE adapter, USB TX sequencer,
+auxiliary endpoint and native HCI consumer. It retains the earlier direct-backend
+cases for comparison. Synthetic BSP/customization and action acknowledgments
+complete startup, followed by acknowledged disable and publication. Native open
+then sends the actual four-byte enable command through the action engine.
+
+The model independently checks USB sequence counters, queue switch/reset order,
+reserved prefix bytes, total sizes, HCC command/ACL bytes and padding. Queue-10
+notifications and fragmented HCI replies are wrapped as synthetic USB aggregates
+and decoded before routing. Actual native Features/BD_ADDR queries complete;
+Reset is transmitted but deliberately not answered. The data case sends ACL
+through the driver worker and USB framing, then checks a coalesced event/ACL
+stream split across two HCC records. Both owned skbs retain exact bytes after
+all source buffers are overwritten. HCI_INIT still drops ACL before L2CAP.
+
+A short enable transfer is rejected despite the model supplying an action reply;
+HCI withdraws without issuing any HCI command or faulting shared TX. A short
+bulk data completion faults the shared transport and withdraws HCI. The model
+saw that ACL, but the driver records local TX failure rather than credit or ACK.
+The initial composed configuration passes 29 cases.
+
+Final source ``3a5c44d5a17840bc3f8cdc0181d2f9938d165d55`` adds parent abort while
+Reset is blocked inside the runtime TX backend and an accepted ACL is queued
+behind it. Abort closes admission before the model releases the blocked call;
+HCI unregister joins its work, no queued ACL reaches the backend, RX cannot
+revive the instance and a held auxiliary reference returns -ENODEV after removal.
+The final run passes 30 cases: 16 codec, one failed-enable lifecycle, nine prior
+native model cases and four composed model cases. SMP, KASAN, UBSAN,
+PROVE_LOCKING, DEBUG_ATOMIC_SLEEP and FAILSLAB are verified in both configurations.
+
+Evidence manifests (SHA-256):
+
+* ``20261017T104605.823705Z`` (29 HCI/codec KUnit PASS),
+  ``0b4863d87f1c51c08ed2c1f6c235553028f7bd5af5292ecf32ba0191b9cb61fe``.
+* ``20261017T104801.909198Z`` (30 HCI/codec KUnit PASS),
+  ``c0aedd04f510669846e45586dfcb7c12968676ede91db1ecf2a9baa4d1d53af8``.
+
+This increment changes only tests and their expected-case supervisor; production
+code is unchanged. No failed test attempt occurred. Earlier regular 79-case,
+USB fixture, supervisor-negative and module results retain their earlier source
+identities and are not claimed as fresh runs. The changed test file is
+strict-checkpatch clean. This composition reaches the injected-I/O boundary,
+not an actual USB control setup packet, submitted URB or physical firmware.
+No full HCI initialization, L2CAP/peer, cold U/E, board/trim, hardware drain,
+parent firmware-loader integration, Wi-Fi or upstream qualification is added.
+No physical operation or external submission occurred. Documentation commits
+do not replace the exact tested source identities above.

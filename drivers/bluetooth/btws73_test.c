@@ -544,7 +544,7 @@ static void btws73_h4_state_mutation(struct kunit *test)
 				} else {
 					complete++;
 					KUNIT_ASSERT_EQ(test, ret, 1);
-					KUNIT_ASSERT_PTR_EQ(test, packet, stream->data);
+					KUNIT_ASSERT_PTR_EQ(test, packet, &stream->data[0]);
 					KUNIT_ASSERT_EQ(test, packet_len, pending_len);
 					KUNIT_ASSERT_GE(test, packet_len, 3);
 					KUNIT_ASSERT_MEMEQ(test, packet, pending, packet_len);

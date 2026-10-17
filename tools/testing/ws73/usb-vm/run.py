@@ -10,7 +10,7 @@ def validate_build(proofdir, proof, expected_head):
  required={'.config','arch/x86/boot/bzImage','vmlinux','drivers/bluetooth/btws73.o','drivers/bluetooth/btws73_proto.o'}
  required.update('drivers/misc/ws73/'+name+'.o' for name in
                  ['usb','usb-io','usb-boot-test','usb-startup-test','boot','boot-loader','firmware','runtime','usb-tx','usb-wire','service',
-                  'ble-control','customize','customize-request','startup','ble','ble-link'])
+                  'platform-config','ble-control','customize','customize-request','startup','ble','ble-link'])
  assert proof['status']=='PASS','failed/incomplete build'
  assert proof['source']==expected_head,'stale source artifact'
  assert set(proof['artifacts'])==required,'missing/extra build artifact'

@@ -32,7 +32,7 @@ static void ws73_usb_control_test(struct kunit *test)
 	KUNIT_EXPECT_MEMEQ(test, out, reset_wire, sizeof(reset_wire));
 	memset(out, 0xa5, sizeof(out));
 	for (i = 0; i <= U8_MAX; i++) {
-		if (i == 7 || i == 9)
+		if (i == 7 || i == 9 || i == 10)
 			continue;
 		KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, 36, 0,
 				WS73_USB_SWITCH_QUEUE, i), -EOPNOTSUPP);

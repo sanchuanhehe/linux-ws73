@@ -224,6 +224,41 @@ something the synthetic repeated-action tests prove. Auxiliary/HCI registration
 and its caller lifetime/drain remain pending; no action caller is currently
 registered in the USB parent.
 
+Customization encoding
+----------------------
+
+``customize.c`` encodes explicit host parameters for the SDK110 USB
+``use_flash=0`` path. It writes fields individually in little endian, without
+copying a native structure or installing vendor defaults. The record is
+exactly 800 bytes: service/subtype 0x50, queue 10, HCC TX length 800 (including
+HCC), tag type 0, tag length 140, then the customization body. The flash-use
+word, flash-derived trim/address fields, structure padding and remaining
+allocation padding are zero. This path does not override per-device addresses
+or trims. Flash overrides remain unsupported.
+
+Frequency/reference pairs place frequency in the high half-word. The first
+six channel boundaries are packed in pairs, with the earlier boundary in the
+high half-word; the seventh is a single value. Calibration count is limited
+to 0..8, as documented by the SDK INI. The codec checks representation only;
+it does not prove power, coexistence, regulatory or board suitability. Its
+test vectors deliberately contain synthetic endian markers, not RF settings.
+
+Queue-10 USB TX accepts only this exact record shape, including zero reserved
+bytes, before any queue-switch/reset side effect. It uses the existing bounded
+serial transport, with actual-length checking and terminal failure after a
+short transfer. RX retains its separate device-notification decoder and length
+convention. Encoding or USB TX success does not imply CUSTOMIZE_RECEIVED.
+No initialization caller sends the new record yet; board profile selection,
+acknowledgement transaction and subsequent boot/action gates remain pending.
+
+The pinned SDK ``build/config/ws73_cfg_default.ini`` and
+``hbsle_custom_fill_ini_param`` provide a more complete parameter source than
+blindly copying ``CONFIG_NO_SUPPORT_INI`` defaults. In particular, the INI
+contains eight calibration frequencies (6, 15, 26, 39, 60, 68, 72, 76), whereas
+the no-INI default structure initializes the corresponding words to reference
+20 without those frequency half-words. Neither path alone establishes board
+compatibility for both U/E. No default board profile is selected here.
+
 BLE initialization audit (SDK110)
 --------------------------------
 

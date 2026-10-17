@@ -6,10 +6,11 @@
 #include <linux/unaligned.h>
 
 #include "usb-wire.h"
+#include "customize.h"
 
 static bool ws73_usb_queue_valid(u32 queue)
 {
-	return queue == 7 || queue == 9;
+	return queue == 7 || queue == 9 || queue == 10;
 }
 
 static int ws73_usb_record_validate(const u8 *record, size_t length, u32 queue)
@@ -23,6 +24,8 @@ static int ws73_usb_record_validate(const u8 *record, size_t length, u32 queue)
 		return -EOPNOTSUPP;
 	if (record[1] != queue)
 		return -EPROTO;
+	if (queue == 10)
+		return ws73_customize_validate(record, length);
 	payload = get_unaligned_le16(record + 2);
 	if (queue == 7) {
 		if (record[0])
@@ -110,7 +113,7 @@ int ws73_usb_aggregate_decode(const u8 *data, size_t length,
 	if (get_unaligned_le32(data + 4) != length)
 		return -EMSGSIZE;
 	queue = get_unaligned_le32(data + 8);
-	if (!ws73_usb_queue_valid(queue) && queue != 10)
+	if (!ws73_usb_queue_valid(queue))
 		return -EOPNOTSUPP;
 	parsed.queue = queue;
 	for (i = 0; i < BTWS73_RX_MAX_RECORDS; i++) {

@@ -25,7 +25,8 @@ struct ws73_usb_rx {
 
 /*
  * Pure TX wire helpers; no device I/O or queue state. Only BLE (7) and platform
- * (9) are admitted. Caller serializes queue switch, aggregation reset and
+ * (9), plus the exact no-flash customization shape (10), are admitted.
+ * Caller serializes queue switch, aggregation reset and
  * data, and supplies its per-device sequence. Buffers must not overlap.
  * Return encoded byte count, or errno without modifying output on error.
  */

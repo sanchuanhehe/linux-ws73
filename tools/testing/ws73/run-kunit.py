@@ -127,7 +127,8 @@ def main():
                     "drivers/misc/ws73/usb-tx.o", "drivers/misc/ws73/usb-tx-test.o",
                     "drivers/misc/ws73/runtime.o", "drivers/misc/ws73/runtime-test.o",
                     "drivers/misc/ws73/service.o", "drivers/misc/ws73/service-test.o",
-                    "drivers/misc/ws73/ble-control.o", "drivers/misc/ws73/ble-control-test.o"}
+                    "drivers/misc/ws73/ble-control.o", "drivers/misc/ws73/ble-control-test.o",
+                    "drivers/misc/ws73/customize.o", "drivers/misc/ws73/customize-test.o"}
         if not args.core_only:
             required.update({"drivers/bluetooth/btws73_proto.o",
                              "drivers/bluetooth/btws73_test.o",
@@ -153,6 +154,10 @@ def main():
                 "btws73_h4_splits", "btws73_h4_coalesced", "btws73_h4_errors",
             }
             expected_groups = {
+                "ws73-customize": {
+                    "ws73_customize_wire_test", "ws73_customize_encode_errors_test",
+                    "ws73_customize_validate_errors_test", "ws73_customize_transport_test",
+                },
                 "btws73-proto": expected,
                 "ws73-fw-boot": {
                     "ws73_profiles_test", "ws73_file_test", "ws73_boot_sequence_test",

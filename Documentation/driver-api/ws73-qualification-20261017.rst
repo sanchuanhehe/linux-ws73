@@ -2275,3 +2275,116 @@ round BT_LE enabled for each profile):
 
 Artifact audit ``cross-matrix-audit.json`` SHA-256:
 ``f93d102bcef6e7de886b30ff71180e807302dc769a18fd438d5eec7e4d473632``.
+
+Strict KCSAN runs and synchronized native HCI fault snapshot
+----------------------------------------------------------
+
+The native HCI fault worker read bt->error with READ_ONCE while remove could
+update the same field using a plain store under bt->lock. Source review found
+this inconsistent access discipline; no KCSAN report reproduced this specific
+WS73 race. At ``ffd7b1fc3f16bf4d8be7bdad29fe6e5c2b29a2d7`` the worker takes one
+snapshot under the same state lock and uses it for both shared fault delivery
+and native command cancellation. The lock is released before callbacks and
+HCI operations. Remove/fault-work draining and terminal behavior remain intact.
+Checkpatch on the production C change reports zero errors and warnings.
+
+The runner now offers --kcsan in a separate build-kunit-kcsan directory.
+KASAN is disabled as required by Kconfig; UBSAN, SMP, lockdep and
+DEBUG_ATOMIC_SLEEP remain. Strict checking, weak-memory modeling, early
+enable, boot selftests and KCSAN_SKIP_WATCH=1000 are required. The supervisor
+checks activation/strict-mode/3-of-3 selftest records and actual compiler
+memory-access hooks in shared BLE endpoint/link objects and native HCI when
+enabled. Kernel diagnostics reject PASS independently of KTAP case statuses.
+All VMs have two vCPUs, 1 GiB, no network and no physical USB. Four compilation
+jobs were reserved; another 12-job build was observed and allowed to finish
+before the first build started. Other project VMs were not operated.
+
+Successful bounded executions:
+
+* Shared core/protocol: 83 cases in 14 suites under KCSAN at
+  ``fe0ece87d031a5ef70aec14c0e086cb4a99a818d``. The native HCI consumer is off.
+  This includes independent-receive-thread control tests and bounded parser
+  mutations. The following production change touches only btws73.c, which
+  is not part of this shared-core test configuration.
+* Native HCI/protocol: 31 cases in 3 suites under KCSAN after the fault snapshot
+  change at ``ffd7b1fc3f16bf4d8be7bdad29fe6e5c2b29a2d7``. Existing tests cover
+  blocked TX, concurrent flush/RX, local/shared faults and removal against
+  explicit synthetic backends. They stop before complete HCI initialization.
+* The same 31 cases pass separately with KASAN, UBSAN and lockdep at ffd7b1fc.
+  The two modes share codec cases; they are not 114 distinct tests.
+
+No kernel diagnostic occurs in those three successful runs. The initial
+completed HCI KCSAN run at baa3e8653ff9 also passed 31 cases, but used the earlier fixture
+and is not relabeled as the final configuration. All build logs are retained:
+full rebuilds include existing kernel-doc warnings outside WS73 and the
+Documentation/.renames.txt gitignore warning. No WS73 compiler warning occurs.
+
+Failures and limits are part of the qualification result:
+
+* The first sandboxed run built successfully but QEMU could not bind its QMP
+  Unix socket. No test ran. The terminated attempt remains FAIL; the next
+  authorized VM execution used the same independent output directory.
+* The first shared-core KCSAN boot reported ``ps2_do_sendbyte / ps2_interrupt``
+  in the QEMU i8042/PS2 mouse path before any KTAP test. panic_on_warn remained
+  enabled; the supervisor terminated the panicked VM at its 120-second limit.
+  The headless serial fixture now disables KEYBOARD_ATKBD, MOUSE_PS2 and
+  SERIO_I8042. The first configuration attempt disabled only i8042 and was
+  rejected because the keyboard/mouse selectors re-enabled it; no VM ran in
+  that attempt. Failed preflight records may retain earlier build artifacts;
+  they are not new execution evidence. This fixture isolation does not fix
+  or qualify the PS/2 path.
+* A later HCI KCSAN run completed five cases, then reported an unknown-origin
+  race in ``blake2s_update`` through ``release_task / add_device_randomness``.
+  It panicked and reached the same 120-second limit. Local source shows
+  release_task passes p->se.sum_exec_runtime by address to randomness mixing;
+  concurrent runtime accounting is a hypothesis, not a confirmed writer.
+  This report remains unresolved. No report filter, relaxed KCSAN mode or
+  change to the random/exit code was added. The next run was justified by
+  the separate WS73 snapshot fix, not repeated attempts to obtain a pass.
+  Its success does not close this report or prove KCSAN stability.
+* Supervisor negative checks initially accepted two trailing-corruption
+  records. Exact complete-line checks fixed that; the final 33 negative
+  controls reject missing/duplicate/malformed markers, wrong selftest counts,
+  missing configuration, diagnostics, and both actual failed KCSAN logs.
+  Positive inputs are retained actual VM logs. Intermediate 25/28/31-control
+  records remain with their original result and source.
+
+**Overall KCSAN qualification remains incomplete.** These bounded sampled
+executions do not prove race freedom, all interleavings, complete HCI/BlueZ,
+physical USB or firmware behavior. The normal physical driver is still
+observation-only; no hardware was accessed in this increment. The new
+single-U power-cycle confirmation, original firmware startup, E hardware,
+BLE peer/AP and formal support/upstream review gates remain outstanding.
+No unrelated kernel report was submitted externally.
+
+All VM/preflight and supervisor attempts, manifest SHA-256:
+
+* ``20261017T141527.263871Z`` (FAIL),
+  ``4b513b9522e3d41d70a2eefcaf69cd2bf1c733c77c9fe9c532c14a48e4fbd489``.
+* ``20261017T141823.934481Z`` (PASS),
+  ``922c2e957b0b090815b177c16f8909bcfdd8943090343a7c190dbc87344cc4e7``.
+* ``20261017T141957.468777Z`` (FAIL),
+  ``f3f54d8fe062ced9bb2feeb894f1d45a0465bf7f4d62c35fe2895fc7d85c6d8f``.
+* ``20261017T142627.501310Z`` (FAIL),
+  ``bced9107dbe06ba79a2f6dcfc61313d51eed450b219ef242f3e98305af944de0``.
+* ``20261017T142724.346206Z`` (PASS),
+  ``49cb36995701cc1cddf81d4784836fd543ff67ab82f2db715f0fdd3ef16b2b0f``.
+* ``20261017T142850.700223Z`` (FAIL),
+  ``9a4b830071565ed7e71380935f879d315a25976b6bc905ee22afee939d00b247``.
+* ``20261017T143506.386391Z`` (PASS),
+  ``ec1536df84c34ae84516654d292f117401045710153d6afe010ec3139624b83f``.
+* ``20261017T143540.546882Z`` (PASS),
+  ``d56b0f24a7a6c8050c3fedeb2a3857a9ab328ecda86fa2b7bd5bc1a0edb0f95c``.
+* ``kcsan-supervisor-20261017T141850.322356Z`` (FAIL),
+  ``08e721a69782bd425837d9f0f0e5a35a3e5ab418444df7ea04f523eeecb02ed4``.
+* ``kcsan-supervisor-20261017T141918.677630Z`` (PASS),
+  ``200d63836625d6c2a15ee603706a04549a9895e91197402f69b38d545149f154``.
+* ``kcsan-supervisor-20261017T142845.751192Z`` (PASS),
+  ``08c4a3ecbb68f7cd190b218f262844be47a7fd26fe38361ff0f841fbcdc8ca16``.
+* ``kcsan-supervisor-20261017T143541.724583Z`` (PASS),
+  ``0d56fad27fa40ba224557c19bc3eba751895e8c9bcb6606fb82a5fa71c6be99e``.
+* ``kcsan-supervisor-20261017T143618.558353Z`` (PASS),
+  ``fe41a851dbf9cbb6ba723236e1d6da02c81fac1ede6ff752d018c741a9f3ce35``.
+
+Artifact/source audit ``kcsan-audit.json`` SHA-256:
+``31804af300a09ec6b84e0e52f3858e031ed997ee904176f5f9f09c9854a403a9``.

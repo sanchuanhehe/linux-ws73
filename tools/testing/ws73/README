@@ -54,6 +54,10 @@ The KCSAN fixture disables the unused i8042 keyboard/mouse controller driver:
 a retained earlier run reported a libps2 race and panicked before any WS73
 test ran. Serial console operation and all WS73 test dependencies remain.
 This isolates the headless fixture; it does not fix or qualify the PS/2 path.
+A separate retained unknown-origin report in the release_task/randomness
+mixing path remains unresolved. Later bounded successful runs do not close
+that report or establish stable KCSAN qualification. No report filter or
+weaker detection mode is used; see the dated qualification document.
 
 The USB aggregate and H4 tests also run bounded deterministic mutation campaigns
 with four fixed xorshift32 seeds each. USB supplies 16,384 unaligned inputs in

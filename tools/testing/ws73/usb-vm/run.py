@@ -9,7 +9,7 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def validate_build(proofdir, proof, expected_head):
  required={'.config','arch/x86/boot/bzImage','vmlinux'}
  required.update('drivers/misc/ws73/'+name+'.o' for name in
-                 ['usb','usb-io','boot','firmware','runtime','usb-tx','usb-wire','service',
+                 ['usb','usb-io','usb-boot-test','boot','firmware','runtime','usb-tx','usb-wire','service',
                   'ble-control','customize','customize-request','startup','ble','ble-link'])
  assert proof['status']=='PASS','failed/incomplete build'
  assert proof['source']==expected_head,'stale source artifact'
@@ -109,6 +109,50 @@ def validate_boot(kernel, log, speed="full"):
  assert log.count('WS73_BOOT_OUT ')==14 and log.count('WS73_BOOT_IN ')==12
  assert 'runtime chip observation' not in kernel and 'WS73_TEST_CASE' not in log
  return {'cases':14,'out_transfers':14,'in_transfers':12,'disconnects':14,'drains':14,'timeout_cases':1,'no_extra_out_checks':13}
+def validate_download(kernel, log, speed="full"):
+ bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL',kernel+'\n'+log)
+ assert not bad,bad.group(0) if bad else ''
+ assert len(re.findall(r'new '+speed+r'-speed USB device',kernel))==7,'download enumeration count/speed'
+ assert log.count('WS73_VIRTUAL_USB_PASS')==1
+ assert re.findall(r'WS73_DOWNLOAD_CASE (\d+) BEGIN',log)==list(map(str,range(7)))
+ assert re.findall(r'WS73_DOWNLOAD_CASE (\d+) PASS',log)==list(map(str,range(7)))
+ parts=re.findall(r'WS73_DOWNLOAD_CASE (\d+) BEGIN(.*?)WS73_DOWNLOAD_CASE \1 PASS',log,re.S)
+ assert [int(n) for n,_ in parts]==list(range(7))
+ commands=['FILES 1 0x400000 0x8000 0x0 ','FILES 1 0x408000 0x1 0x2 ','FILES 1 0x430000 0x20 0x3 ','FILES 1 0x440000 0x20 0x3 ']
+ payload_count=0
+ for number,part in parts:
+  n=int(number);success=n in (0,6)
+  records=re.findall(r'WS73_TEST_KMSG ([^\r\n]*)',part)
+  assert len(records)==(4 if n==5 else 3),number
+  results=re.findall(r'synthetic download result=(-?\d+) stage=(\d+) image=(\d+) ack=(\d+)',part)
+  assert len(results)==1,number
+  result,stage,image,ack=map(int,results[0])
+  if success:assert (result,stage,image,ack)==(0,6,2,32),number
+  elif n in (1,2,3):assert (result,stage,image,ack)==(-110 if n==3 else -71,4 if n==2 else 2,0,0),number
+  else:assert result in (-19,-108,-71,-2,-104) and (stage,image,ack)==(2 if n==4 else 3,0,0),number
+  assert re.findall(r'WS73_DOWNLOAD_COMMAND chunk=(\d+) actual=(\d+) verified',part)==[(str(i),str(len(commands[i]))) for i in range(4 if success else 1)],number
+  payloads=re.findall(r'WS73_DOWNLOAD_PAYLOAD chunk=(\d+) actual=(\d+) delay_us=(\d+) verified',part)
+  assert [(a,b) for a,b,_ in payloads]==[(str(i),str([32768,1,32,32][i])) for i in range(4 if success else 1 if n==2 else 0)],number
+  assert all(int(delay)>=5000 for _,_,delay in payloads),number
+  payload_count+=len(payloads)
+  replies=[('READY','5'),('FILES OK','8')]*4 if success else [('READX','5')] if n==1 else [('READY','5'),('FILES NO','8')] if n==2 else [('READY','5')] if n==5 else []
+  assert re.findall(r'WS73_DOWNLOAD_REPLY ([A-Z ]+) actual=(\d+)',part)==replies,number
+  assert part.count('WS73_DOWNLOAD_QUIT actual=5 verified')==int(success),number
+  assert part.count('WS73_DOWNLOAD_WITHHOLD_READY')==int(n==3),number
+  assert part.count('WS73_DOWNLOAD_NO_EXTRA_OUT window_ms=100')==int(n not in (4,5)),number
+  assert part.count('WS73_TEST_REMOVE')==1,number
+  assert sum('USB disconnect' in x for x in records)==1,number
+  assert records[-1].endswith('synthetic download callbacks drained'),number
+  assert part.index('WS73_TEST_REMOVE')<part.index('USB disconnect')<part.index('synthetic download callbacks drained'),number
+  if n in (4,5):assert part.index('WS73_TEST_REMOVE')<part.index('synthetic download result='),number
+  else:assert part.index('synthetic download result=')<part.index('WS73_DOWNLOAD_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE'),number
+  if n==5:assert part.index('synthetic payload admission')<part.index('WS73_TEST_REMOVE'),number
+ assert log.count('WS73_TEST_KMSG ')==22
+ assert log.count('WS73_DOWNLOAD_COMMAND ')==13 and log.count('WS73_DOWNLOAD_PAYLOAD ')==9
+ assert log.count('WS73_DOWNLOAD_REPLY ')==20 and log.count('WS73_DOWNLOAD_QUIT ')==2
+ assert kernel.count('synthetic download result=')==7 and kernel.count('synthetic download callbacks drained')==7
+ assert 'boot chip observation' not in kernel and 'runtime chip observation' not in kernel
+ return {'cases':7,'files_commands':13,'payloads':payload_count,'quit_commands':2,'disconnects':7,'drains':7,'no_extra_out_checks':5,'scope':'synthetic download only; READY timing measured from gadget submission to first payload read'}
 def library(name):
  path=pathlib.Path(subprocess.check_output(['gcc','-print-file-name='+name],text=True).strip()).resolve()
  if not path.is_file():raise RuntimeError('Missing host runtime library: '+name)
@@ -130,7 +174,7 @@ def archive(init_binary):
  item('TRAILER!!!',0)
  return gzip.compress(bytes(result),mtime=0),{str(path):sha(path) for path in files.values()}
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');parser.add_argument('--phase',choices=['runtime','boot'],default='runtime');args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');parser.add_argument('--phase',choices=['runtime','boot','download'],default='runtime');args=parser.parse_args()
  with (WORK/'build.lock').open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   proofdir=pathlib.Path((WORK/'usb-vm-build-record').read_text().strip());proof=json.loads((proofdir/'manifest.json').read_text())
@@ -145,7 +189,7 @@ def main():
    manifest['tools'][tool]['path_candidates_sha256']={str(p):sha(p) for p in sorted(candidates)}
   for source,name in [(proofdir/'manifest.json','build-proof.json'),(proofdir/'arch/x86/boot/bzImage','bzImage'),(proofdir/'.config','.config'),(TOOLS/'init.c','init.c'),(TOOLS/'run.py','run.py'),(TOOLS/'build.py','build.py')]:
    shutil.copyfile(source,record/name);manifest['materials'][name]=sha(record/name)
-  compile_cmd=['gcc','-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
+  compile_cmd=['gcc','-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-DWS73_TEST_DOWNLOAD='+('1' if args.phase=='download' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
   manifest['init_compile']=compile_cmd
   with (record/'init-build.log').open('w') as build_log:
    subprocess.run(compile_cmd,check=True,stdout=build_log,stderr=subprocess.STDOUT,env=dict(os.environ,CCACHE_DISABLE='1'))
@@ -157,7 +201,7 @@ def main():
    with (record/'kernel.log').open('w') as log:
     result=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,timeout=45)
    manifest['exit_code']=result.returncode;assert result.returncode==0
-   manifest['observed']=(validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
+   manifest['observed']=(validate_download if args.phase=='download' else validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
    assert source_identity()==before,'source changed during VM test'
    manifest['status']='PASS'
   except BaseException as error:

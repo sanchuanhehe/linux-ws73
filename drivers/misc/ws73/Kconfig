@@ -49,3 +49,14 @@ config WS73_HCI_KUNIT_TEST
 	  ownership, bounded queues and task-scoped allocation failures.
 	  Controller replies exist only in the
 	  explicit test model, never the production driver or USB backend.
+
+config WS73_USB_BOOT_TEST
+	tristate "WS73 synthetic USB boot download test"
+	depends on USB && USB_DUMMY_HCD && DEBUG_KERNEL
+	select WS73_CORE
+	select WS73_USB_IO
+	help
+	  Execute the boot download sequencer using synthetic payloads over
+	  actual URBs to a FunctionFS peer. Only the dummy_hcd controller and
+	  a separate test USB ID can bind. Run only in a hardware-free VM.
+	  This does not qualify real firmware, board setup or boot identity.

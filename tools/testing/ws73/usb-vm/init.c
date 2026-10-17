@@ -23,6 +23,9 @@
 #ifndef WS73_TEST_BOOT
 #define WS73_TEST_BOOT 0
 #endif
+#ifndef WS73_TEST_DOWNLOAD
+#define WS73_TEST_DOWNLOAD 0
+#endif
 static int disconnected;
 static volatile sig_atomic_t alarm_seen;
 
@@ -59,7 +62,7 @@ static void le32(unsigned char *p, uint32_t v) { le16(p, v); le16(p + 2, v >> 16
 static void descriptors(int fd)
 {
  unsigned char d[108] = {0}, s[23] = {0};
- unsigned int endpoints = WS73_TEST_BOOT ? 2 : 5;
+ unsigned int endpoints = (WS73_TEST_BOOT || WS73_TEST_DOWNLOAD) ? 2 : 5;
  unsigned int stride = 9 + endpoints * 7, length = 20 + stride * 2;
  le32(d, FUNCTIONFS_DESCRIPTORS_MAGIC_V2); le32(d + 4, length);
  le32(d + 8, FUNCTIONFS_HAS_FS_DESC | FUNCTIONFS_HAS_HS_DESC);
@@ -248,6 +251,83 @@ static void boot_trials(int control, int *eps, int log, const char *udc)
   printf("WS73_BOOT_CASE %u PASS\n", trial);
  }
 }
+static void download_trials(int control, int *eps, int log, const char *udc)
+{
+ struct sigaction action = { .sa_handler = quiet_alarm };
+ static const char *commands[] = {
+  "FILES 1 0x400000 0x8000 0x0 ", "FILES 1 0x408000 0x1 0x2 ",
+  "FILES 1 0x430000 0x20 0x3 ", "FILES 1 0x440000 0x20 0x3 ",
+ };
+ static const unsigned int sizes[] = {32768, 1, 32, 32};
+ if (sigemptyset(&action.sa_mask) || sigaction(SIGALRM, &action, NULL)) die("download signal");
+ for (unsigned int trial = 0; trial < 7; trial++) {
+  unsigned char got[32768];
+  const char *result = trial == 0 || trial == 6 ? "synthetic download result=0 stage=6 image=2 ack=32" :
+   trial == 1 ? "synthetic download result=-71 stage=2 image=0 ack=0" :
+   trial == 2 ? "synthetic download result=-71 stage=4 image=0 ack=0" :
+   trial == 3 ? "synthetic download result=-110 stage=2 image=0 ack=0" : "synthetic download result=";
+  printf("WS73_DOWNLOAD_CASE %u BEGIN\n", trial); disconnected = 0;
+  setting(G "UDC", udc); enabled(control);
+  for (unsigned int chunk = 0; chunk < 4; chunk++) {
+   ssize_t n = read(eps[1], got, sizeof(got));
+   if (n != (ssize_t)strlen(commands[chunk]) || memcmp(got, commands[chunk], n)) die("FILES wire");
+   printf("WS73_DOWNLOAD_COMMAND chunk=%u actual=%zd verified\n", chunk, n);
+   if (trial == 3) { puts("WS73_DOWNLOAD_WITHHOLD_READY"); break; }
+   if (trial == 4) { puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); break; }
+   struct timespec ready, first;
+   clock_gettime(CLOCK_MONOTONIC, &ready);
+   const char *reply = trial == 1 ? "READX" : "READY";
+   if (write(eps[0], reply, 5) != 5) die("READY IN");
+   printf("WS73_DOWNLOAD_REPLY %s actual=5\n", reply);
+   if (trial == 1) break;
+   if (trial == 5) {
+    wait_kernel(log, "synthetic payload admission");
+    puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); break;
+   }
+   unsigned int first_size = sizes[chunk] > 64 ? 64 : sizes[chunk];
+   n = read(eps[1], got, first_size);
+   clock_gettime(CLOCK_MONOTONIC, &first);
+   if (n != first_size) die("first payload length");
+   long elapsed = (first.tv_sec - ready.tv_sec) * 1000000L + (first.tv_nsec - ready.tv_nsec) / 1000;
+   if (elapsed < 5000) die("READY wait below 5ms");
+   if (sizes[chunk] > first_size) {
+    n = read(eps[1], got + first_size, sizes[chunk] - first_size);
+    if (n != sizes[chunk] - first_size) die("remaining payload length");
+   }
+   for (unsigned int j = 0; j < sizes[chunk]; j++) {
+    unsigned int index = j + (chunk == 1 ? 32768 : 0);
+    unsigned int image = chunk < 2 ? 0 : chunk - 1;
+    if (got[j] != (unsigned char)(index * 37 + 11 + image * 19)) die("payload bytes");
+   }
+   printf("WS73_DOWNLOAD_PAYLOAD chunk=%u actual=%u delay_us=%ld verified\n", chunk, sizes[chunk], elapsed);
+   reply = trial == 2 ? "FILES NO" : "FILES OK";
+   if (write(eps[0], reply, 8) != 8) die("FILES result IN");
+   printf("WS73_DOWNLOAD_REPLY %s actual=8\n", reply);
+   if (trial == 2) break;
+  }
+  if (trial == 0 || trial == 6) {
+   ssize_t n = read(eps[1], got, sizeof(got));
+   if (n != 5 || memcmp(got, "QUIT ", 5)) die("QUIT wire");
+   puts("WS73_DOWNLOAD_QUIT actual=5 verified");
+  }
+  wait_kernel(log, result);
+  if (trial != 4 && trial != 5) {
+   struct itimerval timer = { .it_interval.tv_usec = 100000, .it_value.tv_usec = 100000 };
+   alarm_seen = 0;
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("download quiet timer");
+   ssize_t n = read(eps[1], got, sizeof(got));
+   int saved_errno = errno;
+   memset(&timer, 0, sizeof(timer));
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("download timer stop");
+   if (n != -1 || saved_errno != EINTR || !alarm_seen) die("extra download OUT");
+   puts("WS73_DOWNLOAD_NO_EXTRA_OUT window_ms=100");
+   puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n");
+  }
+  if (!disconnected) wait_kernel(log, "USB disconnect");
+  wait_kernel(log, "synthetic download callbacks drained");
+  printf("WS73_DOWNLOAD_CASE %u PASS\n", trial);
+ }
+}
 int main(void)
 {
  if (getpid() != 1) return 2;
@@ -278,7 +358,7 @@ int main(void)
  }
  closedir(dir);
  if (!udc[0]) die("missing dummy UDC");
- directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", "0x3733");
+ directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", WS73_TEST_DOWNLOAD ? "0x3734" : "0x3733");
  setting(G "bcdUSB", "0x0200");
  directory(G "strings/0x409"); setting(G "strings/0x409/serialnumber", "WS73-VM-SYNTHETIC");
  directory(G "configs/c.1"); directory(G "functions/ffs.ws73"); directory("/dev/ffs");
@@ -287,14 +367,15 @@ int main(void)
  if (control < 0) die("ep0");
  descriptors(control);
  int eps[5];
- unsigned int endpoints = WS73_TEST_BOOT ? 2 : 5;
+ unsigned int endpoints = (WS73_TEST_BOOT || WS73_TEST_DOWNLOAD) ? 2 : 5;
  for (unsigned int i = 0; i < endpoints; i++) {
   char path[32]; snprintf(path, sizeof(path), "/dev/ffs/ep%u", i + 1);
   eps[i] = open(path, O_RDWR);
   if (eps[i] < 0) die(path);
  }
  if (symlink(G "functions/ffs.ws73", G "configs/c.1/ffs.ws73")) die("function link");
- if (WS73_TEST_BOOT) boot_trials(control, eps, log, udc);
+ if (WS73_TEST_DOWNLOAD) download_trials(control, eps, log, udc);
+ else if (WS73_TEST_BOOT) boot_trials(control, eps, log, udc);
  else for (unsigned int trial = 0; trial < 17; trial++) {
   unsigned char reply[124] = {0};
   const char *expected[] = {

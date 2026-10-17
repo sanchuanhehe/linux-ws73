@@ -14,7 +14,7 @@ proof=json.loads((p/'manifest.json').read_text())
 assert proof['status']=='PASS' and proof['speed']=='full'
 for name in ['kernel.log','fixture.log']:
  assert hashlib.sha256((p/name).read_bytes()).hexdigest()==proof['materials'][name]
-k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
+k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_download if proof.get('phase')=='download' else m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
 builddir=pathlib.Path(proof['build_record'])
 build=json.loads((builddir/'manifest.json').read_text())
 m.validate_build(builddir,build,proof['compiled_source'])
@@ -85,6 +85,36 @@ if proof.get('phase')=='boot':
   'post_drain':(k,s.replace('WS73_BOOT_CASE 0 PASS','WS73_TEST_KMSG boot chip observation failed: -19\nWS73_BOOT_CASE 0 PASS')),
   'missing_kernel_observation':(k.replace('boot chip observation','missing observation',1),s),
   'wrong_speed':(k.replace('new full-speed','new high-speed',1),s),
+  'kasan':(k+'\nBUG: KASAN',s),
+  'ubsan':(k+'\nUBSAN:',s),
+  'lockdep':(k+'\npossible circular locking dependency',s),
+ }
+
+
+if proof.get('phase')=='download':
+ trials={
+  'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
+  'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
+  'missing_case':(k,s.replace('WS73_DOWNLOAD_CASE 3 PASS','')),
+  'wrong_speed':(k.replace('new full-speed','new high-speed',1),s),
+  'short_command':(k,s.replace('chunk=0 actual=28 verified','chunk=0 actual=27 verified',1)),
+  'short_payload':(k,s.replace('actual=32768 delay_us','actual=32767 delay_us',1)),
+  'missing_payload':(k,s.replace('WS73_DOWNLOAD_PAYLOAD','MISSING_PAYLOAD',1)),
+  'short_ready_wait':(k,re.sub(r'delay_us=\d+','delay_us=4999',s,count=1)),
+  'bad_ready_accepted':(k,s.replace('result=-71 stage=2','result=0 stage=2',1)),
+  'bad_files_ok_accepted':(k,s.replace('result=-71 stage=4','result=0 stage=4',1)),
+  'wrong_timeout':(k,s.replace('result=-110','result=-90',1)),
+  'missing_withhold':(k,s.replace('WS73_DOWNLOAD_WITHHOLD_READY','')),
+  'wrong_progress':(k,s.replace('image=2 ack=32','image=2 ack=31',1)),
+  'false_ready':(k,s.replace('result=0 stage=6','result=0 stage=0',1)),
+  'missing_quit':(k,s.replace('WS73_DOWNLOAD_QUIT actual=5 verified','',1)),
+  'extra_quit':(k,s.replace('WS73_DOWNLOAD_CASE 1 PASS','WS73_DOWNLOAD_QUIT actual=5 verified\nWS73_DOWNLOAD_CASE 1 PASS')),
+  'wrong_reply':(k,s.replace('FILES NO actual=8','FILES OK actual=8',1)),
+  'missing_quiet':(k,s.replace('WS73_DOWNLOAD_NO_EXTRA_OUT','',1)),
+  'missing_remove':(k,s.replace('WS73_TEST_REMOVE','',1)),
+  'missing_drain':(k,s.replace('synthetic download callbacks drained','missing drain',1)),
+  'post_drain_result':(k,s.replace('WS73_DOWNLOAD_CASE 0 PASS','WS73_TEST_KMSG synthetic download result=0 stage=6 image=2 ack=32\nWS73_DOWNLOAD_CASE 0 PASS')),
+  'missing_kernel_result':(k.replace('synthetic download result=','missing result=',1),s),
   'kasan':(k+'\nBUG: KASAN',s),
   'ubsan':(k+'\nUBSAN:',s),
   'lockdep':(k+'\npossible circular locking dependency',s),

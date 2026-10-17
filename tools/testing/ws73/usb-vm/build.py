@@ -79,7 +79,7 @@ def main():
             assert git("rev-parse", "HEAD") == manifest["source"]
             names = [".config", "arch/x86/boot/bzImage", "vmlinux"]
             names += [f"drivers/misc/ws73/{name}.o" for name in
-                      ("usb", "usb-io", "boot", "firmware", "runtime", "usb-tx", "usb-wire",
+                      ("usb", "usb-io", "usb-boot-test", "boot", "firmware", "runtime", "usb-tx", "usb-wire",
                        "service", "ble-control", "customize", "customize-request", "startup", "ble", "ble-link")]
             for name in names:
                 dest = record / name

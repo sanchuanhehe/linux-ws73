@@ -48,10 +48,11 @@ void verify_chip_reply(void)
 		original = data[index];
 	if (!no_input && !no_output && length >= 18 && length <= 4096) {
 		u32 record = data[2] + (u32)data[3] * 256;
+		u32 message = data[6] + (u32)data[7] * 256;
 
 		valid = data[0] == 0x19 && data[1] == 9 && record >= 18 &&
 			record <= length && data[4] == 10 && data[5] == 0 &&
-			data[6] == 10 && data[7] == 0 && word(data + 8) == 0 &&
+			message >= 10 && message + 8 <= record && word(data + 8) == 0 &&
 			word(data + 12) == 2 && data[16] <= 2 && data[17] <= 2;
 	}
 	ret = btws73_chip_reply_decode(no_input ? NULL : data, length,
@@ -83,10 +84,11 @@ void verify_version_reply(void)
 		original = data[index];
 	if (!no_input && !no_output && length >= 24 && length <= 4096) {
 		u32 record = data[2] + (u32)data[3] * 256;
+		u32 message = data[6] + (u32)data[7] * 256;
 
 		valid = data[0] == 0x19 && data[1] == 9 && record >= 24 &&
 			record <= length && data[4] == 7 && data[5] == 0 &&
-			data[6] == 16 && data[7] == 0 && word(data + 8) == 0 &&
+			message >= 16 && message + 8 <= record && word(data + 8) == 0 &&
 			word(data + 12) == 8;
 	}
 	ret = ws73_version_reply_decode(no_input ? NULL : data, length,

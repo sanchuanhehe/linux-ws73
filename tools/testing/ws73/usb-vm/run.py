@@ -35,13 +35,13 @@ def validate(kernel, log, speed="full"):
   assert sum('USB disconnect' in line for line in records)==1,number
   if n in [0,1,7,8,11,16]:assert sum('runtime version observation: firmware 0x010a6e7f ROM 0x12345678' in line for line in records)==1,number
   out=[('0','36'),('1','36'),('2','128')]
-  incoming=[] if n==4 else [('chip','123' if n==3 else '124')]
+  incoming=[] if n==4 else [('chip','123' if n==3 else '188' if n==0 else '124')]
   if n in [0,1,5,6,7,8,9,10,11,12,13,14,15,16]:
    out+=[('3','128')]
    if n==7:incoming+=[('stale','124')]
    if n==8:incoming += [('unsupported','156'),('notification','156'),('duplicate','156')]
    if n in [9,10]:incoming += [('notification','108' if n==9 else '124')]
-   elif n not in [12,13,14,15]:incoming+=[('version','124')]
+   elif n not in [12,13,14,15]:incoming+=[('version','188' if n==0 else '124')]
   interrupts=[]
   if n==11:interrupts=[('empty','8','00000000'),('event','8','80000819'),('duplicate','8','80000819')]
   if 12<=n<=16:interrupts=[('event','7' if n==12 else '8', '00040001' if n==14 else '00000021' if n==15 else '00000041')]

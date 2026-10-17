@@ -200,6 +200,70 @@ static void ws73_version_invalid_test(struct kunit *test)
 	KUNIT_EXPECT_MEMEQ(test, &version, &before, sizeof(version));
 }
 
+static void ws73_platform_allocation_test(struct kunit *test)
+{
+	struct btws73_chip_identity chip, chip_before = { 0xa5, 0x5a };
+	struct ws73_version version, version_before = { 0xa5a5a5a5, 0x5a5a5a5a };
+	u8 data[96];
+	unsigned int kind, length;
+
+	for (kind = 0; kind < 2; kind++) {
+		unsigned int minimum = kind ? 16 : 10;
+
+		/* Nonzero allocation padding must never become returned data. */
+		memset(data, 0xa5, sizeof(data));
+		data[0] = 0x19;
+		data[1] = 9;
+		put_unaligned_le16(sizeof(data), data + 2);
+		put_unaligned_le16(kind ? 7 : 10, data + 4);
+		put_unaligned_le32(0, data + 8);
+		put_unaligned_le32(kind ? 8 : 2, data + 12);
+		put_unaligned_le32(0x010a6e00, data + 16);
+		put_unaligned_le32(0x00010000, data + 20);
+		if (!kind) {
+			data[16] = 2;
+			data[17] = 0;
+		}
+		for (length = 0; length <= U16_MAX; length++) {
+			bool valid = length >= minimum && length <= sizeof(data) - 8;
+			int ret;
+
+			put_unaligned_le16(length, data + 6);
+			chip = chip_before;
+			version = version_before;
+			ret = kind ? ws73_version_reply_decode(data, sizeof(data), &version) :
+				btws73_chip_reply_decode(data, sizeof(data), &chip);
+			KUNIT_EXPECT_EQ(test, ret, valid ? 0 : -EMSGSIZE);
+			if (!valid) {
+				KUNIT_EXPECT_MEMEQ(test, &chip, &chip_before, sizeof(chip));
+				KUNIT_EXPECT_MEMEQ(test, &version, &version_before,
+						   sizeof(version));
+			} else if (kind) {
+				KUNIT_EXPECT_EQ(test, version.firmware, 0x010a6e00);
+				KUNIT_EXPECT_EQ(test, version.rom, 0x00010000);
+			} else {
+				KUNIT_EXPECT_EQ(test, chip.package, 2);
+				KUNIT_EXPECT_EQ(test, chip.bus, 0);
+			}
+		}
+		put_unaligned_le16(88, data + 6);
+		for (length = 0; length < sizeof(data); length++) {
+			chip = chip_before;
+			version = version_before;
+			KUNIT_EXPECT_EQ(test, kind ?
+				ws73_version_reply_decode(data, length, &version) :
+				btws73_chip_reply_decode(data, length, &chip), -EMSGSIZE);
+			KUNIT_EXPECT_MEMEQ(test, &chip, &chip_before, sizeof(chip));
+			KUNIT_EXPECT_MEMEQ(test, &version, &version_before, sizeof(version));
+		}
+		/* An allocation cannot substitute for the exact returned-data size. */
+		put_unaligned_le32(kind ? 9 : 3, data + 12);
+		KUNIT_EXPECT_EQ(test, kind ?
+			ws73_version_reply_decode(data, sizeof(data), &version) :
+			btws73_chip_reply_decode(data, sizeof(data), &chip), -EMSGSIZE);
+	}
+}
+
 static void ws73_runtime_versions_test(struct kunit *test)
 {
 	struct ws73_runtime_mock *mock;
@@ -375,6 +439,7 @@ static void ws73_runtime_independent_rx_test(struct kunit *test)
 static struct kunit_case ws73_runtime_cases[] = {
 	KUNIT_CASE(ws73_version_wire_test),
 	KUNIT_CASE(ws73_version_invalid_test),
+	KUNIT_CASE(ws73_platform_allocation_test),
 	KUNIT_CASE(ws73_runtime_versions_test),
 	KUNIT_CASE(ws73_runtime_query_test),
 	KUNIT_CASE(ws73_runtime_failures_test),

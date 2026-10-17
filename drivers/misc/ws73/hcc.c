@@ -33,7 +33,7 @@ int btws73_chip_reply_decode(const u8 *data, size_t len,
 			     struct btws73_chip_identity *identity)
 {
 	struct btws73_chip_identity parsed;
-	u16 record_len;
+	u16 record_len, message_len;
 
 	if (!data || !identity)
 		return -EINVAL;
@@ -48,7 +48,9 @@ int btws73_chip_reply_decode(const u8 *data, size_t len,
 	if (get_unaligned_le16(data + 4) != 10) /* GET_CHIP_TYPE_COMPLETE */
 		return -EPROTO;
 	/* Status u32, returned length u32, package u8, bus u8. */
-	if (get_unaligned_le16(data + 6) != 10 ||
+	message_len = get_unaligned_le16(data + 6);
+	/* SDK110 replies can include unused allocation bytes in message_len. */
+	if (message_len < 10 || message_len > record_len - 8 ||
 	    get_unaligned_le32(data + 12) != 2)
 		return -EMSGSIZE;
 	if (get_unaligned_le32(data + 8))
@@ -83,7 +85,7 @@ EXPORT_SYMBOL_NS_GPL(ws73_version_query_encode, "WS73");
 int ws73_version_reply_decode(const u8 *data, size_t len, struct ws73_version *version)
 {
 	struct ws73_version parsed;
-	u16 record_len;
+	u16 record_len, message_len;
 
 	if (!data || !version)
 		return -EINVAL;
@@ -92,8 +94,10 @@ int ws73_version_reply_decode(const u8 *data, size_t len, struct ws73_version *v
 	if (data[0] != 0x19 || data[1] != 9 || get_unaligned_le16(data + 4) != 7)
 		return -EPROTO;
 	record_len = get_unaligned_le16(data + 2);
+	message_len = get_unaligned_le16(data + 6);
 	if (record_len < 24 || record_len > len ||
-	    get_unaligned_le16(data + 6) != 16 || get_unaligned_le32(data + 12) != 8)
+	    message_len < 16 || message_len > record_len - 8 ||
+	    get_unaligned_le32(data + 12) != 8)
 		return -EMSGSIZE;
 	if (get_unaligned_le32(data + 8))
 		return -EREMOTEIO;

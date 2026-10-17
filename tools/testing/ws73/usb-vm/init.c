@@ -796,7 +796,8 @@ int main(void)
  else if (WS73_TEST_DOWNLOAD) download_trials(control, eps, log, udc);
  else if (WS73_TEST_BOOT) boot_trials(control, eps, log, udc);
  else for (unsigned int trial = 0; trial < 17; trial++) {
-  unsigned char reply[124] = {0};
+  unsigned char reply[188] = {0};
+  size_t wire_size = trial == 0 ? sizeof(reply) : 124;
   const char *expected[] = {
    "runtime chip observation: package 2 bus 0; firmware compatibility unverified",
    "runtime chip observation: package 0 bus 0; firmware compatibility unverified",
@@ -821,32 +822,33 @@ int main(void)
   for (unsigned int step = 0; step < 3; step++) transaction(eps[1], step);
   if (trial == 4) { puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); }
   else {
-   le32(reply, 2); le32(reply + 4, sizeof(reply)); le32(reply + 8, 9);
-   le16(reply + 12, 32); reply[92] = 0x19; reply[93] = 9;
-   le16(reply + 94, 32); le16(reply + 96, 10); le16(reply + 98, 10);
+   le32(reply, 2); le32(reply + 4, wire_size); le32(reply + 8, 9);
+   le16(reply + 12, wire_size - 92); reply[92] = 0x19; reply[93] = 9;
+   le16(reply + 94, wire_size - 92); le16(reply + 96, 10); le16(reply + 98, trial == 0 ? 88 : 10);
    le32(reply + 100, trial == 2 ? 1 : 0); le32(reply + 104, 2);
    reply[108] = trial == 1 ? 0 : 2;
-   size_t length = trial == 3 ? sizeof(reply) - 1 : sizeof(reply);
+   if (trial == 0) memset(reply + 110, 0xa5, wire_size - 110);
+   size_t length = trial == 3 ? wire_size - 1 : wire_size;
    if (write(eps[0], reply, length) != (ssize_t)length) die("IN actual length");
    printf("WS73_TEST_IN kind=chip actual=%zu synthetic\n", length);
   }
   if (trial == 0 || trial == 1 || trial >= 5) {
    transaction(eps[1], 3);
    if (trial == 7) {
-    if (write(eps[0], reply, sizeof(reply)) != sizeof(reply)) die("stale chip IN");
+    if (write(eps[0], reply, wire_size) != wire_size) die("stale chip IN");
     puts("WS73_TEST_IN kind=stale actual=124 synthetic");
    }
    if (trial >= 8 && trial <= 10) notifications(eps[0], trial);
    if (trial >= 11 && trial <= 15) interrupt_event(eps[2], log, trial);
    if (trial < 9 || trial == 11 || trial == 16) {
-   memset(reply + 92, 0, 32);
-   reply[92] = 0x19; reply[93] = 9; le16(reply + 94, 32);
-   le16(reply + 96, 7); le16(reply + 98, 16);
+   memset(reply + 92, trial == 0 ? 0xa5 : 0, wire_size - 92);
+   reply[92] = 0x19; reply[93] = 9; le16(reply + 94, wire_size - 92);
+   le16(reply + 96, 7); le16(reply + 98, trial == 0 ? 88 : 16);
    le32(reply + 100, trial == 5 ? 1 : 0);
    le32(reply + 104, trial == 6 ? 7 : 8);
    le32(reply + 108, 0x010a6e7f); le32(reply + 112, 0x12345678);
-   if (write(eps[0], reply, sizeof(reply)) != sizeof(reply)) die("version IN");
-   puts("WS73_TEST_IN kind=version actual=124 synthetic");
+   if (write(eps[0], reply, wire_size) != wire_size) die("version IN");
+   printf("WS73_TEST_IN kind=version actual=%zu synthetic\n", wire_size);
    }
   }
   wait_kernel(log, expected[trial]);

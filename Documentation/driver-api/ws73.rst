@@ -7,8 +7,8 @@ Status and scope
 ----------------
 
 This branch is a development series based on Linux
-70dd4ee72eb2d5793c62e71c14e3aba78e5a4e56. The initial codec is executable
-kernel code consumed by its KUnit tests. The shared module also contains
+70dd4ee72eb2d5793c62e71c14e3aba78e5a4e56. The wire codecs are executable
+kernel code consumed by the native HCI adapter and KUnit tests. The shared module also contains
 firmware validation and a bounded download executor with injectable I/O.
 The USB parent can issue one fixed boot READM chip observation, or a
 serialized runtime HCC identity/version queries with independent RX, and drain its
@@ -38,6 +38,61 @@ compatibility, version or boot/runtime identity agreement.
 
    ws73-qualification-20261017
    ws73-roadmap
+
+Native auxiliary BLE consumer (publication still gated)
+-------------------------------------------------------
+
+``ble.c`` owns one auxiliary endpoint per published BLE function, with exported
+WS73-namespaced operations and per-device callbacks. Backend calls are sleepable
+and serialized; RX/fault callbacks are serialized under an IRQ-safe lock and
+must not sleep or reenter the shared interface. Unbind drains callbacks. Stop
+gates RX before issuing a real backend disable; success must come from the
+backend's action acknowledgement. First errors persist, with no reset API.
+A BLE-local fault does not reset an active sibling. The physical owner remains
+responsible for classifying and broadcasting whole-chip faults.
+
+The owner must establish verified U/E USB identity, firmware epoch/version,
+board/address inputs and startup handshakes, then disable/drain the initial BLE
+session before publishing. These are constructor preconditions, not facts that
+an arbitrary caller can prove by passing a boolean. The current USB observer
+**does not call this constructor**. Only the explicit synthetic KUnit backends
+publish endpoints so far; they do not supply hardware qualification.
+
+The owner must abort IO and join RX/fault producers before removal. Removal
+closes admission, joins active backend calls, clears backend pointers and
+unregisters the auxiliary device. Its allocation, ID and core module reference
+survive until the final device reference is released. Calls through a retained
+reference return the terminal error without touching the removed backend.
+
+``drivers/bluetooth/btws73.c`` is the actual auxiliary consumer. It allocates a
+per-device ``hci_dev``, sets HCI_USB and the auxiliary parent, and implements
+setup/open/close/flush/send. Setup requests real Local Supported Features and
+BD_ADDR through the native HCI command engine. It requires LE-only features
+and a nonzero/non-FF public address; no fixed address, invented capabilities,
+SCO/ISO support or speculative quirk is supplied. These setup commands have not
+yet been exercised against a successful virtual or physical controller.
+
+TX accepts command/ACL packets only. It validates a copied H4 packet before
+admission and limits the queue plus the active worker packet to 64 packets and
+96000 H4 bytes. On success the adapter consumes the caller's skb; on error the
+caller retains it. One worker encodes HCC into bounded storage and submits a
+borrowed record to the shared backend. Local TX completion is not HCI command
+success or controller credit. HCI command/data credits remain in the native
+stack. Flush stops TX admission and drains/purges its worker/queue while leaving
+RX active; close separately stops receive admission and requests BLE disable.
+
+RX uses the bounded H4 reassembler and copies complete event/ACL packets into
+owned skbs before ``hci_recv_frame``. No borrowed URB storage escapes. Transport
+or parse failure schedules HCI withdrawal in a separate worker; no fabricated
+Command Complete or Hardware Error event is sent. Removal unbinds callbacks,
+drains TX and fault work, unregisters HCI and releases its state. Normal TX/RX,
+queue saturation, active flush and physical enable/disable remain unqualified.
+
+The codec is built once as a hidden shared component, with its own BTWS73
+namespace, avoiding duplicate definitions when both the consumer and codec
+KUnit tests are enabled. BT_WS73 depends on WS73_USB, constraining built-in/
+module combinations. The shared core selects auxiliary bus but not Bluetooth
+or mac80211. Build and VM commands are in ``tools/testing/ws73/README``.
 
 Runtime USB framing baseline
 ----------------------------
@@ -116,7 +171,8 @@ function or bypass the boot/cold-start and firmware-version gates. Boot and
 runtime objects do not share requests, callbacks or identity cache. Unknown
 outer types/queues and unsupported notification tags/actions are dropped as
 whole aggregates. Malformed known records terminate the observation.
-BLE frames have no consumer yet and are not presented as HCI events.
+The observation-only USB parent does not publish a BLE endpoint or forward
+BLE frames to the native HCI consumer yet.
 
 GET_VERSION is SDK110 platform request 13 with one input byte equal to 1,
 padded to a 32-byte HCC record. Reply 7 contains status u32, returned length
@@ -156,7 +212,8 @@ both URBs, including completions that already left their anchors, then joins
 initialization and fault work before freeing either buffer. An optional dynamic
 debug message marks that actual drain boundary for lifecycle verification.
 Register endpoints, invoking BLE controls from validated initialization,
-firmware readiness and auxiliary/HCI consumers remain pending.
+firmware readiness and publishing the native auxiliary/HCI consumer from this
+USB owner remain pending.
 
 Function notification reception
 -------------------------------
@@ -670,8 +727,9 @@ Architecture decision 0001 (selected implementation)
 
 HCI validation and H4 transmit framing stay local to drivers/bluetooth.
 HCC receive and chip identity helpers now live in drivers/misc/ws73 and
-are exported in the WS73 namespace. There is no registration API, auxiliary
-child or unused SLE interface yet. The USB owner currently provides bounded
+are exported in the WS73 namespace. A per-device auxiliary BLE endpoint and
+actual HCI consumer now exist; the USB owner does not publish that endpoint yet.
+There is no Wi-Fi child or unused SLE interface. The USB owner currently provides bounded
 boot observations, runtime HCC identity/version and notification reception,
 and request teardown. Firmware loading and native consumers remain to be
 integrated. Only actual Wi-Fi/BLE consumer needs justify extraction
@@ -690,8 +748,9 @@ disconnect admission share a spinlock. Disconnect sets a terminal flag,
 kills anchored URBs and joins initialization before releasing the parent;
 each transfer joins its completion before freeing its request storage.
 The worker does not retry failed reads or register functions. Runtime USB
-queue sequencing and RX/IRQ callback drain are implemented; consumer data
-queues, stop/drain interfaces and function registration remain pending.
+queue sequencing and RX/IRQ callback drain are implemented. The new BLE
+endpoint and HCI queue/stop contracts still need connection to the qualified
+USB startup path and positive data-path integration tests.
 Protocol HCI credits remain separate from
 USB queue slots. A BLE close must not reset an active Wi-Fi consumer.
 

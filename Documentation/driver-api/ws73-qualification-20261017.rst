@@ -1112,3 +1112,85 @@ register accessibility, register provenance, board/trim validity, firmware
 loading, 32-KiB boot TX, READY delay, armed startup/class-control, HCI or Wi-Fi.
 No new physical qualification or external submission occurred. The later
 documentation commit is not the compiled/tested source identity.
+
+Auxiliary BLE endpoint and native HCI consumer
+--------------------------------------------
+
+Source ``b440989db41e6119461cef16a601e2c8a3659e97`` adds a per-device auxiliary
+BLE endpoint together with its real Bluetooth HCI consumer. The endpoint owns
+serialized backend admission, atomic receive/fault callback binding and terminal
+errors; backend pointers are cleared before final device release can be delayed
+by external references. The consumer implements setup/open/close/flush/send,
+bounded command/ACL TX and owned event/ACL RX, and deferred HCI withdrawal on
+transport/parse faults. No physical USB publication call was added: qualified
+firmware/identity/board/startup and a disabled/drained BLE baseline remain
+required. No SLE placeholder or private userspace ABI was introduced.
+
+Subsequent fixes clear stale auxiliary private data on failed probe/remove and
+keep RX active during TX flush. Final functional source is
+``3bfa3354ab86efbd7f7793d5f86a45bc06127454``. Codec exports are namespaced and
+compiled once, including when its tests and the HCI driver are both built in.
+The selected tristate dependencies prevent a built-in consumer with a modular
+WS73 USB owner. Not all legal mixed combinations have been compiled yet.
+
+The first regular KUnit run passes 72 cases, including three new endpoint
+cases: enable/disable admission and callback gating; a failed enable retained
+through removal and a delayed final reference; and invalid HCC input plus a
+terminal send failure. No native HCI consumer is bound in that configuration.
+A separate HCI-only configuration binds the actual consumer to an explicitly
+synthetic backend that rejects enable. Native HCI registration/power-on occurs,
+then the fault withdraws HCI; consumer rebind cannot clear the endpoint error.
+No successful action or HCI command completion is fabricated. That configuration
+passes one native lifecycle case and the existing 16 codec cases.
+
+After the cleanup/flush fixes, the HCI-only run passes again. Test source
+``84da8c9b1cc2e988b7380c8adaae5bb232f3be41`` then enables SMP, lockdep and
+DEBUG_ATOMIC_SLEEP alongside KASAN/UBSAN. The HCI-only 17 cases pass under that
+configuration. The separate core-only VM passes 56 cases with NET and Bluetooth
+disabled under the same instrumentation. These counts describe their individual
+configurations, not independent repetitions of every test in one kernel.
+
+Two build-tool failures are retained. The initial builtin checker mistakenly
+required the SPDX comment to appear in generated .config and failed before C
+compilation. The first module-only build omitted the corresponding kernel and
+modpost rejected missing vmlinux symbols. The corrected builder validates only
+configuration requests and builds bzImage before modules; unresolved symbols
+remain errors. The all-module WS73 core/USB/HCI/codec combination passes. The
+repository-relative public tool passes the same combination at source
+``f9298bfa4828c4caeb6a53238b7e522b6a314510`` (tools/README changes only).
+Module metadata shows HCI depending on bluetooth, ws73-core and btws73_proto,
+with WS73/BTWS73 namespace imports. This is compile/link evidence, not module
+load/unload qualification. W=1 reports existing kernel-doc warnings outside
+WS73 and an unused ACPI num_carats variable; the WS73 sources are warning-free
+in this build and the new C/header files are strict-checkpatch clean.
+
+Evidence manifests, including failed attempts (SHA-256):
+
+* ``20261017T092630.839944Z`` (72 KUnit PASS),
+  ``1232059d1c7d3533ed283c202d74cd7690f284fcf64dae87fbdb33504fd55254``.
+* ``hci-build-builtin-20261017T092819.406083Z`` (FAIL, comment/config check),
+  ``499520825dde18570e0425d9ecfa4d916f95b90029b56d50c9fe4f33e8c9b24d``.
+* ``20261017T093024.236035Z`` (17 HCI/codec KUnit PASS),
+  ``57a3fd61a4154573f9b49ab989b54dddde05ab59f143e2bba8de672f0341b4d3``.
+* ``hci-build-module-20261017T093153.641025Z`` (FAIL, missing kernel symbol table),
+  ``f98765ef3260bb5c9a159530750afcb20cbf4a7db6d5acdd3cdd83839b1bae70``.
+* ``hci-build-module-20261017T093324.943534Z`` (module build PASS),
+  ``2d72907cfad740d1468d7d28fe911b694df5c50dc86676900caf5d2f8cb2673a``.
+* ``20261017T093617.967909Z`` (17 HCI/codec KUnit PASS after fixes),
+  ``4ad6fafb94cabcbaff5393b6d1965057eb1d26e1c87410c2670a00b00002d1da``.
+* ``20261017T093712.640719Z`` (17 HCI/codec SMP/lock KUnit PASS),
+  ``e3a412747d91f07fa0597d1f472b3740c09da3cf4edb012391222304d821cf5c``.
+* ``20261017T094019.100325Z`` (56 core-only SMP/lock KUnit PASS),
+  ``5a7a50c58557b738cf0961127496b37d310a4c8703691d12f15b6310efe46b05``.
+* ``hci-build-module-20261017T094254.259481Z`` (public module build PASS),
+  ``0e337a83eccb24be545ea6804c695acf0faf30142ff9437c3c249174615dcd9d``.
+
+The public commands and scope distinctions are in ``tools/testing/ws73/README``.
+These tests do not execute successful HCI setup, command/ACL traffic, queue
+saturation, active RX during flush, peer exchange or actual USB BLE enable.
+Callback/backend concurrency and full module-load ordering need further tests.
+The USB parent still observes identity without publishing a BLE function;
+boot/firmware/board initialization integration, cold U/E evidence, peer/AP
+resources, Wi-Fi, firmware delivery and upstream review remain open. No new
+physical operation, RFC or formal submission occurred. Documentation commits
+do not replace the exact compiled source identities above.

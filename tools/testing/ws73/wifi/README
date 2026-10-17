@@ -88,3 +88,34 @@ late-reply cancellation, device epoch validation, command whitelist, HCC routing
 key transactions, mac80211 operations or functional STA. Those contracts still
 need the real consumer and original-firmware validation. A tuple match alone
 cannot prove freshness after reconnect; parser success is not command success.
+
+Bounded FRW transactions
+------------------------
+The Wi-Fi test module also links frw-transaction.c. One sleepable caller owns
+command storage, while an independent atomic-safe RX entry point validates and
+copies a bounded reply. A second caller gets EBUSY. Sequences start at one and
+are never reused in an instance; exhaustion permanently closes admission.
+The timeout is one absolute monotonic deadline (at most 2000 ms), including send.
+The transport must honor that deadline and drain borrowed command storage before
+returning. Exact local send length and an accepted reply are both required.
+Device callback status is returned separately, including nonzero status.
+
+Timeout, short/failed send, malformed active reply, duplicate accepted reply or
+abort closes the instance. Old tuples cannot complete a subsequent command.
+Shutdown aborts and joins the admitted caller; the owner still has to cancel its
+transport and stop/join RX and every other entry point before freeing storage.
+Already admitted send work can overlap abort; the transport must enforce its own
+disconnect admission and cancellation. No mutex is held across an RX callback.
+Inputs/result must not alias the transaction's storage or each other.
+
+The nine transaction cases add early reply with failed/short/long send, duplicate
+and malformed replies, abort, expired and missing replies, sequence exhaustion,
+invalid requests, copied RX bytes, concurrent admission and real kthread shutdown
+draining. Together with the eight codec cases there are 17 expected KUnit cases.
+The runner requires both suites, every ordered case, raw summaries and VM exit.
+
+This is an independently testable internal component, not an active Wi-Fi USB
+consumer. No command whitelist, register access, mac80211 adapter, firmware ABI
+qualification or device epoch/reset guarantee follows from these tests. The
+candidate codec's exact response profile still requires original-firmware
+observation. A new local object alone cannot justify retrying uncertain hardware.

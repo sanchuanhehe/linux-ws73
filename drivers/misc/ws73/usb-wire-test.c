@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
 #include <linux/module.h>
+#include <linux/sched.h>
 #include <linux/unaligned.h>
 
 #include "usb-wire.h"
@@ -225,12 +226,133 @@ static void ws73_usb_aggregate_errors_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_usb_aggregate_decode(data, length, &rx), 0);
 }
 
+static u32 ws73_mutation_next(u32 *state)
+{
+	*state ^= *state << 13;
+	*state ^= *state >> 17;
+	*state ^= *state << 5;
+	return *state;
+}
+
+/* Bounded deterministic mutation, with KASAN seeing the exact input extent. */
+static void ws73_usb_mutation_test(struct kunit *test)
+{
+	static const u32 seeds[] = { 0x73e110, 0x387373, 0xdeadbeef, 0x10203040 };
+	static const u8 queues[] = { 7, 9, 10 };
+	static const u8 notification[] = { 0x50, 10, 8, 0, 4, 0, 4, 0, 0, 0, 0, 0 };
+	u8 *scratch = kunit_kmalloc(test, BTWS73_RX_MAX_SIZE + 32, GFP_KERNEL);
+	struct ws73_usb_rx rx, before;
+	unsigned int seed, attempt, i, accepted, rejected;
+
+	KUNIT_ASSERT_NOT_NULL(test, scratch);
+	memset(&before, 0xa5, sizeof(before));
+	for (seed = 0; seed < ARRAY_SIZE(seeds); seed++) {
+		u32 state = seeds[seed];
+
+		accepted = 0;
+		rejected = 0;
+		for (attempt = 0; attempt < 4096; attempt++) {
+			u32 random = ws73_mutation_next(&state);
+			u8 queue = queues[attempt % ARRAY_SIZE(queues)];
+			unsigned int count = 1 + random % BTWS73_RX_MAX_RECORDS;
+			u16 size = ws73_mutation_next(&state) % 64 ? 32 : 4096;
+			size_t length, offset;
+			u8 *allocation, *data;
+			int ret;
+
+			length = ws73_usb_rx_fixture(scratch, count, queue, size);
+			if (queue == 10)
+				for (i = 0; i < count; i++)
+					memcpy(scratch + 92 + i * size, notification,
+					       sizeof(notification));
+			switch (attempt % 8) {
+			case 0: /* Keep valid seeds in the same stream as rejected inputs. */
+				break;
+			case 1:
+				scratch[random % length] ^= BIT(random % 8);
+				break;
+			case 2:
+				length = random % length;
+				break;
+			case 3:
+				put_unaligned_le32(random, scratch + 4);
+				break;
+			case 4:
+				put_unaligned_le16(random, scratch + 12 + 2 * (random % 24));
+				break;
+			case 5:
+				for (i = 0; i < 16; i++) {
+					size_t position = ws73_mutation_next(&state) % length;
+
+					scratch[position] = ws73_mutation_next(&state);
+				}
+				break;
+			case 6:
+				memset(scratch + length, 0xa7, 1 + random % 31);
+				length += 1 + random % 31;
+				put_unaligned_le32(length, scratch + 4);
+				break;
+			case 7:
+				put_unaligned_le16(random,
+						   scratch + 92 + (random % count) * size + 2);
+				break;
+			}
+			allocation = kunit_kmalloc(test, length + 1, GFP_KERNEL);
+			KUNIT_ASSERT_NOT_NULL(test, allocation);
+			allocation[0] = 0x5a;
+			/* Unaligned, immediately followed by the KASAN redzone. */
+			data = allocation + 1;
+			memcpy(data, scratch, length);
+			memset(&rx, 0xa5, sizeof(rx));
+			ret = ws73_usb_aggregate_decode(data, length, &rx);
+			KUNIT_ASSERT_LE(test, ret, 0);
+			KUNIT_ASSERT_EQ(test, allocation[0], 0x5a);
+			KUNIT_ASSERT_MEMEQ(test, data, scratch, length);
+			if (ret) {
+				rejected++;
+				KUNIT_ASSERT_MEMEQ(test, &rx, &before, sizeof(rx));
+			} else {
+				accepted++;
+				KUNIT_ASSERT_GE(test, length, BTWS73_RX_HEADER_SIZE);
+				KUNIT_ASSERT_TRUE(test,
+						  rx.queue == 7 || rx.queue == 9 || rx.queue == 10);
+				KUNIT_ASSERT_GT(test, rx.count, 0);
+				KUNIT_ASSERT_LE(test, rx.count, BTWS73_RX_MAX_RECORDS);
+				offset = BTWS73_RX_HEADER_SIZE;
+				for (i = 0; i < rx.count; i++) {
+					KUNIT_ASSERT_PTR_EQ(test, rx.record[i].data, data + offset);
+					KUNIT_ASSERT_GT(test, rx.record[i].len, 0);
+					KUNIT_ASSERT_LE(test, rx.record[i].len,
+							BTWS73_RX_MAX_RECORD_SIZE);
+					KUNIT_ASSERT_LE(test, rx.record[i].len, length - offset);
+					offset += rx.record[i].len;
+					if (rx.queue == 10) {
+						KUNIT_ASSERT_GE(test, rx.notification[i],
+								WS73_NOTIFY_BOOT);
+						KUNIT_ASSERT_LE(test, rx.notification[i],
+								WS73_NOTIFY_BLE_CLOSE);
+					}
+				}
+				KUNIT_ASSERT_EQ(test, offset, length);
+			}
+			kunit_kfree(test, allocation);
+			if (!(attempt % 64))
+				cond_resched();
+		}
+		KUNIT_ASSERT_GT(test, accepted, 0);
+		KUNIT_ASSERT_GT(test, rejected, 0);
+		kunit_info(test, "mutation seed=%08x inputs=4096 accepted=%u rejected=%u\n",
+			   seeds[seed], accepted, rejected);
+	}
+}
+
 static struct kunit_case ws73_usb_wire_cases[] = {
 	KUNIT_CASE(ws73_usb_control_test),
 	KUNIT_CASE(ws73_usb_single_test),
 	KUNIT_CASE(ws73_usb_single_limits_test),
 	KUNIT_CASE(ws73_usb_aggregate_test),
 	KUNIT_CASE(ws73_usb_aggregate_errors_test),
+	KUNIT_CASE(ws73_usb_mutation_test),
 	{}
 };
 

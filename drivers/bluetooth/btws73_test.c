@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <kunit/test.h>
 #include <linux/module.h>
+#include <linux/sched.h>
 #include <linux/unaligned.h>
 
 #include "btws73_proto.h"
@@ -451,6 +452,134 @@ static void btws73_h4_errors(struct kunit *test)
 	KUNIT_EXPECT_MEMEQ(test, packet, reset_event, sizeof(reset_event));
 }
 
+static u32 btws73_mutation_next(u32 *state)
+{
+	*state ^= *state << 13;
+	*state ^= *state >> 17;
+	*state ^= *state << 5;
+	return *state;
+}
+
+static void btws73_h4_state_mutation(struct kunit *test)
+{
+	static const u32 seeds[] = { 0x73e110, 0x387373, 0xdeadbeef, 0x10203040 };
+	static const u8 wire[] = {
+		4, 0x0e, 4, 1, 3, 0x0c, 0,
+		2, 1, 0x20, 4, 0, 0x11, 0x22, 0x33, 0x44,
+		4, 0xff, 0,
+	};
+	struct btws73_h4 *stream = kunit_kzalloc(test, sizeof(*stream), GFP_KERNEL);
+	struct btws73_h4 *snapshot = kunit_kmalloc(test, sizeof(*snapshot), GFP_KERNEL);
+	u8 *pending = kunit_kmalloc(test, BTWS73_H4_MAX_SIZE, GFP_KERNEL);
+	unsigned int seed, step;
+
+	KUNIT_ASSERT_NOT_NULL(test, stream);
+	KUNIT_ASSERT_NOT_NULL(test, snapshot);
+	KUNIT_ASSERT_NOT_NULL(test, pending);
+	for (seed = 0; seed < ARRAY_SIZE(seeds); seed++) {
+		u32 state = seeds[seed];
+		size_t pending_len = 0, cursor = 0;
+		unsigned int complete = 0, partial = 0, errors = 0, sticky = 0, resets = 0;
+
+		btws73_h4_reset(stream);
+		for (step = 0; step < 4096; step++) {
+			u32 random = btws73_mutation_next(&state);
+			unsigned int action = random % 8, i;
+			size_t length, consumed = SIZE_MAX, packet_len = SIZE_MAX;
+			const u8 *packet = NULL;
+			u8 scratch[64], *allocation, *data;
+			int ret;
+
+			if (!action) {
+				btws73_h4_reset(stream);
+				KUNIT_ASSERT_EQ(test, stream->len, 0);
+				KUNIT_ASSERT_FALSE(test, stream->failed);
+				pending_len = 0;
+				cursor = 0;
+				resets++;
+				continue;
+			}
+			if (action == 1) {
+				scratch[0] = 0xff;
+				length = 1;
+			} else if (action == 2) {
+				length = btws73_mutation_next(&state) % sizeof(scratch);
+				for (i = 0; i < length; i++)
+					scratch[i] = btws73_mutation_next(&state);
+			} else {
+				length = min_t(size_t, 1 + random % 17, sizeof(wire) - cursor);
+				memcpy(scratch, wire + cursor, length);
+				if (action == 7)
+					scratch[random % length] ^= BIT(random % 8);
+			}
+			allocation = kunit_kmalloc(test, length + 1, GFP_KERNEL);
+			KUNIT_ASSERT_NOT_NULL(test, allocation);
+			allocation[0] = 0x5a;
+			data = allocation + 1;
+			memcpy(data, scratch, length);
+			memcpy(snapshot, stream, sizeof(*snapshot));
+			ret = btws73_h4_feed(stream, data, length, &consumed, &packet, &packet_len);
+			KUNIT_ASSERT_LE(test, consumed, length);
+			KUNIT_ASSERT_LE(test, stream->len, BTWS73_H4_MAX_SIZE);
+			KUNIT_ASSERT_EQ(test, allocation[0], 0x5a);
+			KUNIT_ASSERT_MEMEQ(test, data, scratch, length);
+			if (snapshot->failed) {
+				sticky++;
+				KUNIT_ASSERT_EQ(test, ret, -ESHUTDOWN);
+				KUNIT_ASSERT_EQ(test, consumed, 0);
+				KUNIT_ASSERT_MEMEQ(test, stream, snapshot, sizeof(*stream));
+			} else if (ret < 0) {
+				errors++;
+				KUNIT_ASSERT_TRUE(test, stream->failed);
+				pending_len = 0;
+			} else {
+				KUNIT_ASSERT_FALSE(test, stream->failed);
+				KUNIT_ASSERT_LE(test, consumed, BTWS73_H4_MAX_SIZE - pending_len);
+				memcpy(pending + pending_len, data, consumed);
+				pending_len += consumed;
+				if (!ret) {
+					partial++;
+					KUNIT_ASSERT_EQ(test, consumed, length);
+					KUNIT_ASSERT_EQ(test, pending_len, stream->len);
+				} else {
+					complete++;
+					KUNIT_ASSERT_EQ(test, ret, 1);
+					KUNIT_ASSERT_PTR_EQ(test, packet, stream->data);
+					KUNIT_ASSERT_EQ(test, packet_len, pending_len);
+					KUNIT_ASSERT_GE(test, packet_len, 3);
+					KUNIT_ASSERT_MEMEQ(test, packet, pending, packet_len);
+					if (packet[0] == 4) {
+						KUNIT_ASSERT_EQ(test, packet_len, 3 + packet[2]);
+					} else {
+						KUNIT_ASSERT_EQ(test, packet[0], 2);
+						KUNIT_ASSERT_GE(test, packet_len, 5);
+						KUNIT_ASSERT_EQ(test, packet_len,
+								5 + get_unaligned_le16(packet + 3));
+					}
+					KUNIT_ASSERT_EQ(test, stream->len, 0);
+					pending_len = 0;
+				}
+			}
+			if (ret != 1) {
+				KUNIT_ASSERT_NULL(test, packet);
+				KUNIT_ASSERT_EQ(test, packet_len, SIZE_MAX);
+			}
+			if (action >= 3)
+				cursor = (cursor + consumed) % sizeof(wire);
+			kunit_kfree(test, allocation);
+			if (!(step % 64))
+				cond_resched();
+		}
+		KUNIT_ASSERT_GT(test, complete, 0);
+		KUNIT_ASSERT_GT(test, partial, 0);
+		KUNIT_ASSERT_GT(test, errors, 0);
+		KUNIT_ASSERT_GT(test, sticky, 0);
+		KUNIT_ASSERT_GT(test, resets, 0);
+		kunit_info(test, "H4 seed=%08x steps=4096 complete=%u partial=%u errors=%u sticky=%u resets=%u\n",
+			   seeds[seed], complete, partial, errors, sticky, resets);
+	}
+}
+
 static struct kunit_case btws73_cases[] = {
 	KUNIT_CASE(btws73_rx_valid),
 	KUNIT_CASE(btws73_rx_truncated),
@@ -468,6 +597,7 @@ static struct kunit_case btws73_cases[] = {
 	KUNIT_CASE(btws73_h4_splits),
 	KUNIT_CASE(btws73_h4_coalesced),
 	KUNIT_CASE(btws73_h4_errors),
+	KUNIT_CASE(btws73_h4_state_mutation),
 	{}
 };
 

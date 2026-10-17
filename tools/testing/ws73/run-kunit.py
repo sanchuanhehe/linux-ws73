@@ -172,6 +172,7 @@ def main():
                 "btws73_null_args",
                 "btws73_chip_query", "btws73_chip_reply", "btws73_chip_invalid",
                 "btws73_h4_splits", "btws73_h4_coalesced", "btws73_h4_errors",
+                "btws73_h4_state_mutation",
             }
             expected_groups = {
                 "ws73-ble-link": {
@@ -214,6 +215,7 @@ def main():
                     "ws73_usb_control_test", "ws73_usb_single_test",
                     "ws73_usb_single_limits_test", "ws73_usb_aggregate_test",
                     "ws73_usb_aggregate_errors_test",
+                    "ws73_usb_mutation_test",
                 },
                 "ws73-usb-tx": {
                     "ws73_usb_tx_sequence_test", "ws73_usb_tx_faults_test",

@@ -38,3 +38,53 @@ See Documentation/driver-api/ws73-wifi-interface.rst for the source call
 chains, configuration/data length differences and remaining implementation
 dependencies, including the Host key/register transaction error paths.
 No Wi-Fi hardware capability is enabled by this tool.
+
+Bounded FRW codec VM checks
+--------------------------
+
+  python3 tools/testing/ws73/wifi/run-kunit.py
+
+Reserve four build jobs and two VM CPUs after checking the shared machine
+budget. Requires the same Clang/LLD, make, Python and QEMU/KVM tools as the
+other WS73 VM fixtures. The fixed output directory is build-wifi-kunit under
+the sibling .dev/ws73-upstream directory, guarded by the shared build lock.
+No physical USB, disk or network is assigned to the test VM. Do not run
+experimental kernels/modules on the host.
+
+The codec lives at drivers/net/wireless/hisilicon/ws73/frw.c and currently
+builds only with WS73_WIFI_KUNIT_TEST. It exports no public symbols and
+registers no adapter or auxiliary/USB consumer. This is an independently
+implemented candidate byte codec for the pinned SDK110 control representation;
+original-firmware request/reply behavior remains unqualified.
+
+The encoder produces an eight-byte FRW extension plus a 28-byte communication
+envelope and request body, with explicit little-endian values and zero device
+address slots. Both synchronous flags are set. The decoder accepts only the
+plain synchronous RSP variant, requiring consistent ID/VAP across both headers,
+expected ID/VAP/sequence, exact envelope/body lengths and reply length bounded
+by BOTH the received capacity and the caller's actual capacity. It never clips
+an oversized reply. It preserves signed device_status separately from parser
+success. Remote addresses, returned request data_len and nested flags do not
+become pointers or override validation. Caller retains borrowed reply storage.
+
+Both request and reply payloads have a local 1024-byte bound; this is not a
+firmware maximum or device credit. The APIs operate on an exact unpadded FRW
+record, not HCC/USB framing. The eventual transport must validate/remove outer
+padding before parsing and add initialized padding for TX. Caller-owned inputs
+and outputs must be retained and non-overlapping. Error leaves output unchanged.
+
+Eight KUnit cases check independent request/reply vectors, all 40 truncated
+reply extents in exact-sized unaligned allocations, NULL/size_t extremes,
+empty/maximum payloads, foreign ID/VAP/sequence, mismatched headers/roles,
+unsupported extension flags, length/capacity disagreement, immutable error
+outputs, signed status values and hostile remote address slots. Tests run with
+SMP, KASAN, UBSAN, lockdep and DEBUG_ATOMIC_SLEEP. The supervisor requires the
+exact case set in JSON AND ordered raw KTAP, totals, suite completion, VM reboot,
+requested config and zero tool exit, and rejects kernel diagnostics. Source,
+config, tools, compiled codec/test objects, image and raw logs are archived.
+
+This does not implement the active request table, sequence allocation/wrap,
+late-reply cancellation, device epoch validation, command whitelist, HCC routing,
+key transactions, mac80211 operations or functional STA. Those contracts still
+need the real consumer and original-firmware validation. A tuple match alone
+cannot prove freshness after reconnect; parser success is not command success.

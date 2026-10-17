@@ -255,3 +255,34 @@ skip after an unencrypted link succeeds. The framing and layout findings allow
 explicit codec design, but do not permit registering a functional Wi-Fi adapter
 or claiming the device accepts speculative descriptors. No firmware version
 switch, private Host SME or fabricated ACK is introduced.
+
+
+Initial independent configuration codec
+---------------------------------------
+
+``drivers/net/wireless/hisilicon/ws73/frw.c`` now implements the bounded
+synchronous control subset, with explicit byte encoding rather than native
+SDK structure copies. It builds only in its KUnit test module at present;
+no Wi-Fi adapter, public symbols or physical transport consumer is registered.
+The ordinary shared/BLE build therefore acquires no wireless dependency.
+
+Requests encode duplicate ID/VAP fields, a 32-bit sequence, both sync flags,
+zero address slots and explicit input/reply lengths. Replies must be plain
+synchronous RSP, match both header identities and the caller's expected tuple,
+and have an exact unpadded length. Both the advertised and real caller reply
+capacities bound rsp_len; oversize is rejected without truncation. Parsing
+returns the signed device callback result separately, never a fabricated ACK
+or unconditional command success. Device pointers, returned request length
+and nested flags are not trusted for pointer construction or bounds.
+
+The 1024-byte control payload limit is an initial local policy. HCC/USB padding
+and routing are outside these pure functions. Exact reply flags, reserved
+fields and payload/envelope length conventions are a deliberately restricted
+candidate profile: actual SDK110 U/E firmware compatibility is still unproven.
+The codec does not allocate sequences or track active requests/timeouts/epochs;
+those belong to the upcoming actual consumer and must be implemented before
+commands can be issued. Reusing a tuple after reset cannot be made safe by
+this stateless parser. The existing RF, key and first-STA gates are unchanged.
+
+See ``tools/testing/ws73/wifi/README`` for the eight-case VM suite and precise
+ownership, scope and reproduction contracts.

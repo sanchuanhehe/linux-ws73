@@ -2652,3 +2652,56 @@ Records and manifest SHA-256:
 * ``wifi-key-contract-20261017T153417.711242Z``
   (SOURCE_AUDIT_NOT_DEVICE_PROOF),
   ``380cc780bb673851f5ce244b996b652bf8d4b6469848a9de2abdd3f4af1f1b58``.
+
+
+Independent Wi-Fi FRW control codec in VM
+-----------------------------------------
+
+Source ``694dbd49a928e5111a2d3ca93f5d522b0e1959bd`` adds the independent
+request encoder/reply parser at ``drivers/net/wireless/hisilicon/ws73/`` and
+eight KUnit cases. The candidate control profile uses the pinned SDK110 Host
+layout, explicit endian helpers and a 1024-byte local payload bound. It rejects
+inconsistent headers/roles, tuple mismatches, trailing/truncated bytes and
+oversize responses, while preserving outputs on error. Signed device status
+is separate from parse success. Remote pointer slots are never dereferenced.
+No SDK source, command executor, Wi-Fi adapter or RF capability is included.
+
+A new dedicated, hardware-free x86-64 VM fixture uses the fixed
+``build-wifi-kunit`` output under the shared build lock. All eight cases passed
+with SMP, KASAN, UBSAN, lockdep and DEBUG_ATOMIC_SLEEP. Tests include all 40
+short reply extents in exact-sized unaligned allocations, independent vectors,
+NULL/size_t extremes, empty/maximum payloads, hostile address slots and signed
+status extrema. The C files have strict checkpatch 0 errors/warnings/checks.
+
+Final tested source ``2d2c861aa1527a4caef81866af1790b2ba3fed34`` strengthens
+the runner's raw KTAP and termination validation; the production codec is
+unchanged from the first run. The second full eight-case run also passed.
+The runner now requires the exact ordered raw case list, totals, suite result,
+reboot completion, JSON case set, requested config and successful process exit.
+Both raw logs are complete and retained. Twenty-three corruption controls
+reject missing/duplicate suites/cases, SKIP/failure, truncated/missing/duplicate
+raw markers, wrong order, disabled KASAN and kernel diagnostics. This supervisor
+exercise does not execute another device or confer protocol interoperability.
+All evidence hashes from both runs were rechecked before this report.
+
+The six-file Host source record additionally pins the request initialization,
+FRW header and communication declarations, reply consumer and sequence lookup.
+The original firmware producer's exact RSP flags/length behavior has not been
+observed, so this restricted profile is a candidate until real U/E evidence.
+Payload framing, active request correlation/sequence allocation, timeout/late
+reply/epoch management, command policy, mac80211 integration and functional
+STA are not implemented by these pure functions. Tests do not prove hardware,
+firmware authenticity, security, regulator application or radio behavior.
+No real USB was accessed. The pending NEW single-U power-cycle confirmation
+and all previous firmware/E/peer/AP/upstream gates remain open.
+
+Records and manifest SHA-256:
+
+* ``frw-codec-source-20261017`` (source audit only),
+  ``f49e6715b9f7e0c193c4045eb0c9c28b51850aaa86a2df3573c962fe01d6ca70``.
+* ``wifi-frw-20261017T154421.224870Z`` (8/8 PASS),
+  ``8ff27f1c0306eee17b0ec624284fa5c43b92d0b2be9435b9aae3bc8e686d256c``.
+* ``wifi-frw-20261017T154725.316010Z`` (8/8 PASS, final supervisor),
+  ``c906694b1763949f8bf999ebe9599d8d1e6f7c13e4a9a55fb8cd84476e4dd424``.
+* ``wifi-frw-supervisor-20261017T154838.344250Z`` (23 corruptions rejected),
+  ``3b62b75b42b2f48c2de4047909217cef5761edf67d639a94a0a9669c299c4336``.

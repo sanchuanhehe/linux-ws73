@@ -11,7 +11,7 @@ This branch is a development series based on Linux
 kernel code consumed by its KUnit tests. The shared module also contains
 firmware validation and a bounded download executor with injectable I/O.
 The USB parent can issue one fixed boot READM chip observation, or a
-one-shot runtime HCC identity query with independent RX, and drain its
+serialized runtime HCC identity/version queries with independent RX, and drain its
 requests on disconnect. It does not select/download firmware,
 register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
 Synthetic HCI event fixtures are parser inputs, never generated completions
@@ -71,17 +71,22 @@ callers before releasing the instance. These are tested sequencing contracts,
 not qualification of asynchronous USB teardown, firmware credit or runtime
 communication.
 
-One-shot runtime identity
--------------------------
+Serialized runtime identity and version
+--------------------------------------
 
-``runtime.c`` arms GET_CHIP_TYPE before TX and completes it from a separate
-RX entry point. The request permits one use per instance, with no reset API.
+``runtime.c`` serializes GET_CHIP_TYPE and GET_VERSION in one per-device
+request object. A command mutex admits only one caller (-EBUSY otherwise);
+each kind is permitted once per instance (-EALREADY on reuse), with no reset
+API. The expected reply ID and completion are installed before TX. RX completes
+through a separate entry point and never waits on the command mutex.
 It publishes identity only after the local TX completes successfully and a
 valid matching reply arrives within the deadline. Unrelated reply IDs do not
 complete it; duplicate matching replies before consumption, malformed replies,
 failed TX, timeout and removal enter a terminal error. RX never waits for the
 sleeping query. Abort wakes its waiter and prevents further request transfers.
-An expired request cannot accept a late reply or issue a replacement query.
+An expired request cannot accept a late reply or issue another query. Both
+startup queries share one absolute deadline; starting the version stage does
+not renew it. A late chip reply cannot satisfy the different version reply ID.
 
 The USB parent distinguishes two- and five-endpoint interfaces and validates
 bulk IN/OUT, interrupt IN and register OUT/IN roles for runtime. It starts one
@@ -102,6 +107,58 @@ runtime objects do not share requests, callbacks or identity cache. Unknown
 outer types/queues are dropped; malformed or unsupported records in supported
 aggregates terminate the observation.
 BLE frames have no consumer yet and are not presented as HCI events.
+
+GET_VERSION is SDK110 platform request 13 with one input byte equal to 1,
+padded to a 32-byte HCC record. Reply 7 contains status u32, returned length
+u32 (=8), firmware u32 and ROM u32, all little endian. The platform payload
+length is 16; the HCC length includes the header and must cover all 24 bytes.
+Both raw version words are preserved. ``plat_misc.c`` defines firmware bytes
+as a/b/c/d from most to least significant and ROM fields as v16/r8/c8; its
+printed ROM "1.0.0" is a constant, not the reported word. Neither that string
+nor a plausible version value proves the selected firmware image is running.
+The parent logs observations only after both queries succeed, and names the
+chip or version stage on failure.
+
+BLE initialization audit (SDK110)
+--------------------------------
+
+The following is protocol/call-chain evidence, not implemented BLE support.
+The pinned ``driver/bsle/ble_driver/linux/ble_host_hcc.c`` and
+``driver/platform/pm/plat_pm_wlan.c`` reveal distinct initialization stages:
+
+#. ``ext_bluetooth_init`` calls ``pm_ble_open``; ``pm_svc_open`` performs the
+   first-service shared power/firmware initialization if needed.
+#. ``pm_bsle_open`` registers service 5 and builds the customization message
+   in ``driver/platform/cfg/customize_bsle.c``. It sends an 800-byte HCC buffer
+   on queue 10, with subtype 0, tag type 0 and tag length equal to the actual
+   customization structure, then waits for CUSTOMIZE_RECEIVED. These fields
+   include board/configuration and optional flash-derived address/calibration
+   data; they are not a substitute for the separate BTC calibration file.
+#. ``pm_svc_open`` then sends BLE open through USB class/interface request 0,
+   value/index 0, four-byte message ID 25. ``ext_bluetooth_init`` subsequently
+   waits for BOOT_FINISH, registers the BLE HCC service, obtains the real address
+   via ``get_dev_addr`` and sends vendor HCI opcode 0xfc32 with six reversed
+   address bytes before registering hci_dev. That helper returns local send
+   status; it is not evidence of the controller's command completion.
+#. ``hci_bt_open`` independently registers the enable callback and sends
+   message 25 again; close sends 26. The upstream implementation must establish
+   its own single function lifecycle and actual replies, not reproduce two
+   untracked enables or the SDK's close-timeout success fallback.
+
+``customize_bsle_ext.h`` defines the queue-10 tag as type u16, length u16.
+Device-status tag type 2 carries a u32: BOOT_FINISH=1 or
+CUSTOMIZE_RECEIVED=2. Action-status tag type 4 instead carries BLE_OPEN=0 or
+BLE_CLOSE=1; the SDK translates OPEN=0 into callback boolean true. These
+are different messages, and neither BSP/BCPU interrupt acknowledgement nor
+USB transfer completion can replace them. SLE action values 2/3 are outside
+this project's function support and do not justify an SLE adapter.
+
+The SDK logs and continues through several customization/boot failures and
+uses global status variables. Those behaviors are not adopted. Before adding
+the native HCI consumer, complete the versioned customization layout and valid
+board/address inputs, receive and check the corresponding acknowledgement,
+validate enable/action status, and wait for actual HCI address/setup responses.
+No fixed development address or guessed board parameters are installed here.
 
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.

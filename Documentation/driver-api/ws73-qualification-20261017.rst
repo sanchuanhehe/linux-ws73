@@ -513,3 +513,63 @@ register endpoints, arbitrary control transaction reuse, version/boot identity
 agreement, firmware loading, auxiliary/HCI consumers and peer traffic remain
 unqualified. This increment operated no physical WS73 device and does not
 change the previous OBSERVATION_PASS_NOT_COLD hardware result.
+
+Serialized chip/version query increment
+--------------------------------------
+
+Commit ``dbb9b31172a4`` mechanically renames the runtime request machinery
+for its platform role. The unchanged 37 KUnit cases pass on that clean source
+in ``20261017T070321.292178Z`` (manifest SHA-256
+``bb0a9e75f14598793a2f1cdc37d5cd4b3583c1834e9873f041c40c340d6322f9``).
+
+Production commit ``c189384d3996`` then adds version encoding/decoding and
+serialized one-shot chip/version requests. A busy caller cannot start a
+second request. Each reply kind is used once per instance, a late chip reply
+cannot satisfy the version request, and any request failure prevents further
+platform queries. The USB initialization worker carries a single absolute
+deadline across both stages and logs observations only after both succeed.
+The raw firmware/ROM words are not a firmware compatibility approval.
+
+The clean source passes 40 KUnit cases in ``20261017T070730.183072Z``.
+New cases cover exact request bytes, all shorter output capacities, unaligned
+reply words, every truncation, all 16-bit declared lengths, error status,
+wrong lengths/IDs, raw zero/unknown versions, concurrent admission, replies
+for a different stage, failure after the first successful stage and forbidden
+reuse. Manifest SHA-256::
+
+   986d411bd085a271e552b98f458ec7e555b55e6fe90b97f30b376f09eb4e4a67
+
+The separate KASAN/UBSAN/lockdep/DEBUG_ATOMIC_SLEEP virtual USB kernel is
+from the same clean production source, build record
+``virtual-usb-build-20261017T070901.015159Z``, manifest SHA-256::
+
+   84bea31ed1b0027855761f20a625f2d7b4af26714d3c6fc2f1b4d696e349deca
+
+Both speeds pass eight synthetic FunctionFS/dummy_hcd cases: two successful
+chip/version combinations, chip error, truncated chip aggregate, removal
+while waiting, version error, wrong version return length and a stale chip
+reply followed by the valid version reply. Each run checks 29 exact OUT
+transfers, 13 IN replies and eight removals. Queue switching is not repeated
+between the two platform requests, and the USB sequence advances to 3 for
+the version request. All identities/versions are synthetic fixture values.
+
+* Full-speed: ``virtual-usb-20261017T070939.593645Z``, manifest SHA-256
+  ``cddfc7133f3916a281a1a156d26cb49e561b4e4ff7690763203f4bcab4d5b348``.
+* High-speed: ``virtual-usb-20261017T071056.412119Z``, manifest SHA-256
+  ``565e0fb58212f4cfebdc2837f8668b361fbb15557eb4826bc35be6e7486e5992``.
+
+The updated text supervisor rejects 19 negative controls, recorded in
+``virtual-usb-supervisor-negative-v3.json`` with its exact verifier hash.
+In addition to the previous controls, these include a missing version TX,
+wrong raw version, wrong reply role and missing stale-reply injection.
+No sanitizer, lockdep or atomic-sleep error was reported. The original and
+updated fixture/runner sources are preserved separately with their records.
+The prototype harness remains private and still needs a portable in-tree
+entry point; no public CI or physical USB qualification is claimed.
+
+The accompanying BLE initialization audit identifies customization/status,
+boot status, two SDK enable call sites and vendor address command completion
+as distinct requirements. None is implemented or qualified by version-query
+success. Firmware execution, boot/runtime compatibility, cold-start evidence,
+auxiliary/HCI consumers, E hardware, BLE peer/AP testing and formal submission
+remain open. No physical device was operated in this increment.

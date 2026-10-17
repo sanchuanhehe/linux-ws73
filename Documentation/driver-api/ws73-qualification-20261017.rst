@@ -3496,3 +3496,71 @@ Private records and manifest SHA-256:
   ``ecc3312b1cefc6709ec7c437750b6c319e2133c7642f40ea28344b5c177441a3``.
 * ``load-ble-trial-20261017T221219.018687Z``,
   ``5f1dec77e9518414c33078c2be3583aa30ae11e1d8f625be657d1e45ebc726b4``.
+
+Explicit native HCI physical-trial preparation (2026-10-18 SGT)
+-------------------------------------------------------------
+
+Source ``8a33ab101830`` adds opt-in ``native_hci=1`` to the tagged-VM BLE
+experiment, after the same identity/startup/acknowledged-disable sequence.
+Only that experimental owner publishes the real auxiliary child; btws73 and
+the native Bluetooth stack perform the next enable and HCI initialization.
+The default trial still ends at disable, and the regular physical parent
+still publishes no child. Use the opt-in only with a freshly loaded epoch,
+not an arbitrary retained runtime. Reference board inputs and address-source
+qualification are not broadened by this test mode.
+
+``hardware/build.py --hci`` builds into separate fixed kernel/module outputs
+and keeps a separate evidence pointer. Both the native-HCI and default
+Clang W=1 builds passed. Their empty VMs passed the existing admission/profile
+checks and explicit registration/unload. The default build additionally
+rejected ``native_hci=1`` before driver registration. The HCI VM opened a
+native management socket and confirmed that no HCI device existed without
+physical attachment. No physical USB was accessed in these checks.
+
+The prepared continuous-load guest requests management Read Info only after
+a configured index notification; no BlueZ daemon or radio test command is
+started. Actual HCI command/completion pairs, feature/address/version agreement
+with management information, four BLE class transactions and complete owner
+drains are required by the new transcript verifier. A successful USB write or
+HCI registration alone cannot pass. Its initial allowlist covers native
+initialization/readout operations, not scanning, advertising or connecting;
+unanticipated behavior will be retained as a failed trial for investigation.
+Read BD_ADDR remains an observation, not proof of provisioned public identity.
+
+Management's not-powered state can hide native setup's AUTO_OFF phase, so
+the supervisor also waits for the second actual BLE_CLOSE notification before
+detach. The transcript independently checks that close's class request and
+reply follow HCI replies. Two socketpair-only management positives and 15
+negative cases passed, including repeated settings without duplicate markers.
+One synthetic HCI transcript passed; 24 independent mutations were rejected,
+including missing captures/drop counters, errors/opcode mismatch, inconsistent
+management identity, missing close-related markers and kernel diagnostics.
+These are supervisor properties, not original-firmware HCI compatibility.
+
+Preparation failures are retained in the private qualification summary:
+GCC first rejected the enlarged module-parameter string's old buffer capacity;
+the initial synthetic fixture shadowed an event helper; class-completion
+matching wrongly assumed globally unique URB identifiers; one negative
+mutation left its input unchanged; a private edit used the wrong working
+directory; and sandboxed socketpair creation failed before parser execution.
+The buffer, fixture, ordered URB pairing and mutation were corrected, the edit
+was rerun, and the pure IPC tests passed with local sockets available. Neither
+the initial empty-VM preflight nor the corrected preflight touched hardware.
+
+The next physical HCI trial remains unexecuted and requires a fresh allocated-U
+power-removal confirmation. Earlier real U BLE enable/disable evidence and its
+scope remain unchanged. HCI/RF/peer, address provenance, E and formal joint
+submission gates remain open.
+
+Private records and manifest SHA-256:
+
+* ``hardware-hci-build-20261017T222003.367490Z``,
+  ``9020422b0fff4faa520f41b8f8880e94cf7cc2efed656bea677bf32937b070d9``.
+* ``hardware-build-20261017T222526.640840Z``,
+  ``72679b2477a3fa9374bf5ca711937f6f71ab60142e1158baad05e5443450c19a``.
+* ``load-hci-trial-20261017T222625.005188Z``,
+  ``f725dcd9ffd94c608c5508e3514a2ea0962cb4408d2fbce3025f64369fc4affd``.
+* ``load-ble-trial-20261017T222606.021460Z``,
+  ``7c3bef00e63f9e348cd05680d69633c1e578d5b8d8901dfb93b901820e3c604e``.
+* ``native-hci-preparation-20261017T222842.377146Z``,
+  ``6e6e680b6ed4d20a5d85b0ebfaa14a3d5c776e32970c3236376478ba162a410f``.

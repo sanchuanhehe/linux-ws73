@@ -56,7 +56,7 @@ config WS73_USB_BOOT_TEST
 	select WS73_CORE
 	select WS73_USB_IO
 	help
-	  Execute the boot download sequencer using synthetic payloads over
-	  actual URBs to a FunctionFS peer. Only the dummy_hcd controller and
-	  a separate test USB ID can bind. Run only in a hardware-free VM.
+	  Execute boot download or complete original-file loading over actual
+	  URBs to a synthetic FunctionFS peer. Only the dummy_hcd controller and
+	  separate test USB IDs can bind. Run only in a hardware-free VM.
 	  This does not qualify real firmware, board setup or boot identity.

@@ -1528,3 +1528,80 @@ Physical cold U/E, board/trim, parent loading/startup, actual BLE control USB,
 full HCI/peer/AP, Wi-Fi, PM/recovery and upstream review remain open. No physical
 operation or external submission occurred. Documentation commits do not replace
 the exact compiled/tested source identities above.
+
+Original-file acquisition joined to boot identity and transfer
+-------------------------------------------------------------
+
+Tested source ``441473b5835e7d6cce733dc5673bb1801bc23fba`` adds the one-shot
+``ws73_boot_start`` entry. It copies/range-checks explicit trim, reads the fixed
+HCC identity, selects exactly one U/E USB profile, requests/validates all three
+original files, then runs fixed preparation and FILES/QUIT. Firmware references
+remain owned until synchronous IO has joined and are released on every return
+path. File acquisition now uses request_firmware_direct without a userspace
+fallback. A single absolute deadline is retained; cancellation/time are checked
+after file acquisition before writing. The call is serialized by its owner,
+retains the first failure and rejects reuse. Success is WAIT_RUNTIME only.
+
+The additional dummy_hcd-only ID ffff:3735 exercises this entry with original
+local SDK110 files in a private VM initramfs. Both speeds pass ten cases:
+U and E success; missing U BTC; changed U code with a recomputed valid internal
+hash; E Wi-Fi calibration in the U path; S/SDIO; E/UART; identity-stage removal;
+malformed first WRITEM acknowledgement; and fresh U success. Each calls start
+again and verifies the same first error or -EALREADY, with no repeated IO.
+
+The peer verifies exact READM and four-byte replies, all 11 preparation writes
+with explicit synthetic trim 1/2, FILES flags/addresses, every original payload
+byte after the 64-byte header, and QUIT. The three successes per speed transfer
+22 chunks in total, including two E BTC chunks. Missing/corrupted/mixed inputs
+and unsupported transports stop before the first write. Bad WRITEM stops before
+FILES. Every instance drains, and nine quiet windows check no extra OUT.
+Identity removal returns -ENODEV at full speed and -ESHUTDOWN at high speed;
+both retain the error and do not publish an identity or input state.
+
+The loader supervisor rejects 33 log corruptions and nine artifact/provenance
+corruptions. It also rechecks all six original file identities and the exact
+rehashed negative input. The runner preserves a FAIL manifest for preparation
+errors as well as VM errors. An intentionally empty local firmware directory
+is rejected before QEMU starts; that expected FAIL attempt is retained along
+with its successful negative-test receipt. No unexpected failed attempt occurred.
+
+Regular KUnit passes 80 cases, adding one loader guard case with eight scenarios:
+coarse/fine range, missing device/callback, expired deadline, cancellation,
+retained failure and completed session. Repaired arguments cannot revive them
+or issue IO. Existing synthetic download full-speed seven-case regression and
+all-module compile/link also pass. SMP/KASAN/UBSAN/PROVE_LOCKING and
+DEBUG_ATOMIC_SLEEP configurations are verified; the module build disables the
+synthetic USB test driver. Strict checkpatch passes for the new loader and test.
+
+Evidence manifests and SHA-256 values (all bind to the tested source above):
+
+* ``virtual-usb-build-20261017T111750.615422Z`` (PASS),
+  ``f8611074b3be6f576df908a8b214bbea927351aacc97256d8393c625658caa7a``.
+* ``virtual-usb-20261017T111837.757133Z`` (loader full PASS),
+  ``2c3341d510c00fbdee85ea1db43a219d54bfc3fdee4f65115fd3cac709545f0a``.
+* ``virtual-usb-20261017T111926.614383Z`` (loader high PASS),
+  ``0d1f5742be026652d1829b468da1806ec8d91d6bc8eadb568a8739cf513ecc81``.
+* ``virtual-usb-20261017T111934.843785Z`` (download full PASS),
+  ``f51a074526f80af81415ead80c2c46f3c4066a866ac017fb730503b065240a84``.
+* ``virtual-usb-negative-20261017T111924.312351Z`` (loader  PASS),
+  ``c655cfe4be87f576a58047344f1ddf82eb7ed92a1bebe2d44874fdc40d5c01b1``.
+* ``20261017T111942.917462Z`` (PASS),
+  ``16f22d11ec5db971597350f3557762595a5e31a2ee25d70292b65f9de96f68d0``.
+* ``hci-build-module-20261017T112237.822943Z`` (PASS),
+  ``aff3b78c40c515390145db418743ba9301fd44778d632a0fa287e4752ee15248``.
+* ``virtual-usb-20261017T112327.866566Z`` (loader full FAIL; expected missing-local-input rejection),
+  ``538548e9a63f0e3306ff2e6288663c18e4b0a90d6e44c90c00973656d2d02944``.
+* ``loader-runner-negative-20261017T112327.634380Z`` (PASS),
+  ``333eb6b509862b201eaf7f16763706d4ecdea1662704dd2c2a1ecb75f349fb75``.
+
+The original binaries and generated negative file are local artifacts only;
+only hashes and source are committed. This does not establish firmware
+redistribution permission. The physical USB observer does not call the new
+entry: cold U/E access, board/register/trim applicability, runtime re-enumeration
+and identity/version agreement remain open. No physical firmware execution,
+actual BLE class-control/startup USB, complete HCI/peer/AP, Wi-Fi or upstream
+qualification is added. File acquisition remains synchronous and was not
+subjected to deterministic cancellation/latency injection here. No host module
+load, physical device operation or external submission occurred. Unchanged
+runtime/boot USB and native HCI-model results keep their earlier source identities.
+Documentation/help-only changes do not replace the exact tested source above.

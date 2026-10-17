@@ -49,7 +49,9 @@ does not prove module loading/unloading, suspend/resume or hardware behavior.
 
 See usb-vm/README for boot/runtime and synthetic FILES/QUIT download integration
 through dummy_hcd and FunctionFS, including actual 32-KiB URBs and READY wait.
-The download test binds a separate synthetic ID only on dummy_hcd; it does not
-request original firmware or qualify board setup. The physical USB parent remains observation-only: it does not
+The download phase uses synthetic payloads. The loader phase uses the local
+original U/E files through the actual firmware API and complete boot sequence,
+with a separate dummy_hcd-only ID. Neither qualifies physical board setup.
+The physical USB parent remains observation-only: it does not
 publish BLE until firmware, board, identity and startup gates are integrated
 and qualified. Enabling BT_WS73 alone does not provide working physical BLE.

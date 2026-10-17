@@ -40,7 +40,9 @@ struct ws73_firmware {
 const struct ws73_fw_profile *ws73_fw_profile(const struct btws73_chip_identity *chip);
 int ws73_fw_validate(const struct ws73_fw_info *info, const u8 *data,
 		     size_t size, struct ws73_fw_view *view);
-/* chip must come from a verified live HCC identity, never a USB ID guess. */
+/* Direct firmware API, no userspace fallback. chip must come from a verified
+ * live HCC identity, never a USB ID guess. Caller supplies an empty bundle.
+ */
 int ws73_firmware_request(struct device *dev, const struct btws73_chip_identity *chip,
 			  struct ws73_firmware *set);
 void ws73_firmware_release(struct ws73_firmware *set);

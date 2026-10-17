@@ -14,6 +14,8 @@ the compiled init fixture directly on the host or add physical USB passthrough.
   python3 tools/testing/ws73/usb-vm/run.py --phase boot --speed high
   python3 tools/testing/ws73/usb-vm/run.py --phase download --speed full
   python3 tools/testing/ws73/usb-vm/run.py --phase download --speed high
+  python3 tools/testing/ws73/usb-vm/run.py --phase loader --speed full --firmware-root /path/to/ws73_SDK/firmware
+  python3 tools/testing/ws73/usb-vm/run.py --phase loader --speed high --firmware-root /path/to/ws73_SDK/firmware
   python3 tools/testing/ws73/usb-vm/check-supervisor.py <full-speed-record>
 
 Do not use python -O: assertions form part of the verification and optimized
@@ -28,8 +30,8 @@ pointer and timestamped artifacts live under ../.dev/ws73-upstream.
 The runner requires the build's clean source commit to match the current
 worktree, including tools and documentation. Rebuild after committing changes.
 It checks the exact required artifact set and hashes before starting QEMU,
-including the BLE endpoint, runtime-link, shared USB IO and download-test objects. The fixture leaves
-publication gated; having those objects does not mean a BLE child was exercised.
+including the BLE endpoint, runtime-link, shared USB IO, boot-loader and
+download-test objects. The fixture leaves publication gated; having those objects does not mean a BLE child was exercised.
 ACPI and PCI are required for this Q35 guest to power off: ACPI's default
 PCI_Config region handler depends on PCI. Guest shutdown must terminate QEMU
 successfully; a fixture PASS line followed by a process timeout is a failure.
@@ -46,7 +48,10 @@ five invalid build manifests (stale source, failed build, missing/extra artifact
 and wrong hash). Every corruption must be rejected. It does not exercise a
 device. Run it once for each phase's full-speed PASS record. Boot mode checks
 22 log corruptions and the same five invalid build manifests. Download mode
-checks 28 log corruptions and five invalid build manifests.
+checks 28 log corruptions and five invalid build manifests. Loader mode checks
+33 log corruptions, five build artifacts and four firmware provenance/hash
+corruptions. The six original files and the rehashed negative input are verified
+against their recorded identities before accepting a loader result.
 
 The boot phase enumerates two-endpoint synthetic devices in 14 cases. It checks
 the exact fixed READM command, U/USB (including zero), E/USB, S/SDIO and E/UART
@@ -81,3 +86,27 @@ USB tests do not execute armed startup/customization, BLE class-control, HCI
 or Wi-Fi, nor qualify physical U/E, RF, PM or peers. Missing resources, failed
 configuration dependencies, malformed logs and unexpected driver records fail
 the run rather than broadening the accepted result.
+
+The loader phase additionally needs authorized local SDK110 firmware/us and
+firmware/e originals. It pins all six files using check-firmware.py before
+building the private initramfs; the code payload mutation is generated locally
+and given a valid recomputed internal hash. Original and negative files are
+copied only into local test records/initramfs, never into the kernel repository.
+Do not publish those binary records as part of a patch series. The documented
+hashes and source code are sufficient to identify the inputs.
+
+This phase uses ffff:3735 on dummy_hcd to call ws73_boot_start. Ten cases check
+fresh READM selection, actual request_firmware_direct, all-input validation,
+11 fixed RAM/XO writes, FILES payloads and QUIT. Cases include U/E success,
+missing BTC, rehashed modification, mixed calibration, S/SDIO and E/UART
+rejection, identity-stage removal, bad WRITEM reply and fresh U success.
+Repeating a finished call must return the first error or -EALREADY without IO.
+Nine no-extra-OUT windows and all ten disconnect drains are required. The peer
+checks 22 original payload chunks per speed; it does not execute that code.
+
+Board trim 1/2 is an explicit synthetic value. This does not qualify real
+board registers, cold identity, hardware firmware execution, re-enumeration or
+runtime identity agreement. Original-file rejection is exercised through the
+kernel API, but cancellation/latency during filesystem acquisition itself is
+not fault-injected. Missing local runner inputs produce a FAIL manifest before
+QEMU starts; they cannot be interpreted as a skipped or successful hardware run.

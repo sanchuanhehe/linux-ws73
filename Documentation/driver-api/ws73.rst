@@ -9,7 +9,8 @@ Status and scope
 This branch is a development series based on Linux
 70dd4ee72eb2d5793c62e71c14e3aba78e5a4e56. The wire codecs are executable
 kernel code consumed by the native HCI adapter and KUnit tests. The shared module also contains
-firmware validation and a bounded download executor with injectable I/O.
+firmware validation, bounded download execution and a one-shot entry joining
+fresh HCC identity to original-file acquisition and board preparation.
 The USB parent can issue one fixed boot READM chip observation, or a
 serialized runtime HCC identity/version queries with independent RX, and drain its
 requests on disconnect. It does not select/download firmware,
@@ -468,10 +469,49 @@ in the USB observation driver yet.
 The executor borrows already validated immutable image views. Full image/header
 hash checks remain the firmware-request layer's prerequisite, as do live HCC
 identity, cold-read qualification and board compatibility. Range checks alone
-do not establish any of these. The new integrated transcript uses tiny synthetic
+do not establish any of these. The injectable board transcript uses tiny synthetic
 images and explicit non-production trim, checks all 35 send/receive operations,
 and injects errors at every operation. Runtime XO temperature compensation,
 device address provenance and native consumers remain separate pending work.
+
+One-shot original firmware boot loader
+--------------------------------------
+
+``boot-loader.c:ws73_boot_start`` joins the existing components into one
+serialized, sleepable attempt. A zero-initialized session records the current
+phase, first error, fresh READM observation and transfer progress. Explicit
+board trim is copied and range-checked before any IO. READM then selects exactly
+one U/USB or E/USB profile; S/SDIO and E/UART are rejected. All three original
+files must pass size, internal-header and complete-file hash checks before the
+first RAM/XO write. There is no combined input or alternate-model retry.
+
+The firmware bundle stays local to the call and holds immutable references
+through preparation and every synchronous transfer. All return paths release
+it, including partial acquisition. ``request_firmware_direct`` uses the kernel
+firmware loader without a userspace fallback wait. Filesystem acquisition itself
+is synchronous; USB cancellation does not interrupt a filesystem read. The
+caller owns the device/IO/session until return. Cancellation and the unchanged
+absolute deadline are checked again after input acquisition and before writes;
+the underlying executor rechecks them around transfers. This is not a promise
+of immediate teardown during a blocked filesystem operation.
+
+Failures retain their original phase/error and cannot be retried with repaired
+arguments. A successful second call returns -EALREADY without IO. Success means
+WAIT_RUNTIME only; no firmware reference or cached boot state is transferred to
+a new USB instance. The owner must independently qualify cold-register access
+and board/trim applicability before calling this API. The physical USB observer
+still does not call it, re-enumerate a device or publish BLE/Wi-Fi.
+
+The dummy_hcd-only test additionally binds ffff:3735 for this whole path. It
+obtains both original profiles through the actual firmware API in an isolated
+VM, verifies all 11 preparation commands, strips only validated headers and
+checks all transmitted bytes against local originals. Explicit fixture trim
+1/2 is a model input, not a physical board default. The two USB speeds cover
+U/E success, absent BTC, a changed code payload with recomputed header, mixed
+U/E calibration, unsupported transports, removal during identity, bad first
+WRITEM acknowledgement and fresh success. Every attempt calls start again to
+verify terminal behavior. None of these transfers executes firmware on a chip
+or qualifies cold access, register applicability or runtime identity agreement.
 
 Startup handshake coordinator
 -----------------------------
@@ -661,8 +701,9 @@ SDK loading sequence and identity gate
 -------------------------------------
 
 The pinned SDK's ``driver/platform/pm/plat_pm_board_ws73.c`` function
-``ws73_board_service_enter`` establishes this order. The items below are
-requirements for the forthcoming loader, not implemented transport states:
+``ws73_board_service_enter`` establishes this order. The board/download
+executors above implement the boot subset; the complete physical startup path
+below remains subject to identity, board and runtime qualification:
 
 #. Obtain the per-device PM/bus context; power up and prepare patch loading.
    Reinitialize the bus. USB ``hcc_usb_reinit`` waits for the boot probe.

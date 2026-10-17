@@ -18,7 +18,7 @@ int ws73_notification_decode(const u8 *record, size_t length,
 		return -EINVAL;
 	if (length < 8 || length > BTWS73_RX_MAX_RECORD_SIZE)
 		return -EMSGSIZE;
-	if (record[0] != 5 || record[1] != 10)
+	if (record[0] != 0x50 || record[1] != 10)
 		return -EPROTO;
 	payload = get_unaligned_le16(record + 2);
 	if (payload < 8 || payload > length)

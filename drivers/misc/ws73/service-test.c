@@ -8,7 +8,7 @@
 static void ws73_notification_fixture(u8 *record, u16 tag, u32 value)
 {
 	memset(record, 0, 16);
-	record[0] = 5;
+	record[0] = 0x50;
 	record[1] = 10;
 	put_unaligned_le16(12, record + 2);
 	put_unaligned_le16(tag, record + 4);
@@ -18,7 +18,7 @@ static void ws73_notification_fixture(u8 *record, u16 tag, u32 value)
 
 static void ws73_notification_valid_test(struct kunit *test)
 {
-	static const u8 wire[] = { 5, 10, 12, 0, 4, 0, 4, 0, 0, 0, 0, 0 };
+	static const u8 wire[] = { 0x50, 10, 12, 0, 4, 0, 4, 0, 0, 0, 0, 0 };
 	enum ws73_notification event;
 	u8 storage[17], *record = storage + 1;
 	unsigned int i;
@@ -70,14 +70,14 @@ static void ws73_notification_invalid_test(struct kunit *test)
 	}
 	ws73_notification_fixture(record, 2, 1);
 	for (i = 0; i <= U8_MAX; i++) {
-		if (i == 5)
+		if (i == 0x50)
 			continue;
 		event = 99;
 		record[0] = i;
 		KUNIT_EXPECT_EQ(test, ws73_notification_decode(record, 16, &event), -EPROTO);
 		KUNIT_EXPECT_EQ(test, event, 99);
 	}
-	record[0] = 5;
+	record[0] = 0x50;
 	record[1] = 9;
 	KUNIT_EXPECT_EQ(test, ws73_notification_decode(record, 16, &event), -EPROTO);
 	KUNIT_EXPECT_EQ(test, ws73_notification_decode(record, SIZE_MAX, &event), -EMSGSIZE);

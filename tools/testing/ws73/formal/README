@@ -47,6 +47,10 @@ length bound, and wrong returned ROM value. Each must produce its specific
 counterexample; unrelated failures, warnings, missing properties, unknown
 results, timeouts and abnormal exits are not accepted. These copies are never
 compiled into a kernel or committed as production changes.
+Before each solver invocation, the runner obtains --show-properties with the
+same model/check options. Every result ID and description must match that
+complete inventory, including memory checks, as well as the explicit contract
+set. A success banner or a remaining subset of assertions is insufficient.
 
 This is conditional bounded C verification of four scalar converters, not
 firmware authenticity/compatibility, boot register reliability, USB aggregation,

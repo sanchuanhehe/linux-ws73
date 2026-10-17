@@ -37,13 +37,28 @@ def git(*args):
     return subprocess.check_output(["git", "-C", str(SOURCE), *args], text=True).strip()
 
 
-def validate(raw, returncode, function, negative=None):
+def document(raw):
     messages = json.loads(raw)
     if not isinstance(messages, list):
         raise ValueError("invalid CBMC document")
     if any(m.get("messageType") in ("ERROR", "WARNING") or
            "unsupported" in m.get("messageText", "").lower() for m in messages):
         raise ValueError("CBMC warning/error/unsupported operation")
+    return messages
+
+
+def inventory(raw, returncode):
+    groups = [m["properties"] for m in document(raw) if "properties" in m]
+    if returncode or len(groups) != 1 or not groups[0]:
+        raise ValueError("missing/failed property inventory")
+    properties = {p["name"]: p["description"] for p in groups[0]}
+    if len(properties) != len(groups[0]):
+        raise ValueError("duplicate inventory property")
+    return properties
+
+
+def validate(raw, returncode, function, properties, negative=None):
+    messages = document(raw)
     conclusions = [m["cProverStatus"] for m in messages if "cProverStatus" in m]
     groups = [m["result"] for m in messages if "result" in m]
     if len(groups) != 1 or not groups[0]:
@@ -52,6 +67,8 @@ def validate(raw, returncode, function, negative=None):
     ids = [p["property"] for p in props]
     if len(set(ids)) != len(ids):
         raise ValueError("duplicate property")
+    if {p["property"]: p["description"] for p in props} != properties:
+        raise ValueError("result differs from complete property inventory")
     contracts = {p["description"] for p in props if p["description"].startswith("WS73 ")}
     if contracts != {"WS73 " + name for name in EXPECTED[function]}:
         raise ValueError("missing/extra harness contract")
@@ -117,20 +134,29 @@ def main():
                 manifest["attempts"].append(item)
                 save()
                 out, err = record / (name + ".json"), record / (name + ".stderr")
-                with out.open("w") as stdout, err.open("w") as stderr:
-                    proc = subprocess.Popen(command, stdout=stdout, stderr=stderr,
-                        env=dict(os.environ, CCACHE_DISABLE="1"), start_new_session=True, preexec_fn=limits)
-                    try:
-                        item["exit_code"] = proc.wait(timeout=60)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                        proc.wait()
-                        item["status"] = "NOT_PROVEN_TIMEOUT"
-                        raise RuntimeError("CBMC timeout: " + name)
+                def execute(cmd, output, errors):
+                    with output.open("w") as stdout, errors.open("w") as stderr:
+                        proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr,
+                            env=dict(os.environ, CCACHE_DISABLE="1"), start_new_session=True, preexec_fn=limits)
+                        try:
+                            returncode = proc.wait(timeout=60)
+                        except subprocess.TimeoutExpired:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                            proc.wait()
+                            item["status"] = "NOT_PROVEN_TIMEOUT"
+                            raise RuntimeError("CBMC timeout: " + name)
+                    if errors.read_text().strip():
+                        raise ValueError("unexpected CBMC stderr: " + name)
+                    return returncode
+                inv_out, inv_err = record / (name + "-inventory.json"), record / (name + "-inventory.stderr")
+                item["inventory_command"] = command + ["--show-properties"]
+                save()
+                item["inventory_exit_code"] = execute(item["inventory_command"], inv_out, inv_err)
+                properties = inventory(inv_out.read_text(), item["inventory_exit_code"])
+                item["inventory_sha256"] = sha(inv_out)
+                item["exit_code"] = execute(command, out, err)
                 item["stdout_sha256"], item["stderr_sha256"] = sha(out), sha(err)
-                if err.read_text().strip():
-                    raise ValueError("unexpected CBMC stderr: " + name)
-                item.update(validate(out.read_text(), item["exit_code"], function, negative))
+                item.update(validate(out.read_text(), item["exit_code"], function, properties, negative))
                 item["status"] = "EXPECTED_COUNTEREXAMPLE" if negative else "BOUNDED_PASS"
                 save()
 

@@ -50,6 +50,23 @@ static int ws73_test_receive(void *context, u8 *data, size_t len,
 	return ws73_usb_io_transfer(&test->usb, data, len, timeout_ms, true, false);
 }
 
+static void ws73_test_wait_ready(void *context)
+{
+	struct ws73_download_test *test = context;
+	u64 start = ktime_get_ns(), elapsed;
+	unsigned long flags;
+
+	ws73_usb_io_wait_ready(context);
+	elapsed = ktime_get_ns() - start;
+	/* USB scheduling can mask a missing sleep in the gadget's wire timing. */
+	if (elapsed < 5000000) {
+		spin_lock_irqsave(&test->lock, flags);
+		test->error = -ETIME;
+		spin_unlock_irqrestore(&test->lock, flags);
+	}
+	dev_info(&test->intf->dev, "synthetic READY wait ns=%llu\n", elapsed);
+}
+
 static void ws73_test_download(struct work_struct *work)
 {
 	struct ws73_download_test *test = container_of(work, typeof(*test), work);
@@ -59,7 +76,7 @@ static void ws73_test_download(struct work_struct *work)
 		.cancelled = ws73_test_cancelled,
 		.send = ws73_test_send,
 		.receive = ws73_test_receive,
-		.wait_ready = ws73_usb_io_wait_ready,
+		.wait_ready = ws73_test_wait_ready,
 	};
 	struct ws73_fw_view images[] = {
 		{ test->payload, 32769, 0x400000 },

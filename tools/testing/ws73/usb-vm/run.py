@@ -147,6 +147,8 @@ def validate_download(kernel, log, speed="full"):
   if n in (4,5):assert part.index('WS73_TEST_REMOVE')<part.index('synthetic download result='),number
   else:assert part.index('synthetic download result=')<part.index('WS73_DOWNLOAD_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE'),number
   if n==5:assert part.index('synthetic payload admission')<part.index('WS73_TEST_REMOVE'),number
+ waits=re.findall(r'synthetic READY wait ns=(\d+)',kernel)
+ assert len(waits)==10 and all(int(ns)>=5000000 for ns in waits),'actual shared READY delay'
  assert log.count('WS73_TEST_KMSG ')==22
  assert log.count('WS73_DOWNLOAD_COMMAND ')==13 and log.count('WS73_DOWNLOAD_PAYLOAD ')==9
  assert log.count('WS73_DOWNLOAD_REPLY ')==20 and log.count('WS73_DOWNLOAD_QUIT ')==2

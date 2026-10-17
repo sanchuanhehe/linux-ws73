@@ -416,6 +416,7 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	usb_kill_urb(ws->interrupt_urb);
 	cancel_work_sync(&ws->initialize);
 	cancel_work_sync(&ws->stop);
+	dev_dbg(&interface->dev, "device callbacks drained\n");
 	usb_free_urb(ws->rx_urb);
 	usb_free_urb(ws->interrupt_urb);
 	kfree(ws->rx_buffer);

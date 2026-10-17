@@ -2388,3 +2388,118 @@ All VM/preflight and supervisor attempts, manifest SHA-256:
 
 Artifact/source audit ``kcsan-audit.json`` SHA-256:
 ``31804af300a09ec6b84e0e52f3858e031ed997ee904176f5f9f09c9854a403a9``.
+
+Bounded KCSAN writer diagnostic: stopped without resolving the writer
+-------------------------------------------------------------------
+
+The previous randomness-path report was investigated against source
+``8219a8d965422a3c1790d5ac45b53ea41a9a1b62``. release_task passes
+p->se.sum_exec_runtime by address, and fair scheduler update_se updates that
+field. kernel/sched/Makefile disables ordinary KCSAN access instrumentation
+while retaining barrier instrumentation. This supports a candidate explanation
+for an unknown-origin report, but does not identify the writer in that run.
+
+A temporary VM-only patch added __kcsan_check_read_write at the actual
+update_se accounting write. Its dirty patch, original/modified source,
+compiled fair.o and command file, symbol inventory and kernel artifacts are
+retained. The object contains __kcsan_check_access. The experiment was bounded
+to at most three VMs and would stop on a relevant report or unexpected failure.
+The first VM instead reported ``kthread_is_per_cpu / worker_thread`` before
+any WS73 KTAP case, panicked, and was terminated by the original 120-second
+supervisor deadline. This is a report in the temporarily instrumented kernel,
+not a newly claimed reproduction on an unchanged baseline. The temporary
+instrumentation may perturb timing; no causal claim beyond the trace is made.
+
+The experiment stopped after one attempt, without suppressing reports or
+trying to obtain PASS. Its precise source restoration was checked against
+HEAD and the saved original hash. No scheduler or exit/randomness changes
+were committed, and no external report was submitted. The original randomness
+writer remains unproven; the new startup report is also unresolved. Existing
+archived clean runs retain their original scope. The reusable KCSAN build
+cache contains this diagnostic build until rebuilt by the runner; it is not
+a clean qualification artifact.
+
+* ``20261017T144617.720728Z/manifest.json`` (FAIL),
+  ``5048fe75cb62d96dd56846affea1756e66477266d5c5897e3d8255a6a18e4d7f``.
+* Temporary scheduler patch SHA-256:
+  ``042a2d007c057f17aba0333559d026a8a9d5b1fc96d0a4a7bffd2bc4fe57f194``.
+* ``20261017T144617.720728Z/diagnostic/manifest.json`` SHA-256:
+  ``851fce7a01443e9ef821a30d82ac7ebb431c88962260a7c5e9a84777e368e605``.
+
+Conditional CBMC verification of production HCC scalar converters
+----------------------------------------------------------------
+
+Final checked source: ``f03ce8f3451f`` (full commit and tool identities in the
+manifest). tools/testing/ws73/formal/hcc.c includes the actual production
+hcc.c and public ws73.h rather than copying its algorithms. The four checked
+entry points are chip/version query encoding and chip/version reply decoding.
+The aggregate decoder in the same translation unit is outside this proof.
+
+CBMC 6.11.0 checks i386 and x86_64 scalar/pointer models. Length/capacity ranges
+over the full size_t domain; bytes, NULL arguments and previous output values
+are symbolic. Allocations model valid retained, distinct caller objects and
+an unaligned start, ending at min(declared extent, inspected prefix). Their
+18/24/32-byte prefixes and leading guard establish that shorter extents are
+respected and longer suffixes are not accessed. Caller allocation failure is
+excluded; protocol NULL inputs/outputs are not excluded.
+
+The trusted shim covers kernel scalar types, errno values, module metadata,
+memset declarations and bytewise unaligned little-endian helpers. The actual
+kernel helper implementations are not proved equivalent by this harness.
+CBMC/frontend/library/preprocessor correctness and caller ownership assumptions
+remain dependencies. Success means the stated C conversion properties under
+these assumptions, not hardware protocol authenticity or compatibility.
+
+Eight positive jobs pass: each architecture reports 443 chip-reply and 395
+version-reply properties; query jobs report 210 each on i386 and 209 each on
+x86_64. The total is 2,514 successful property results across the jobs, with
+shared checks repeated; it is not a count of unique tests. Exact acceptance,
+query bytes, failure-output preservation, unchanged input, successful value
+preservation and pointer/bounds/arithmetic/conversion/leak checks pass.
+Each job obtains a complete --show-properties inventory first; every solver
+result ID and description must match it, in addition to explicit contracts.
+Unwind 33 and unwinding assertions cover the 32-byte query loop.
+
+Five negative production-code copies yield exactly the intended counterexample:
+wrong chip query tag, wrong version request role byte, premature chip output
+publication, removal of the declared record-length bound, and returning the
+firmware word as the ROM word. Those copies are private proof inputs and never
+kernel code. Another actual solver run with unwind 1 fails an unwinding
+assertion and is rejected as incomplete. The result supervisor also rejects
+24 damaged-result controls, including missing memory/contract properties,
+unknown/failed statuses, warnings, mismatched inventories, abnormal exit,
+truncated JSON and invalid negative-control outcomes; all 13 retained positive
+and expected-counterexample records validate.
+
+The initial preparatory probe failed because host 32-bit libc headers were
+absent. A second single-function development probe succeeded. Those probes
+were uncommitted, did not retain complete source snapshots, and are not
+qualification evidence; their raw commands and output remain. The first
+committed matrix also stopped when CBMC's builtin memset model included the
+host string.h. A minimal standard string declaration now isolates that model
+from host multilib headers without changing the production implementation.
+The failed full matrix remains NOT_PROVEN, even though two jobs had succeeded.
+The subsequent complete matrix and final inventory-checked matrix both pass
+with their own source hashes. Each solver runs serially under the project
+lock, with a 60-second and 4-GiB address-space limit.
+
+No kernel or driver was executed on the host for these proofs. Production
+WS73 code is unchanged in this increment. USB aggregation, H4 streaming,
+concurrent lifecycle/refinement, TLC/LKMM, liveness and real devices are not
+proved. KCSAN reports, original-firmware physical startup, the pending new
+single-U power-cycle confirmation, E hardware, peers/AP and upstream review
+remain open. This is the plan's conditional bounded-C evidence category,
+not completion of the formal verification or hardware qualification program.
+
+Records and manifest SHA-256:
+
+* ``cbmc-hcc-20261017T150007.939157Z`` (NOT_PROVEN),
+  ``4e93240c234e1fed74c7762c2ad246a881e7e5260b74b237731c6e43a8f9a950``.
+* ``cbmc-hcc-20261017T150040.967709Z`` (BOUNDED_PASS),
+  ``40a7478aa7fb6a1d0b1052702260fd7601840c3eca23dbd001523dd76058562c``.
+* ``cbmc-hcc-20261017T150252.752024Z`` (BOUNDED_PASS),
+  ``01dffc9088d12067c1ae8475f1889e82f9620a1d81c771bf467491a8061f0663``.
+* ``cbmc-supervisor-20261017T150434.923169Z`` (PASS),
+  ``3434c5ed819d7c5933444f9e26bd159d1d98cd89ba2d97b05a07fa0fdf26489e``.
+* ``cbmc-unwind-control-20261017T150612.759243Z`` (EXPECTED_INCOMPLETE_REJECTED),
+  ``f27a10bd1d401bbd999e394b0940bad99f2f7f37d28ef5ccd64da4c6e3b9b96f``.

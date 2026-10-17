@@ -250,8 +250,8 @@ bytes, before any queue-switch/reset side effect. It uses the existing bounded
 serial transport, with actual-length checking and terminal failure after a
 short transfer. RX retains its separate device-notification decoder and length
 convention. Encoding or USB TX success does not imply CUSTOMIZE_RECEIVED.
-No initialization caller sends the new record yet; board profile selection,
-acknowledgement transaction and subsequent boot/action gates remain pending.
+No initialization caller sends the new record yet; board profile selection and
+subsequent boot/action gates remain pending.
 
 The pinned SDK ``build/config/ws73_cfg_default.ini`` and
 ``hbsle_custom_fill_ini_param`` provide a more complete parameter source than
@@ -260,6 +260,24 @@ contains eight calibration frequencies (6, 15, 26, 39, 60, 68, 72, 76), whereas
 the no-INI default structure initializes the corresponding words to reference
 20 without those frequency half-words. Neither path alone establishes board
 compatibility for both U/E. No default board profile is selected here.
+
+``customize-request.c`` adds a one-shot per-device transaction, with independent
+RX completion and cancellation. Queue-switch/reset traffic occurs in PREPARING;
+only immediately before the data submission does it arm WAITING. A premature,
+duplicate or late CUSTOMIZE_RECEIVED is terminal. Unarmed observations do not
+satisfy a future request. BOOT_FINISH and BLE action notifications cannot satisfy
+this waiter. Exact USB transfer completion and one timely acknowledgement must
+both succeed, within one absolute deadline capped to 2000 ms. Successful apply
+cannot be repeated, and any failure retains its first error without retry.
+Invalid parameters are rejected before consuming the transaction or doing I/O.
+
+The USB parent initializes, routes notifications to and aborts this state on
+shared failure/disconnect. Initialization still does not call apply: a known
+firmware epoch and board-qualified parameters are prerequisites. Tokenless
+status cannot authenticate the device epoch. As with BLE action state, an owner
+adding a caller must join it before releasing the parent; the current parent
+has no customization caller. Synthetic tests cover actual production transport
+sequencing and an independent RX thread, not a physical customization exchange.
 
 BLE initialization audit (SDK110)
 --------------------------------

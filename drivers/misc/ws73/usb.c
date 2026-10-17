@@ -6,6 +6,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/unaligned.h>
 #include <linux/usb.h>
 #include <linux/workqueue.h>
 
@@ -22,6 +23,7 @@ struct ws73_usb {
 	struct ws73_usb_tx tx;
 	struct ws73_platform_request identity;
 	struct ws73_ble_control ble;
+	struct ws73_ble_control_io ble_io;
 	struct urb *rx_urb;
 	struct urb *interrupt_urb;
 	u8 *rx_buffer;
@@ -79,9 +81,10 @@ static void ws73_usb_complete(struct urb *urb)
 }
 
 static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
-			     unsigned int timeout_ms, bool receive)
+			     unsigned int timeout_ms, bool receive, bool control)
 {
 	struct ws73_usb_request request;
+	struct usb_ctrlrequest *setup = NULL;
 	struct urb *urb;
 	unsigned long flags;
 	u8 *buffer;
@@ -89,6 +92,8 @@ static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
 
 	if (!size || size > (ws->runtime ? WS73_USB_TX_MAX : 512) ||
 	    !timeout_ms || timeout_ms > 2000)
+		return -EINVAL;
+	if (control && (!ws->runtime || receive || size != 4))
 		return -EINVAL;
 	urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!urb)
@@ -103,12 +108,25 @@ static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
 	init_completion(&request.done);
 	request.status = -EINPROGRESS;
 	request.actual = 0;
-	usb_fill_bulk_urb(urb, ws->udev,
-			  receive ? usb_rcvbulkpipe(ws->udev, ws->in) :
-			 usb_sndbulkpipe(ws->udev, ws->out),
-			 buffer, size, ws73_usb_complete, &request);
-	if (ws->runtime && !receive)
-		urb->transfer_flags |= URB_ZERO_PACKET;
+	if (control) {
+		setup = kzalloc_obj(*setup);
+		if (!setup) {
+			ret = -ENOMEM;
+			goto free_buffer;
+		}
+		setup->bRequestType = USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE;
+		setup->wLength = cpu_to_le16(4);
+		/* SDK110: request/value/index are all zero; only interface 0 binds. */
+		usb_fill_control_urb(urb, ws->udev, usb_sndctrlpipe(ws->udev, 0),
+				     (u8 *)setup, buffer, size, ws73_usb_complete, &request);
+	} else {
+		usb_fill_bulk_urb(urb, ws->udev,
+				  receive ? usb_rcvbulkpipe(ws->udev, ws->in) :
+				 usb_sndbulkpipe(ws->udev, ws->out),
+				 buffer, size, ws73_usb_complete, &request);
+		if (ws->runtime && !receive)
+			urb->transfer_flags |= URB_ZERO_PACKET;
+	}
 
 	spin_lock_irqsave(&ws->lock, flags);
 	if (ws->disconnected || ws->error) {
@@ -137,6 +155,7 @@ static int ws73_usb_transfer(struct ws73_usb *ws, void *data, size_t size,
 		ret = request.actual;
 	}
 free_buffer:
+	kfree(setup);
 	kfree(buffer);
 free_urb:
 	usb_free_urb(urb);
@@ -269,12 +288,21 @@ static void ws73_usb_rx_complete(struct urb *urb)
 
 static int ws73_usb_send(void *context, const u8 *data, size_t size, unsigned int timeout)
 {
-	return ws73_usb_transfer(context, (void *)data, size, timeout, false);
+	return ws73_usb_transfer(context, (void *)data, size, timeout, false, false);
 }
 
 static int ws73_usb_receive(void *context, u8 *data, size_t size, unsigned int timeout)
 {
-	return ws73_usb_transfer(context, data, size, timeout, true);
+	return ws73_usb_transfer(context, data, size, timeout, true, false);
+}
+
+static int ws73_usb_ble_send(void *context, const u8 command[4], unsigned int timeout)
+{
+	u32 message = get_unaligned_le32(command);
+
+	if (message != 25 && message != 26)
+		return -EINVAL;
+	return ws73_usb_transfer(context, (void *)command, 4, timeout, false, true);
 }
 
 static void ws73_usb_initialize(struct work_struct *work)
@@ -386,6 +414,12 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	ws73_usb_tx_init(&ws->tx);
 	ws73_platform_init(&ws->identity);
 	ws73_ble_control_init(&ws->ble);
+	ws->ble_io = (struct ws73_ble_control_io) {
+		.context = ws,
+		.now_ms = ws73_usb_now,
+		.cancelled = ws73_usb_cancelled,
+		.send = ws73_usb_ble_send,
+	};
 	if (runtime) {
 		ws->rx_urb = usb_alloc_urb(0, GFP_KERNEL);
 		ws->interrupt_urb = usb_alloc_urb(0, GFP_KERNEL);

@@ -52,9 +52,15 @@ def main():
                 manifest["tools"][tool] = {
                     "path": str(path), "sha256": sha(path),
                     "version": subprocess.check_output([tool, "--version"], text=True),
+                    "path_candidates_sha256": {
+                        str(candidate): sha(candidate) for candidate in sorted({
+                            (Path(entry) / tool).resolve() for entry in os.get_exec_path()
+                            if (Path(entry) / tool).is_file()
+                        })
+                    },
                 }
             env = dict(os.environ, CCACHE_DISABLE="1", KCONFIG_ALLCONFIG=str(CONFIG),
-                       KCONFIG_DEFCONFIG_LIST="/dev/null")
+                       KCONFIG_DEFCONFIG_LIST="/dev/null", KCONFIG_CONFIG=".config")
             with (record / "build.log").open("w") as log:
                 for target in ("allnoconfig", "bzImage"):
                     command = ["make", "-C", str(SOURCE), f"O={BUILD}", "ARCH=x86_64",

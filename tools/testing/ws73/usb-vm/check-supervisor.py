@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-import argparse,datetime,hashlib,importlib.util,json,pathlib,re,sys
+import argparse,copy,datetime,hashlib,importlib.util,json,pathlib,re,sys
 sys.dont_write_bytecode=True
 if not __debug__:raise RuntimeError("Run without Python optimization")
 parser=argparse.ArgumentParser(description="Verify rejection controls against a fresh full-speed PASS record")
@@ -15,6 +15,21 @@ assert proof['status']=='PASS' and proof['speed']=='full'
 for name in ['kernel.log','fixture.log']:
  assert hashlib.sha256((p/name).read_bytes()).hexdigest()==proof['materials'][name]
 k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();m.validate(k,s)
+builddir=pathlib.Path(proof['build_record'])
+build=json.loads((builddir/'manifest.json').read_text())
+m.validate_build(builddir,build,proof['compiled_source'])
+artifact_trials={}
+for name in ['stale_source','failed_build','missing_artifact','extra_artifact','wrong_hash']:
+ changed=copy.deepcopy(build)
+ if name=='stale_source':changed['source']='0'*40
+ elif name=='failed_build':changed['status']='FAIL'
+ elif name=='missing_artifact':del changed['artifacts']['drivers/misc/ws73/usb.o']
+ elif name=='extra_artifact':changed['artifacts']['unexpected']='0'*64
+ else:changed['artifacts']['.config']='0'*64
+ try:m.validate_build(builddir,changed,proof['compiled_source'])
+ except (AssertionError,ValueError):artifact_trials[name]='REJECTED'
+ else:raise AssertionError('accepted '+name)
+
 trials={
  'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
  'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
@@ -58,5 +73,5 @@ for name,(a,b) in trials.items():
 out=root/'records'/('virtual-usb-negative-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
 out.mkdir(parents=True)
 (out/'check-supervisor.py').write_bytes(pathlib.Path(__file__).read_bytes())
-result={'status':'PASS','runner_sha256':hashlib.sha256(runner.read_bytes()).hexdigest(),'checker_sha256':hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),'positive_record':str(p),'negative_rejected':rejected,'scope':'text supervisor rejection checks only'}
-(out/'manifest.json').write_text(json.dumps(result,indent=2)+'\n');print(out);print('PASS',len(rejected))
+result={'status':'PASS','runner_sha256':hashlib.sha256(runner.read_bytes()).hexdigest(),'checker_sha256':hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),'positive_record':str(p),'negative_rejected':rejected,'artifact_rejected':artifact_trials,'scope':'text supervisor rejection checks only'}
+(out/'manifest.json').write_text(json.dumps(result,indent=2)+'\n');print(out);print('PASS',len(rejected),'log controls and',len(artifact_trials),'artifact controls')

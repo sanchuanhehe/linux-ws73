@@ -6,6 +6,17 @@ SOURCE=TOOLS.parents[3]
 WORK=SOURCE.parent/'.dev/ws73-upstream'
 if not __debug__: raise RuntimeError('Run without Python optimization; verification assertions are required')
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def validate_build(proofdir, proof, expected_head):
+ required={'.config','arch/x86/boot/bzImage','vmlinux'}
+ required.update('drivers/misc/ws73/'+name+'.o' for name in
+                 ['usb','boot','firmware','runtime','usb-tx','usb-wire','service',
+                  'ble-control','customize','customize-request','startup'])
+ assert proof['status']=='PASS','failed/incomplete build'
+ assert proof['source']==expected_head,'stale source artifact'
+ assert set(proof['artifacts'])==required,'missing/extra build artifact'
+ for name,digest in proof['artifacts'].items():
+  assert sha(proofdir/name)==digest,'artifact hash mismatch: '+name
+
 def validate(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL',kernel+'\n'+log)
  assert not bad, bad.group(0) if bad else ''
@@ -81,15 +92,15 @@ def main():
  with (WORK/'build.lock').open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   proofdir=pathlib.Path((WORK/'usb-vm-build-record').read_text().strip());proof=json.loads((proofdir/'manifest.json').read_text())
-  assert proof['status']=='PASS'
-  assert {'.config','arch/x86/boot/bzImage','vmlinux','drivers/misc/ws73/usb.o'} <= proof['artifacts'].keys()
   before=source_identity();assert not before['status']
-  for name,digest in proof['artifacts'].items():assert sha(proofdir/name)==digest,name
+  validate_build(proofdir,proof,before['head'])
   stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ');record=WORK/'records'/('virtual-usb-'+stamp);record.mkdir();print(record,flush=True)
   manifest={'status':'INCOMPLETE','compiled_source':proof['source'],'speed':args.speed,'scope':'FunctionFS/dummy_hcd synthetic USB integration in hardware-free VM; no physical/firmware/HCI qualification','build_record':str(proofdir),'harness_source':before,'tools':{},'materials':{}}
   def save():(record/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
   for tool in ['gcc','qemu-system-x86_64','python3']:
    path=pathlib.Path(shutil.which(tool));manifest['tools'][tool]={'path':str(path),'sha256':sha(path),'version':subprocess.check_output([tool,'--version'],text=True).splitlines()[0]}
+   candidates={(pathlib.Path(entry)/tool).resolve() for entry in os.get_exec_path() if (pathlib.Path(entry)/tool).is_file()}
+   manifest['tools'][tool]['path_candidates_sha256']={str(p):sha(p) for p in sorted(candidates)}
   for source,name in [(proofdir/'manifest.json','build-proof.json'),(proofdir/'arch/x86/boot/bzImage','bzImage'),(proofdir/'.config','.config'),(TOOLS/'init.c','init.c'),(TOOLS/'run.py','run.py'),(TOOLS/'build.py','build.py')]:
    shutil.copyfile(source,record/name);manifest['materials'][name]=sha(record/name)
   compile_cmd=['gcc','-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]

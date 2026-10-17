@@ -3439,3 +3439,60 @@ Private records and manifest SHA-256:
   ``4e8df5f318b9345478b73f7901b5c55d1951c16091cf9b7c8b39361b17c5320c``.
 * ``load-ble-trial-20261017T182455.149845Z``,
   ``45999f1e20ef1221492117d705453e03e6bad6a880cf67750c2df10b14f30eb8``.
+
+Allocated-U continuous RAM load and BLE enable/disable (2026-10-18 SGT)
+--------------------------------------------------------------------
+
+Source ``f88f2a4e105298be809793bb9e9b5ff75ea449c0`` passed one physical
+trial using the assigned U in the isolated, two-vCPU VM. After the user's
+power-removal/reinsertion confirmation, host enumeration was initially absent;
+read-only checks did not consume the confirmation or start a hardware trial.
+The same serial reappeared on the assigned port at 06:11:05 SGT following
+another reported reinsertion. Its exact boot descriptors and lack of ownership
+were checked before attachment. No hub/controller recovery was performed;
+the cause of the earlier missing enumeration remains unknown.
+
+The production boot path read HCC identity before selecting the three original
+SDK110 U files, validated all inputs, performed the 11 fixed preparation
+operations and downloaded 172580 payload bytes in seven blocks. The transcript
+contains 29 boot OUT transfers and 28 replies, including the initial observer
+queries, fresh loader identity, READY/FILES OK exchanges and QUIT. The result
+reached WAIT_RUNTIME. The explicit reference XO/calibration choices retain
+their earlier board-qualification limitations.
+
+Controlled QMP detach/reattach created a new runtime owner on the same guest
+port with a new enumeration number. U/USB and firmware ``0x010a6e3c`` /
+ROM ``0x00010101`` matched. The production startup path received BSP readiness,
+sent the awake-platform policy and reference customization, received the
+customization/action/BOOT notifications, then completed one explicit BLE
+disable with its device reply. The verifier checked eight runtime bulk OUT,
+six successful bulk IN, four function notifications, one successful interrupt
+and two completed class requests (enable 25, disable 26). Neither a host write
+completion alone nor a synthesized HCI event was used as a success criterion.
+
+All archived material hashes match. Text and binary bulk captures agree,
+binary drop counters are zero, and complete runtime replies are retained.
+The 512-byte customization TX prefix includes all 140 input bytes but omits
+the final 352 padding bytes; this is not a complete-wire-payload capture claim.
+Three device owners drained, QEMU exited 0, and the target returned unowned
+at runtime host enumeration 125. No KASAN/UBSAN/lock warning was observed.
+Read-only postchecks confirmed unchanged serials/enumeration numbers for all
+four SparkLink devices; none was attached, reset or otherwise operated on.
+
+This is real U initialization/enable/disable evidence, not native HCI, RF,
+peer communication, address provisioning, E support, repeated-start endurance
+or natural reenumeration/recovery qualification. The earlier retained-runtime
+timeout remains FAIL with an unresolved cause; this fresh-load success does
+not establish a repair or justify automatic retry. The production parent
+remains observation-only, and the joint U/E submission gates remain open.
+
+Private records and manifest SHA-256:
+
+* ``hardware-build-20261017T182600.080209Z``,
+  ``49b003c838f02c5f92287c53222abbd9ae7c2ba7b68143d5e583b30c3239498d``.
+* ``load-ble-trial-20261017T182639.410161Z`` (empty VM),
+  ``1012f1660280b1c2c4709cd8ef72d4cff1ca3c25603fbcc42fb9dd346bbd1e36``.
+* ``load-ble-confirmation-20261017T221210.724824Z``,
+  ``ecc3312b1cefc6709ec7c437750b6c319e2133c7642f40ea28344b5c177441a3``.
+* ``load-ble-trial-20261017T221219.018687Z``,
+  ``5f1dec77e9518414c33078c2be3583aa30ae11e1d8f625be657d1e45ebc726b4``.

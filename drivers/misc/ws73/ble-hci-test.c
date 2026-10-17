@@ -76,7 +76,7 @@ static void ws73_hci_failed_enable_test(struct kunit *test)
 		device_for_each_child(&adev->dev, &children, ws73_hci_count_child);
 		if (!children)
 			break;
-		msleep(10);
+		msleep(20);
 	} while (time_before(jiffies, deadline));
 	KUNIT_EXPECT_EQ(test, children, 0);
 	KUNIT_EXPECT_EQ(test, f->sends, 0);

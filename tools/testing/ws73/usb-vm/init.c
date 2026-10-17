@@ -19,6 +19,9 @@
 #include <linux/usb/functionfs.h>
 
 #define G "/sys/kernel/config/usb_gadget/ws73/"
+#ifndef WS73_TEST_BOOT
+#define WS73_TEST_BOOT 0
+#endif
 static int disconnected;
 
 static void stop(int failed)
@@ -48,22 +51,24 @@ static void le32(unsigned char *p, uint32_t v) { le16(p, v); le16(p + 2, v >> 16
 static void descriptors(int fd)
 {
  unsigned char d[108] = {0}, s[23] = {0};
- le32(d, FUNCTIONFS_DESCRIPTORS_MAGIC_V2); le32(d + 4, sizeof(d));
+ unsigned int endpoints = WS73_TEST_BOOT ? 2 : 5;
+ unsigned int stride = 9 + endpoints * 7, length = 20 + stride * 2;
+ le32(d, FUNCTIONFS_DESCRIPTORS_MAGIC_V2); le32(d + 4, length);
  le32(d + 8, FUNCTIONFS_HAS_FS_DESC | FUNCTIONFS_HAS_HS_DESC);
- le32(d + 12, 6); le32(d + 16, 6);
+ le32(d + 12, endpoints + 1); le32(d + 16, endpoints + 1);
  for (unsigned int speed = 0; speed < 2; speed++) {
-  unsigned char *p = d + 20 + speed * 44;
-  unsigned char iface[] = {9, USB_DT_INTERFACE, 0, 0, 5, 0xe0, 2, 2, 1};
+  unsigned char *p = d + 20 + speed * stride;
+  unsigned char iface[] = {9, USB_DT_INTERFACE, 0, 0, endpoints, 0xe0, 2, 2, 1};
   const unsigned char addresses[] = {0x81, 0x02, 0x83, 0x04, 0x85};
   memcpy(p, iface, sizeof(iface)); p += sizeof(iface);
-  for (unsigned int i = 0; i < 5; i++, p += 7) {
+  for (unsigned int i = 0; i < endpoints; i++, p += 7) {
    p[0] = 7; p[1] = USB_DT_ENDPOINT; p[2] = addresses[i];
    p[3] = i == 2 ? USB_ENDPOINT_XFER_INT : USB_ENDPOINT_XFER_BULK;
    le16(p + 4, i == 2 ? 8 : speed ? 512 : 64);
    p[6] = i == 2 ? speed ? 4 : 1 : 0;
   }
  }
- if (write(fd, d, sizeof(d)) != sizeof(d)) die("FunctionFS descriptors");
+ if (write(fd, d, length) != length) die("FunctionFS descriptors");
  le32(s, FUNCTIONFS_STRINGS_MAGIC); le32(s + 4, sizeof(s));
  le32(s + 8, 1); le32(s + 12, 1); le16(s + 16, 0x409);
  memcpy(s + 18, "ws73", 5);
@@ -180,6 +185,52 @@ static void interrupt_event(int in, int log, unsigned int trial)
   puts("WS73_TEST_INT kind=duplicate actual=8 bits=80000819 synthetic");
  }
 }
+static void boot_trials(int control, int *eps, int log, const char *udc)
+{
+ static const uint32_t words[] = {0, 0x0a, 0x0c, 4, 0x28, 0, 0, 0, 0, 0, 0, 0, 0, 0x0a};
+ static const unsigned int lengths[] = {4, 4, 4, 4, 4, 0, 1, 3, 5, 512, 0, 0, 4, 4};
+ static const char *expected[] = {
+  "boot chip observation 0x00000000: package 0 bus 0; cold-read qualification pending",
+  "boot chip observation 0x0000000a: package 2 bus 0; cold-read qualification pending",
+  "boot chip observation 0x0000000c: package 0 bus 0; cold-read qualification pending",
+  "boot chip observation 0x00000004: package 1 bus 1; cold-read qualification pending",
+  "boot chip observation 0x00000028: package 2 bus 2; cold-read qualification pending",
+ };
+ for (unsigned int trial = 0; trial < 14; trial++) {
+  unsigned char got[512], reply[512] = {0};
+  static const char command[] = "READM 0x40019000 4 ";
+  const char *message;
+  printf("WS73_BOOT_CASE %u BEGIN\n", trial); disconnected = 0;
+  setting(G "UDC", udc); enabled(control);
+  ssize_t n = read(eps[1], got, sizeof(got));
+  if (n != sizeof(command) - 1 || memcmp(got, command, sizeof(command) - 1))
+   die("boot READM bytes/length");
+  printf("WS73_BOOT_OUT actual=%zd READM_40019000_4 verified\n", n);
+  if (trial == 11) { puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); }
+  else if (trial != 10) {
+   le32(reply, words[trial]);
+   if (write(eps[0], reply, lengths[trial]) != lengths[trial]) die("boot IN length");
+   printf("WS73_BOOT_IN actual=%u word=%08x synthetic\n", lengths[trial], words[trial]);
+  } else puts("WS73_BOOT_WITHHOLD_REPLY");
+  message = trial < 5 ? expected[trial] : trial < 10 ? "boot chip observation failed: -90" :
+            trial == 10 ? "boot chip observation failed: -110" :
+            trial == 11 ? "boot chip observation failed: " : expected[trial - 12];
+  wait_kernel(log, message);
+  if (trial != 11) {
+   /* An ambiguous result must not provoke retries or firmware writes. */
+   int flags = fcntl(eps[1], F_GETFL);
+   if (flags < 0 || fcntl(eps[1], F_SETFL, flags | O_NONBLOCK)) die("boot nonblock");
+   n = read(eps[1], got, sizeof(got));
+   if (n != -1 || errno != EAGAIN) die("unexpected extra boot OUT");
+   if (fcntl(eps[1], F_SETFL, flags)) die("boot restore flags");
+   puts("WS73_BOOT_NO_EXTRA_OUT");
+   puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n");
+  }
+  if (!disconnected) wait_kernel(log, "USB disconnect");
+  wait_kernel(log, "device callbacks drained");
+  printf("WS73_BOOT_CASE %u PASS\n", trial);
+ }
+}
 int main(void)
 {
  if (getpid() != 1) return 2;
@@ -219,13 +270,15 @@ int main(void)
  if (control < 0) die("ep0");
  descriptors(control);
  int eps[5];
- for (unsigned int i = 0; i < 5; i++) {
+ unsigned int endpoints = WS73_TEST_BOOT ? 2 : 5;
+ for (unsigned int i = 0; i < endpoints; i++) {
   char path[32]; snprintf(path, sizeof(path), "/dev/ffs/ep%u", i + 1);
   eps[i] = open(path, O_RDWR);
   if (eps[i] < 0) die(path);
  }
  if (symlink(G "functions/ffs.ws73", G "configs/c.1/ffs.ws73")) die("function link");
- for (unsigned int trial = 0; trial < 17; trial++) {
+ if (WS73_TEST_BOOT) boot_trials(control, eps, log, udc);
+ else for (unsigned int trial = 0; trial < 17; trial++) {
   unsigned char reply[124] = {0};
   const char *expected[] = {
    "runtime chip observation: package 2 bus 0; firmware compatibility unverified",
@@ -292,7 +345,7 @@ int main(void)
   printf("WS73_TEST_CASE %u PASS\n", trial);
  }
  close(log);
- for (unsigned int i = 0; i < 5; i++) close(eps[i]);
+ for (unsigned int i = 0; i < endpoints; i++) close(eps[i]);
  close(control);
  stop(0);
 }

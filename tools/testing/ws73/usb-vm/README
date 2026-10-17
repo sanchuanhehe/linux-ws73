@@ -10,6 +10,8 @@ the compiled init fixture directly on the host or add physical USB passthrough.
   python3 tools/testing/ws73/usb-vm/build.py
   python3 tools/testing/ws73/usb-vm/run.py --speed full
   python3 tools/testing/ws73/usb-vm/run.py --speed high
+  python3 tools/testing/ws73/usb-vm/run.py --phase boot --speed full
+  python3 tools/testing/ws73/usb-vm/run.py --phase boot --speed high
   python3 tools/testing/ws73/usb-vm/check-supervisor.py <full-speed-record>
 
 Do not use python -O: assertions form part of the verification and optimized
@@ -38,7 +40,16 @@ tool, runtime library, kernel and fixture hashes accompany each attempt.
 The negative checker corrupts a verified full-speed log in 32 ways and checks
 five invalid build manifests (stale source, failed build, missing/extra artifact
 and wrong hash). Every corruption must be rejected. It does not exercise a
-device.
+device. Run it once for each phase's full-speed PASS record. Boot mode checks
+22 log corruptions and the same five invalid build manifests.
+
+The boot phase enumerates two-endpoint synthetic devices in 14 cases. It checks
+the exact fixed READM command, U/USB (including zero), E/USB, S/SDIO and E/UART
+observations, replies of 0/1/3/5/512 bytes, a withheld reply timeout, removal
+while awaiting a reply and fresh U/E instances after removal. Decoding S/SDIO
+or E/UART does not enable those transports. Thirteen cases also check that no
+extra OUT command is pending before removal. These are live USB transfers in
+dummy_hcd, not proof that a real cold chip exposes the strap register.
 
 These tests do not execute boot firmware download, 32-KiB boot TX, the READY
 delay, armed startup/customization, BLE class-control, HCI or Wi-Fi. They are

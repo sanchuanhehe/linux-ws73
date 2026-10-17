@@ -67,6 +67,48 @@ def validate(kernel, log, speed="full"):
   assert re.findall(r'WS73_TEST_IN kind=(\w+) actual=(\d+) synthetic',part)==incoming,number
  assert len(re.findall(r'WS73_TEST_KMSG ',log))==67+removal_errors,'missing/extra captured kernel records'
  return {'cases':17,'out_transfers':65,'in_transfers':30,'interrupt_transfers':8,'disconnects':17,'drains':17,'removal_interrupt_errors':removal_errors}
+def validate_boot(kernel, log, speed="full"):
+ bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL',kernel+'\n'+log)
+ assert not bad, bad.group(0) if bad else ''
+ assert len(re.findall(r"new "+speed+r"-speed USB device",kernel))==14,'boot enumeration count/speed'
+ assert log.count('WS73_VIRTUAL_USB_PASS')==1,'missing/repeated overall PASS'
+ assert re.findall(r'WS73_BOOT_CASE (\d+) BEGIN',log)==[str(i) for i in range(14)]
+ assert re.findall(r'WS73_BOOT_CASE (\d+) PASS',log)==[str(i) for i in range(14)]
+ parts=re.findall(r'WS73_BOOT_CASE (\d+) BEGIN(.*?)WS73_BOOT_CASE \1 PASS',log,re.S)
+ assert [int(x[0]) for x in parts]==list(range(14)),'missing/reordered boot case'
+ words=[0,10,12,4,40,0,0,0,0,0,0,0,0,10]
+ lengths=[4,4,4,4,4,0,1,3,5,512,0,0,4,4]
+ identities=[(0,0),(2,0),(0,0),(1,1),(2,2)]
+ for number,part in parts:
+  n=int(number)
+  records=re.findall(r'WS73_TEST_KMSG ([^\r\n]*)',part)
+  assert len(records)==3,'missing/extra boot kernel record '+number
+  observations=[x for x in records if 'boot chip observation' in x]
+  assert len(observations)==1,number
+  observed=observations[0]
+  if n<5 or n>11:
+   package,bus=identities[n if n<5 else n-12]
+   expected=f'boot chip observation 0x{words[n]:08x}: package {package} bus {bus}; cold-read qualification pending'
+   assert observed.endswith(expected),number
+  elif n<10:assert observed.endswith('boot chip observation failed: -90'),number
+  elif n==10:assert observed.endswith('boot chip observation failed: -110'),number
+  else:assert re.search(r'boot chip observation failed: -(19|108|71)$',observed),number
+  assert sum('USB disconnect' in x for x in records)==1,number
+  assert 'device callbacks drained' in records[-1],number
+  assert re.findall(r'WS73_BOOT_OUT actual=(\d+) (\w+) verified',part)==[('19','READM_40019000_4')],number
+  incoming=[] if n in (10,11) else [(str(lengths[n]),f'{words[n]:08x}')]
+  assert re.findall(r'WS73_BOOT_IN actual=(\d+) word=([0-9a-f]+) synthetic',part)==incoming,number
+  assert part.count('WS73_BOOT_WITHHOLD_REPLY')==(1 if n==10 else 0),number
+  assert part.count('WS73_BOOT_NO_EXTRA_OUT')==(0 if n==11 else 1),number
+  assert part.count('WS73_TEST_REMOVE')==1,number
+  assert part.index('WS73_TEST_REMOVE')<part.index('USB disconnect')<part.index('device callbacks drained'),number
+  if n==11:assert part.index('WS73_TEST_REMOVE')<part.index('boot chip observation failed:')<part.index('device callbacks drained'),number
+  else:assert part.index('boot chip observation')<part.index('WS73_BOOT_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE'),number
+ assert log.count('WS73_TEST_KMSG ')==42,'extra captured boot records'
+ assert len(re.findall(r'boot chip observation(?: failed:| 0x)',kernel))==14,'extra/missing actual boot observations'
+ assert log.count('WS73_BOOT_OUT ')==14 and log.count('WS73_BOOT_IN ')==12
+ assert 'runtime chip observation' not in kernel and 'WS73_TEST_CASE' not in log
+ return {'cases':14,'out_transfers':14,'in_transfers':12,'disconnects':14,'drains':14,'timeout_cases':1,'no_extra_out_checks':13}
 def library(name):
  path=pathlib.Path(subprocess.check_output(['gcc','-print-file-name='+name],text=True).strip()).resolve()
  if not path.is_file():raise RuntimeError('Missing host runtime library: '+name)
@@ -88,14 +130,14 @@ def archive(init_binary):
  item('TRAILER!!!',0)
  return gzip.compress(bytes(result),mtime=0),{str(path):sha(path) for path in files.values()}
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');parser.add_argument('--phase',choices=['runtime','boot'],default='runtime');args=parser.parse_args()
  with (WORK/'build.lock').open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   proofdir=pathlib.Path((WORK/'usb-vm-build-record').read_text().strip());proof=json.loads((proofdir/'manifest.json').read_text())
   before=source_identity();assert not before['status']
   validate_build(proofdir,proof,before['head'])
   stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ');record=WORK/'records'/('virtual-usb-'+stamp);record.mkdir();print(record,flush=True)
-  manifest={'status':'INCOMPLETE','compiled_source':proof['source'],'speed':args.speed,'scope':'FunctionFS/dummy_hcd synthetic USB integration in hardware-free VM; no physical/firmware/HCI qualification','build_record':str(proofdir),'harness_source':before,'tools':{},'materials':{}}
+  manifest={'status':'INCOMPLETE','compiled_source':proof['source'],'speed':args.speed,'phase':args.phase,'scope':'FunctionFS/dummy_hcd synthetic USB integration in hardware-free VM; no physical/firmware/HCI qualification','build_record':str(proofdir),'harness_source':before,'tools':{},'materials':{}}
   def save():(record/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
   for tool in ['gcc','qemu-system-x86_64','python3']:
    path=pathlib.Path(shutil.which(tool));manifest['tools'][tool]={'path':str(path),'sha256':sha(path),'version':subprocess.check_output([tool,'--version'],text=True).splitlines()[0]}
@@ -103,7 +145,7 @@ def main():
    manifest['tools'][tool]['path_candidates_sha256']={str(p):sha(p) for p in sorted(candidates)}
   for source,name in [(proofdir/'manifest.json','build-proof.json'),(proofdir/'arch/x86/boot/bzImage','bzImage'),(proofdir/'.config','.config'),(TOOLS/'init.c','init.c'),(TOOLS/'run.py','run.py'),(TOOLS/'build.py','build.py')]:
    shutil.copyfile(source,record/name);manifest['materials'][name]=sha(record/name)
-  compile_cmd=['gcc','-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
+  compile_cmd=['gcc','-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
   manifest['init_compile']=compile_cmd
   with (record/'init-build.log').open('w') as build_log:
    subprocess.run(compile_cmd,check=True,stdout=build_log,stderr=subprocess.STDOUT,env=dict(os.environ,CCACHE_DISABLE='1'))
@@ -115,7 +157,7 @@ def main():
    with (record/'kernel.log').open('w') as log:
     result=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,timeout=45)
    manifest['exit_code']=result.returncode;assert result.returncode==0
-   manifest['observed']=validate((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
+   manifest['observed']=(validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
    assert source_identity()==before,'source changed during VM test'
    manifest['status']='PASS'
   except BaseException as error:

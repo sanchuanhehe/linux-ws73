@@ -14,7 +14,7 @@ proof=json.loads((p/'manifest.json').read_text())
 assert proof['status']=='PASS' and proof['speed']=='full'
 for name in ['kernel.log','fixture.log']:
  assert hashlib.sha256((p/name).read_bytes()).hexdigest()==proof['materials'][name]
-k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();m.validate(k,s)
+k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
 builddir=pathlib.Path(proof['build_record'])
 build=json.loads((builddir/'manifest.json').read_text())
 m.validate_build(builddir,build,proof['compiled_source'])
@@ -64,14 +64,40 @@ trials={
  'missing_interrupt_fault':(k,s.replace('interrupt observation failed: -105','interrupt observation failed: -5',1)),
  'missing_unsupported':(k,s.replace('WS73_TEST_IN kind=unsupported actual=156 synthetic','')),
 }
+if proof.get('phase')=='boot':
+ trials={
+  'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
+  'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
+  'missing_case':(k,s.replace('WS73_BOOT_CASE 10 PASS','')),
+  'short_command':(k,s.replace('actual=19 READM','actual=18 READM',1)),
+  'wrong_command':(k,s.replace('READM_40019000_4','READM_40019004_4',1)),
+  'missing_reply':(k,s.replace('WS73_BOOT_IN actual=4 word=00000000 synthetic','',1)),
+  'wrong_reply_size':(k,s.replace('actual=4 word=00000000','actual=3 word=00000000',1)),
+  'wrong_zero_identity':(k,s.replace('package 0 bus 0','package 2 bus 0',1)),
+  'wrong_e_bus':(k,s.replace('package 2 bus 2','package 2 bus 0',1)),
+  'short_reply_accepted':(k,s.replace('boot chip observation failed: -90','boot chip observation 0x00000000: package 0 bus 0; cold-read qualification pending',1)),
+  'wrong_timeout':(k,s.replace('boot chip observation failed: -110','boot chip observation failed: -90',1)),
+  'missing_withhold':(k,s.replace('WS73_BOOT_WITHHOLD_REPLY','')),
+  'missing_no_extra_out':(k,s.replace('WS73_BOOT_NO_EXTRA_OUT','',1)),
+  'extra_out':(k,s.replace('WS73_BOOT_CASE 0 PASS','WS73_BOOT_OUT actual=19 READM_40019000_4 verified\nWS73_BOOT_CASE 0 PASS')),
+  'missing_remove':(k,s.replace('WS73_TEST_REMOVE','',1)),
+  'missing_drain':(k,s.replace('device callbacks drained','missing drain',1)),
+  'post_drain':(k,s.replace('WS73_BOOT_CASE 0 PASS','WS73_TEST_KMSG boot chip observation failed: -19\nWS73_BOOT_CASE 0 PASS')),
+  'missing_kernel_observation':(k.replace('boot chip observation','missing observation',1),s),
+  'wrong_speed':(k.replace('new full-speed','new high-speed',1),s),
+  'kasan':(k+'\nBUG: KASAN',s),
+  'ubsan':(k+'\nUBSAN:',s),
+  'lockdep':(k+'\npossible circular locking dependency',s),
+ }
+
 rejected=[]
 for name,(a,b) in trials.items():
  assert (a,b)!=(k,s),name
- try:m.validate(a,b)
+ try:validator(a,b)
  except (AssertionError, ValueError):rejected.append(name)
  else:raise AssertionError('accepted '+name)
 out=root/'records'/('virtual-usb-negative-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
 out.mkdir(parents=True)
 (out/'check-supervisor.py').write_bytes(pathlib.Path(__file__).read_bytes())
-result={'status':'PASS','runner_sha256':hashlib.sha256(runner.read_bytes()).hexdigest(),'checker_sha256':hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),'positive_record':str(p),'negative_rejected':rejected,'artifact_rejected':artifact_trials,'scope':'text supervisor rejection checks only'}
+result={'status':'PASS','runner_sha256':hashlib.sha256(runner.read_bytes()).hexdigest(),'checker_sha256':hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),'positive_record':str(p),'negative_rejected':rejected,'artifact_rejected':artifact_trials,'phase':proof.get('phase','runtime'),'scope':'log and build artifact supervisor rejection checks only'}
 (out/'manifest.json').write_text(json.dumps(result,indent=2)+'\n');print(out);print('PASS',len(rejected),'log controls and',len(artifact_trials),'artifact controls')

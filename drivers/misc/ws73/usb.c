@@ -365,6 +365,7 @@ static void ws73_usb_initialize(struct work_struct *work)
 	}
 	ret = ws73_boot_read_chip(&ws->boot_io, ws73_usb_now(ws) + 4000, &observation);
 	if (ret) {
+		ws73_usb_fail(ws, ret);
 		dev_err(&ws->interface->dev, "boot chip observation failed: %d\n", ret);
 		return;
 	}

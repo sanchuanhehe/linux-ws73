@@ -1,0 +1,36 @@
+WS73 development verification
+=============================
+
+Use a clean, committed x86-64 Linux kernel worktree with Clang/LLD, make,
+Python 3 and QEMU. Reserve the shared machine budget before starting: the
+builders below use four jobs, and KUnit uses a two-CPU hardware-free VM.
+All outputs are under ../.dev/ws73-upstream, with a shared build.lock.
+Never install these kernels/modules or run driver experiments on the host.
+
+  python3 tools/testing/ws73/run-kunit.py --jobs 4
+  python3 tools/testing/ws73/run-kunit.py --jobs 4 --core-only
+  python3 tools/testing/ws73/run-kunit.py --jobs 4 --hci-only
+  python3 tools/testing/ws73/build-hci.py module
+  python3 tools/testing/ws73/build-hci.py builtin
+
+The default KUnit mode runs protocol, firmware, startup and shared endpoint
+checks without binding the native HCI consumer. Core-only disables NET and
+Bluetooth. HCI-only binds the production auxiliary/HCI consumer to a synthetic
+backend that rejects enable, verifies HCI withdrawal and terminal rebind,
+and runs the H4/HCC codecs. No successful controller response is generated.
+This does not qualify setup commands, normal HCI traffic, BlueZ or a peer.
+The checked-in KUnit configuration enables SMP, KASAN, UBSAN, lockdep and
+DEBUG_ATOMIC_SLEEP. Expected suite/case sets reject missing or skipped tests.
+
+build-hci.py compiles/links the WS73 core, USB and HCI driver either built-in
+or as modules, in the separate fixed build-hci directory. It builds bzImage
+before modules so modpost has the matching kernel symbols; unresolved symbols
+are errors. Configuration requests are checked explicitly, excluding ordinary
+comments. Source, compiler candidates, configuration, build tool and output
+hashes are recorded. Do not run with Python optimization. Compile/link success
+does not prove module loading/unloading, suspend/resume or hardware behavior.
+
+See usb-vm/README for boot/runtime USB integration through dummy_hcd and
+FunctionFS. The physical USB parent remains observation-only: it does not
+publish BLE until firmware, board, identity and startup gates are integrated
+and qualified. Enabling BT_WS73 alone does not provide working physical BLE.

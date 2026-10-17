@@ -463,6 +463,52 @@ static void ws73_hci_rx_fault_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_ble_start(m->adev), -EMSGSIZE);
 }
 
+static void ws73_hci_tx_nomem_test(struct kunit *test)
+{
+	struct ws73_hci_model *m = ws73_model_create(test, false);
+	struct sk_buff *skb;
+	unsigned int remaining;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, m);
+	skb = ws73_model_packet();
+	KUNIT_ASSERT_NOT_NULL(test, skb);
+	/* FAILSLAB targets only this task, not the model or HCI worker threads. */
+	WRITE_ONCE(current->fail_nth, 1);
+	ret = m->hdev->send(m->hdev, skb);
+	remaining = READ_ONCE(current->fail_nth);
+	WRITE_ONCE(current->fail_nth, 0);
+	KUNIT_EXPECT_EQ(test, remaining, 0);
+	KUNIT_EXPECT_EQ(test, ret, -ENOMEM);
+	if (ret) {
+		KUNIT_EXPECT_MEMEQ(test, skb->data, ws73_model_acl, sizeof(ws73_model_acl));
+		kfree_skb(skb);
+	}
+	ws73_model_withdrawn(test, m);
+	KUNIT_EXPECT_EQ(test, m->acls, 0);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(m->adev), -ENOMEM);
+}
+
+static void ws73_hci_rx_nomem_test(struct kunit *test)
+{
+	struct ws73_hci_model *m = ws73_model_create(test, false);
+	const u8 event[] = { HCI_EVENT_PKT, 0xff, 1, 0x73 };
+	unsigned int before, remaining;
+
+	KUNIT_ASSERT_NOT_NULL(test, m);
+	before = m->hdev->stat.byte_rx;
+	WRITE_ONCE(current->fail_nth, 1);
+	ws73_ble_receive(m->adev, event, sizeof(event));
+	remaining = READ_ONCE(current->fail_nth);
+	WRITE_ONCE(current->fail_nth, 0);
+	KUNIT_EXPECT_EQ(test, remaining, 0);
+	ws73_ble_receive(m->adev, event, sizeof(event));
+	ws73_model_withdrawn(test, m);
+	KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, before);
+	KUNIT_EXPECT_EQ(test, m->hdev->stat.err_rx, 1);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(m->adev), -ENOMEM);
+}
+
 static struct kunit_case ws73_hci_data_cases[] = {
 	KUNIT_CASE(ws73_hci_data_test),
 	KUNIT_CASE(ws73_hci_queue_limit_test),
@@ -471,6 +517,8 @@ static struct kunit_case ws73_hci_data_cases[] = {
 	KUNIT_CASE(ws73_hci_acl_rx_test),
 	KUNIT_CASE(ws73_hci_active_flush_test),
 	KUNIT_CASE(ws73_hci_rx_fault_test),
+	KUNIT_CASE(ws73_hci_tx_nomem_test),
+	KUNIT_CASE(ws73_hci_rx_nomem_test),
 	{}
 };
 

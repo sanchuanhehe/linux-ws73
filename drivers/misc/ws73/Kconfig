@@ -37,9 +37,10 @@ config WS73_USB
 
 config WS73_HCI_KUNIT_TEST
 	tristate "WS73 native HCI lifecycle test"
-	depends on KUNIT && BT_WS73
+	depends on KUNIT && BT_WS73 && FAILSLAB
 	help
 	  Bind the actual auxiliary/HCI driver to synthetic backends in a
 	  hardware-free VM. Check terminal failure, HCI setup queries, TX/RX
-	  ownership and bounded queues. Controller replies exist only in the
+	  ownership, bounded queues and task-scoped allocation failures.
+	  Controller replies exist only in the
 	  explicit test model, never the production driver or USB backend.

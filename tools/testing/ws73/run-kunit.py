@@ -91,7 +91,8 @@ def main():
         if args.hci_only:
             config_text = config_text.replace("CONFIG_WS73_KUNIT_TEST=y", "# CONFIG_WS73_KUNIT_TEST is not set")
             config_text = config_text.replace("# CONFIG_BT_WS73 is not set", "CONFIG_BT_WS73=y")
-            config_text += "CONFIG_WS73_HCI_KUNIT_TEST=y\n"
+            config_text += ("CONFIG_FAULT_INJECTION=y\nCONFIG_FAILSLAB=y\n"
+                            "CONFIG_WS73_HCI_KUNIT_TEST=y\n")
         config.write_text(config_text)
         manifest = {
             "scope": ("native auxiliary/HCI synthetic data/lifecycle and codecs in VM; no real controller/peer"
@@ -236,7 +237,8 @@ def main():
                                    "ws73-hci-data": {"ws73_hci_data_test", "ws73_hci_queue_limit_test",
                                                      "ws73_hci_byte_limit_test", "ws73_hci_rejected_acl_test",
                                                      "ws73_hci_acl_rx_test", "ws73_hci_active_flush_test",
-                                                     "ws73_hci_rx_fault_test"}}
+                                                     "ws73_hci_rx_fault_test", "ws73_hci_tx_nomem_test",
+                                                     "ws73_hci_rx_nomem_test"}}
             passed = len(groups) == len(expected_groups)
             seen = set()
             for group in groups:

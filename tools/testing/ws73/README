@@ -21,6 +21,9 @@ and packet/byte queue bounds. It also checks ACL fragment copying at every
 header/payload split, RX during a blocked active flush, queued-packet cancellation
 and immediate TX rejection after malformed RX. ACL is inspected at the native
 HCI receive queue; HCI_INIT drops it before L2CAP processing.
+HCI-only enables FAILSLAB and uses the calling test task's fail_nth for one
+allocation in TX or RX; it resets injection before assertions and verifies
+actual consumption plus terminal ENOMEM. Worker tasks are not injected.
 The explicit test controller supplies synthetic
 Features/BD_ADDR replies; production code never manufactures completions.
 Reset is deliberately left unanswered, so full HCI initialization, Bluetooth

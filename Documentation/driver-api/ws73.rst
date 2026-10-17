@@ -125,7 +125,7 @@ requirements for the forthcoming loader, not implemented transport states:
 #. Check each original file, strip its 64-byte hash header, and send bounded
    chunks. Each FILES command needs READY before payload, then FILES_OK;
    increment the address and verify the total payload count. A short USB
-   transfer or missing acknowledgement cannot count as success. Send QUIT
+   transfer or missing acknowledgment cannot count as success. Send QUIT
    only after all required images succeed and check its response.
 #. PATCH_LAUCH refreshes the bus state. USB ``hcc_usb_reload`` waits for the
    runtime probe before enabling HCC traffic. The SDK distinguishes two

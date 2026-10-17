@@ -141,3 +141,53 @@ delivery and hardware compatibility work. Wi-Fi MAC audit is preliminary;
 the Host authentication/association and reorder evidence argues for first
 evaluating mac80211, but does not resolve TX status and offload gaps.
 All existing issues remain open. UP-05 remains deferred and non-blocking.
+
+HCC identity and WS73E follow-up
+------------------------------
+
+The next compiled source was **77c3956bf0292317e8e1e711b28a4716de3918c8**, clean before and after execution.
+All 13 named cases passed under the same x86-64 KASAN/UBSAN configuration.
+The added cases cover query bytes/padding/capacity, all U/S/E and bus wire
+values, unaligned replies, every truncated prefix, independently malformed
+header/status/identity fields, null arguments and unchanged error outputs.
+These are synthetic protocol fixtures, not live device identification.
+
+The record is ``.dev/ws73-upstream/records/20261017T050342.933647Z/``.
+The runner command remained ``python3 tools/testing/ws73/run-kunit.py --jobs 4``.
+Four build jobs were admitted after checking host load; the main hardware
+VM was left untouched. No USB device was supplied to the test VM.
+Artifact SHA-256 values::
+
+   .config
+   31d2c49f1091568084d26ebda6e186aa70a81b5418904f84cb29736cb5a6e4da
+   arch/x86/boot/bzImage
+   694a221bfc56098158417bd7e0027ad49f9e1dfe02c16fe7305b5a21f63e75bf
+   vmlinux
+   e6e874b98bd34852caa169cdf4ef18b11d45999c1b20f3aa444028ed1fb5caa9
+   test.log
+   b8b7d4948a050baebdfd0cf9fda0c631fd069e2e3686bcd48c8aa095dc719741
+   drivers/bluetooth/btws73_proto.o
+   a58aec7d63757d7f218b66a20dcf2ecf784b43d99d9d2109fb9076da70713184
+   drivers/bluetooth/btws73_test.o
+   e09006ad52272688dabf1ce06afa879aa20823b5da08a301a56fd08ccc548475
+   manifest.json
+   8dc333c7765544d2a9e628e1a2f8fa3d8c5d9fe4758939cb6e9150f3222ee995
+
+Both pinned original firmware profiles (us and e) passed file validation.
+The six earlier corruption/missing/wrong-role cases were rerun successfully;
+eight additional checks rejected both cross-profile sets and each mixed
+code/Wi-Fi/BTC file. This does not establish E hardware support. Reports are
+``records/firmware-{us,e}-identity.json``, ``firmware-negative-identity.json``
+and ``firmware-profile-negatives.json`` under the same private project root.
+The ten SDK loading/identity source hashes are retained separately in
+``records/sdk-loading-identity-files.json``. No binary contents were published.
+
+Strict file checks of the three C/header files had zero errors/warnings.
+Individual commit checks retained new-file MAINTAINERS reminders, the earlier
+short Kconfig help (fixed in the report commit), one historical unwrapped
+commit paragraph and a documentation spelling warning (fixed subsequently).
+No checkpatch error was reported. These checks do not constitute upstream
+review. The SDK loading audit and preference for drivers/misc/ws73 are
+provisional design evidence; transport, loader, HCI and cleanup integration
+remain unimplemented. Cold-start HCC identity availability is still an open
+hardware/protocol gate, so no guessed U/E firmware was loaded.

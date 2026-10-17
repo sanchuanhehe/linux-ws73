@@ -11,4 +11,5 @@ ws73-test-y += board-test.o ble-test.o
 obj-$(CONFIG_WS73_USB) += ws73-usb.o
 ws73-usb-y := usb.o
 
-obj-$(CONFIG_WS73_HCI_KUNIT_TEST) += ble-hci-test.o
+obj-$(CONFIG_WS73_HCI_KUNIT_TEST) += ws73-hci-test.o
+ws73-hci-test-y := ble-hci-test.o ble-hci-data-test.o

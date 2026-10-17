@@ -6,11 +6,12 @@
 #include <linux/ws73-ble.h>
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
+#include <net/bluetooth/hci_sync.h>
 
 #include "btws73_proto.h"
 
 #define BTWS73_TX_PACKETS 64
-#define BTWS73_TX_BYTES (64 * BTWS73_H4_MAX_SIZE)
+#define BTWS73_TX_BYTES (64 * 1024)
 
 struct btws73 {
 	struct auxiliary_device *adev;
@@ -40,10 +41,21 @@ static void btws73_fault_work(struct work_struct *work)
 	/* No fabricated HCI Hardware Error or command-complete event. */
 	mutex_lock(&bt->registration);
 	if (bt->registered) {
+		hci_cmd_sync_cancel_sync(bt->hdev, -READ_ONCE(bt->error));
 		hci_unregister_dev(bt->hdev);
 		bt->registered = false;
 	}
 	mutex_unlock(&bt->registration);
+}
+
+static void btws73_fault_locked(struct btws73 *bt, int error)
+{
+	lockdep_assert_held(&bt->lock);
+	if (!bt->error) {
+		bt->error = error;
+		bt->running = false;
+		schedule_work(&bt->fault_work);
+	}
 }
 
 static void btws73_fault(void *context, int error)
@@ -52,11 +64,7 @@ static void btws73_fault(void *context, int error)
 	unsigned long flags;
 
 	spin_lock_irqsave(&bt->lock, flags);
-	if (!bt->error) {
-		bt->error = error;
-		bt->running = false;
-		schedule_work(&bt->fault_work);
-	}
+	btws73_fault_locked(bt, error);
 	spin_unlock_irqrestore(&bt->lock, flags);
 }
 
@@ -102,6 +110,7 @@ static int btws73_flush_locked(struct hci_dev *hdev)
 	struct btws73 *bt = hci_get_drvdata(hdev);
 	struct sk_buff_head discard;
 	unsigned long flags;
+	int ret = 0;
 
 	skb_queue_head_init(&discard);
 	spin_lock_irqsave(&bt->lock, flags);
@@ -109,23 +118,29 @@ static int btws73_flush_locked(struct hci_dev *hdev)
 	spin_unlock_irqrestore(&bt->lock, flags);
 	cancel_work_sync(&bt->tx_work);
 	spin_lock_irqsave(&bt->lock, flags);
+	/* Purging accepted ACL in a live session would strand native credits. */
+	if (bt->running && !skb_queue_empty(&bt->tx)) {
+		ret = -ECANCELED;
+		btws73_fault_locked(bt, ret);
+	}
 	skb_queue_splice_init(&bt->tx, &discard);
 	bt->packets = 0;
 	bt->bytes = 0;
 	bt->flushing = false;
 	spin_unlock_irqrestore(&bt->lock, flags);
 	skb_queue_purge(&discard);
-	return 0;
+	return ret;
 }
 
 static int btws73_flush(struct hci_dev *hdev)
 {
 	struct btws73 *bt = hci_get_drvdata(hdev);
+	int ret;
 
 	mutex_lock(&bt->lifecycle);
-	btws73_flush_locked(hdev);
+	ret = btws73_flush_locked(hdev);
 	mutex_unlock(&bt->lifecycle);
-	return 0;
+	return ret;
 }
 
 static int btws73_open(struct hci_dev *hdev)
@@ -207,39 +222,53 @@ static int btws73_send(struct hci_dev *hdev, struct sk_buff *skb)
 	struct btws73 *bt = hci_get_drvdata(hdev);
 	struct sk_buff *copy;
 	unsigned long flags;
-	unsigned int length = skb->len + 1;
+	unsigned int length;
 	int ret;
 
-	if (!skb->len || skb->len >= BTWS73_H4_MAX_SIZE)
-		return -EMSGSIZE;
-	if (hci_skb_pkt_type(skb) != HCI_COMMAND_PKT &&
-	    hci_skb_pkt_type(skb) != HCI_ACLDATA_PKT)
-		return -EOPNOTSUPP;
 	spin_lock_irqsave(&bt->lock, flags);
 	ret = bt->error ?: (bt->running ? 0 : -ENETDOWN);
-	if (!ret && bt->flushing)
-		ret = -EAGAIN;
 	if (ret)
 		goto unlock;
+	if (bt->flushing) {
+		ret = -ECANCELED;
+		goto reject;
+	}
+	if (!skb->len || skb->len >= BTWS73_H4_MAX_SIZE) {
+		ret = -EMSGSIZE;
+		goto reject;
+	}
+	if (hci_skb_pkt_type(skb) != HCI_COMMAND_PKT &&
+	    hci_skb_pkt_type(skb) != HCI_ACLDATA_PKT) {
+		ret = -EOPNOTSUPP;
+		goto reject;
+	}
+	length = skb->len + 1;
 	if (bt->packets >= BTWS73_TX_PACKETS || length > BTWS73_TX_BYTES - bt->bytes) {
 		ret = -ENOBUFS;
-		goto unlock;
+		goto reject;
 	}
 	copy = skb_copy_expand(skb, 1, 0, GFP_ATOMIC);
 	if (!copy) {
 		ret = -ENOMEM;
-		goto unlock;
+		goto reject;
 	}
 	*(u8 *)skb_push(copy, 1) = hci_skb_pkt_type(skb);
 	ret = btws73_hci_validate(copy->data, copy->len, true);
 	if (ret) {
 		kfree_skb(copy);
-		goto unlock;
+		goto reject;
 	}
 	__skb_queue_tail(&bt->tx, copy);
 	bt->packets++;
 	bt->bytes += copy->len;
 	schedule_work(&bt->tx_work);
+	goto unlock;
+reject:
+	/* hci_sched_acl_pkt consumes credit even when ->send returns an error.
+	 * Close admission before unlocking; do not invent a completion/credit.
+	 */
+	bt->hdev->stat.err_tx++;
+	btws73_fault_locked(bt, ret);
 unlock:
 	spin_unlock_irqrestore(&bt->lock, flags);
 	/* An error leaves the original skb with the HCI caller. */
@@ -350,16 +379,22 @@ static void btws73_remove(struct auxiliary_device *adev)
 {
 	struct btws73 *bt = auxiliary_get_drvdata(adev);
 	unsigned long flags;
+	int error;
 
 	ws73_ble_unbind(adev);
 	spin_lock_irqsave(&bt->lock, flags);
 	bt->running = false;
+	error = bt->error;
 	bt->error = -ENODEV;
 	spin_unlock_irqrestore(&bt->lock, flags);
+	if (error)
+		ws73_ble_fault(adev, error);
 	btws73_flush(bt->hdev);
 	cancel_work_sync(&bt->fault_work);
-	if (bt->registered)
+	if (bt->registered) {
+		hci_cmd_sync_cancel_sync(bt->hdev, ENODEV);
 		hci_unregister_dev(bt->hdev);
+	}
 	auxiliary_set_drvdata(adev, NULL);
 	hci_free_dev(bt->hdev);
 	kfree(bt);

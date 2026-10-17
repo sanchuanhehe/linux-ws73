@@ -15,10 +15,12 @@ Never install these kernels/modules or run driver experiments on the host.
 
 The default KUnit mode runs protocol, firmware, startup and shared endpoint
 checks without binding the native HCI consumer. Core-only disables NET and
-Bluetooth. HCI-only binds the production auxiliary/HCI consumer to a synthetic
-backend that rejects enable, verifies HCI withdrawal and terminal rebind,
-and runs the H4/HCC codecs. No successful controller response is generated.
-This does not qualify setup commands, normal HCI traffic, BlueZ or a peer.
+Bluetooth. HCI-only binds the production auxiliary/HCI consumer to synthetic backends.
+It verifies failed enable, terminal rebind, two setup queries, packet ownership
+and packet/byte queue bounds. The explicit test controller supplies synthetic
+Features/BD_ADDR replies; production code never manufactures completions.
+Reset is deliberately left unanswered, so full HCI initialization, Bluetooth
+connections, BlueZ and peer behavior remain unqualified. Codec tests also run.
 The checked-in KUnit configuration enables SMP, KASAN, UBSAN, lockdep and
 DEBUG_ATOMIC_SLEEP. Expected suite/case sets reject missing or skipped tests.
 

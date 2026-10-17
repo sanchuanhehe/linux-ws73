@@ -39,6 +39,7 @@ config WS73_HCI_KUNIT_TEST
 	tristate "WS73 native HCI lifecycle test"
 	depends on KUNIT && BT_WS73
 	help
-	  Bind the actual auxiliary/HCI driver to a synthetic failing backend
-	  in a hardware-free VM. Verify failed enable withdraws HCI and cannot
-	  be cleared by rebinding. No successful controller reply is generated.
+	  Bind the actual auxiliary/HCI driver to synthetic backends in a
+	  hardware-free VM. Check terminal failure, HCI setup queries, TX/RX
+	  ownership and bounded queues. Controller replies exist only in the
+	  explicit test model, never the production driver or USB backend.

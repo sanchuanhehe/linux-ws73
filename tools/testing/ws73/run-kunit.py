@@ -64,7 +64,7 @@ def main():
                         help="reserved share of the whole-machine budget (1..8)")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--hci-only", action="store_true",
-                      help="run native HCI failing-backend lifecycle and codec tests")
+                      help="run native HCI synthetic data/lifecycle and codec tests")
     mode.add_argument("--core-only", action="store_true",
                         help="verify the shared core with NET and Bluetooth disabled")
     args = parser.parse_args()
@@ -94,7 +94,7 @@ def main():
             config_text += "CONFIG_WS73_HCI_KUNIT_TEST=y\n"
         config.write_text(config_text)
         manifest = {
-            "scope": ("native auxiliary/HCI failing-backend lifecycle and codecs in VM; no real controller/peer"
+            "scope": ("native auxiliary/HCI synthetic data/lifecycle and codecs in VM; no real controller/peer"
                       if args.hci_only else "synthetic protocol/firmware/endpoint tests in VM; no native HCI registration or peer"),
             "hci_only": args.hci_only,
             "core_only": args.core_only,
@@ -149,7 +149,8 @@ def main():
                              "drivers/misc/ws73/usb.o"})
         if args.hci_only:
             required = {name for name in required if not name.endswith(("-test.o", "/test.o"))}
-            required.update({"drivers/misc/ws73/ble-hci-test.o", "drivers/bluetooth/btws73.o"})
+            required.update({"drivers/misc/ws73/ble-hci-test.o", "drivers/misc/ws73/ble-hci-data-test.o",
+                             "drivers/bluetooth/btws73.o"})
         for name in sorted(required):
             path = build / name
             if path.is_file():
@@ -231,7 +232,9 @@ def main():
                 del expected_groups["btws73-proto"]
             if args.hci_only:
                 expected_groups = {"btws73-proto": expected,
-                                   "ws73-hci-lifecycle": {"ws73_hci_failed_enable_test"}}
+                                   "ws73-hci-lifecycle": {"ws73_hci_failed_enable_test"},
+                                   "ws73-hci-data": {"ws73_hci_data_test", "ws73_hci_queue_limit_test",
+                                                     "ws73_hci_byte_limit_test", "ws73_hci_rejected_acl_test"}}
             passed = len(groups) == len(expected_groups)
             seen = set()
             for group in groups:

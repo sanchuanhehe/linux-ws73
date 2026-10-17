@@ -14,8 +14,8 @@ struct ws73_ble_backend {
  * board/address inputs and startup handshakes, with BLE disabled and its old
  * data drained. No public qualification knob.
  * Backend operations sleep, have finite deadlines and support owner abort.
- * They must not call remove. The owner must abort IO before remove and join
- * all receive/fault producers before dropping its returned device reference.
+ * They must not call remove. The owner must abort IO and join all receive/
+ * fault producers before remove, which consumes its returned device reference.
  * Backend storage/context remain valid until remove returns; no callback is
  * retained after that, even if an external device reference delays release.
  * Registration can synchronously probe the actual HCI consumer.

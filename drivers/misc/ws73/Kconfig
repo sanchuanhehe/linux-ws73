@@ -34,3 +34,11 @@ config WS73_USB
 	  This development path does not select firmware or enable
 	  Bluetooth/Wi-Fi: boot/runtime compatibility remains unqualified.
 	  No register write, generic register interface or reset is provided.
+
+config WS73_HCI_KUNIT_TEST
+	tristate "WS73 native HCI lifecycle test"
+	depends on KUNIT && BT_WS73
+	help
+	  Bind the actual auxiliary/HCI driver to a synthetic failing backend
+	  in a hardware-free VM. Verify failed enable withdraws HCI and cannot
+	  be cleared by rebinding. No successful controller reply is generated.

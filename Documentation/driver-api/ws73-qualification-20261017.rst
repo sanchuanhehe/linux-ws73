@@ -2930,3 +2930,39 @@ Records and manifest SHA-256:
   ``e27c427393288c3405324c9aff4cd28db1450f2fcd67c61fc858240a0cb1570f``.
 * ``ram-trial-20261017T163704.118738Z``,
   ``cde216711081143d7ebf1ee736c1a55e81d474005e72d858d00d8a047a7e4b7a``.
+
+
+Post-ACK and TX-admission cross builds (2026-10-18 SGT)
+-----------------------------------------------------
+
+Clean source ``fa3cd51e7d47029c50f083ea01dc9a6beb2f487c`` was compiled and
+linked after the READY echo and shared TX lock-admission changes. The four
+sequential profiles were arm64 Clang, i386 Clang, PowerPC64 big-endian Clang,
+and x86-64 GCC. Each used W=1, four jobs, the dedicated fixed incremental
+output directory and the shared build lock. All four passed; the retained
+build logs contain no warnings or errors. A second audit verified every
+recorded artifact hash and all seven ELF headers per profile (vmlinux plus
+six modules), including class, endianness, machine and object type. Requested
+shared/USB/native Bluetooth modules and LE-enabled, BR/EDR-disabled Kconfig
+settings were checked against the resolved configurations.
+
+This refreshes the compile/link evidence for these production changes. It
+neither runs foreign-architecture code nor qualifies Wi-Fi, hardware, all
+Kconfig combinations, PM or recovery. No physical device was accessed; the
+new READY-fix power-cycle confirmation is still pending. The source remains
+compatible with the already prepared hardware build because changes since
+62d782 are documentation-only.
+
+Records and manifest SHA-256:
+
+* ``cross-arm64-clang-20261017T164144.670215Z``,
+  ``be0f091d7b46cb9f756aa2427ee37630aea2c2ac1a38b6b51bc0e7b3ff77c321``.
+* ``cross-i386-clang-20261017T164158.140355Z``,
+  ``7d29561241de1dc32f8e3ef09b387281bf7e029754d0563477166914c42cc860``.
+* ``cross-ppc64be-clang-20261017T164216.660388Z``,
+  ``f8c599fc83b698d7b936d042ab12d35f49b08537a403f7c71f2ba73a31049b97``.
+* ``cross-x86_64-gcc-20261017T164231.479704Z``,
+  ``01cc2709757c43f4f77fefe711daac05473c7b22cb13c844563e3b3aec6281ee``.
+
+Independent audit ``cross-current-audit-20261017T1643.json``, SHA-256
+``4b166d19ca07f4fb2097a9bb7e8a97d92866e98295dd75a4fc17ce7d536c9231``.

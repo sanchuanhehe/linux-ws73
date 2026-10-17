@@ -220,7 +220,13 @@ URBs use URB_ZERO_PACKET for maximum-packet boundary semantics. Completion
 only validates/dispatches the bounded aggregate and requeues RX; fault work
 performs blocking URB cancellation. Disconnect closes submission admission,
 wakes the query, joins anchored and already-unanchored RX/TX callbacks, then
-joins initialization/fault work before releasing buffers and the USB reference.
+joins initialization and removes the BLE child before the final fault-work
+cancellation. Child removal joins backend calls under the endpoint operation
+mutex: one may have claimed the first fault before disconnect and only queue
+fault work after admission closes. All producers must finish before that final
+cancellation, then buffers and the USB reference can be released. The current
+USB core's anchor kill already waits for completer callbacks via its suspended
+wakeup accounting; an empty anchor list alone is not the join condition.
 Interrupt RX is active as described below; register endpoints remain inactive.
 
 Runtime identification remains an **observation**, including when the device

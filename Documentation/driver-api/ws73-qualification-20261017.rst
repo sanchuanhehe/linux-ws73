@@ -2503,3 +2503,102 @@ Records and manifest SHA-256:
   ``3434c5ed819d7c5933444f9e26bd159d1d98cd89ba2d97b05a07fa0fdf26489e``.
 * ``cbmc-unwind-control-20261017T150612.759243Z`` (EXPECTED_INCOMPLETE_REJECTED),
   ``f27a10bd1d401bbd999e394b0940bad99f2f7f37d28ef5ccd64da4c6e3b9b96f``.
+
+
+USB stop-work producer drain and finite TLC model
+------------------------------------------------
+
+A source audit found a concrete teardown scheduling window in
+``ws73_usb_unbind``. A BLE backend holding ``ble->operation`` can enter
+``ws73_usb_fail`` before disconnect, set the first error under ``ws->lock``,
+and be delayed before ``schedule_work(&ws->stop)``. Disconnect previously
+cancelled stop before removing the child. That cancellation could return
+before the backend queued stop; later child removal joined the backend but
+left queued work referring to the freed USB owner.
+
+Production fix ``a1124154241cfb3f825d79c5348f86b5d2fd86b5`` moves the final
+stop cancellation after child removal. RX/interrupt and initialization are
+already joined; child removal drains backend calls under the operation mutex
+and removes their context. Only then is the final stop cancellation performed.
+No lock needed by those producers is held across their joins. The code-only
+strict checkpatch result is 0 errors, 0 warnings, 0 checks. The original
+commit-message check additionally reports one long-body-line warning; both
+logs are retained for review-series cleanup, without rewriting development
+history or claiming the message check is clean.
+
+``formal/USBStop.tla`` maps admission, first-fault claim, delayed enqueue,
+callback/initializer/backend return, stop execution and the actual unbind
+sequence. Importantly, this kernel's ``usb_kill_anchored_urbs`` ALREADY waits
+for completion callbacks through ``suspend_wakeups`` accounting in the USB
+core. The model does not invent an anchor-empty callback UAF to justify the
+explicit per-URB joins. Its old-order negative control instead exposes the
+actual delayed backend enqueue window described above.
+
+Final model and VM source: ``00681182e88db73f80e866e6f18fd769baa8a560``.
+TLC 2.19 (rev 5a47802), one worker, 512-MiB heap and a 60-second deadline:
+
+* Corrected order: 5,820 generated states, 2,058 distinct states, zero queued
+  states at exhaustive completion, depth 21, and 16 reachable terminal states.
+  TypeOK and NoUseAfterFree hold in this finite abstraction.
+* Historical order: the required NoUseAfterFree counterexample has 15 states.
+  Backend first-fault claim precedes disconnect; enqueue follows the old
+  cancellation; child removal/free occurs while stop remains queued.
+  Exit 12 is expected only with this exact invariant and schedule evidence.
+* Fifteen malformed/missing/duplicate/wrong-exit/wrong-invariant supervisor
+  controls are rejected. Reachable-state dumps and all model/config inputs
+  are archived. A success banner without completed statistics cannot pass.
+* The first committed runner attempt at ``ff79f154ab6a`` explored the model
+  successfully but looked for a dump without TLC's added ``.dump`` extension.
+  It remains NOT_PROVEN; correcting the path produced the final complete run.
+  Earlier uncommitted probes include a sandbox socket denial and successful
+  positive/negative explorations. Raw logs remain in ``tlc-probe``; these
+  development probes did not archive complete input snapshots and do not
+  grant qualification.
+
+The graph bounds are one owner, one submission for each of RX/interrupt,
+one initializer, one BLE backend operation and one first fault. There are no
+state constraints or simulation shortcuts. This is a safety abstraction with
+explicit lock/join/lifetime assumptions, not a C refinement proof or liveness
+proof. Resubmission, synchronous request stack lifetime, full auxiliary/HCI
+release, multiple instances, recovery, PM and physical behavior remain outside
+this model. TLC's fingerprint collision estimate (4.2e-13 for the positive
+run) remains in raw output. The drift guard checks current C teardown order,
+not semantic equivalence to the model. No executing-kernel UAF reproduction
+is claimed for this particular interleaving.
+
+The affected actual USB/HCI path was rebuilt with SMP, KASAN, UBSAN, lockdep
+and DEBUG_ATOMIC_SLEEP, then exercised in hardware-free KVM at full and high
+USB speed. Each run passed three cases: full native initialization, removal
+while Reset is unanswered, and a fresh successful initialization. Each saw
+27 commands, 26 explicit synthetic replies in 78 fragments and three drains;
+QEMU exited successfully. The full-speed supervisor rejected 31 damaged-log
+and five bad-artifact controls. These tests execute production USB owner and
+auxiliary/HCI code but do not deterministically force the source-derived
+late-scheduling window. All recorded build/TLC artifacts and both VM material
+hashes and observed summaries were revalidated before this report.
+
+No physical USB was accessed this increment. The failed physical READM trial,
+new single-U power-cycle confirmation, original-firmware startup, board/E
+qualification, BLE peer/AP, Wi-Fi firmware gaps, KCSAN reports and upstream
+review remain open. This fixes one real producer ordering defect; it does not
+close #10, the formal verification program or any U/E hardware support gate.
+
+Records and manifest SHA-256:
+
+* ``tlc-usb-stop-20261017T152245.541240Z`` (NOT_PROVEN),
+  ``583e951b5b1672c2842da3a96f2690d533fe4705e1a97342da9aba3764be188f``.
+
+* ``tlc-usb-stop-20261017T152329.213136Z`` (FINITE_MODEL_PASS),
+  ``cbcef28caff823b8b71064507d2c537b5c0e926c32d89f289b37a3b73f59c872``.
+
+* ``virtual-usb-build-20261017T152303.233185Z`` (PASS),
+  ``b42a57dc78088faf05024cf28ec57dde16ccab57ea32b57700737bb37aad04be``.
+
+* ``virtual-usb-20261017T152341.883693Z`` (PASS),
+  ``093b6800da36281707014c1087c0da5108f18afc300476b7192bd00a77ac9734``.
+
+* ``virtual-usb-20261017T152423.310680Z`` (PASS),
+  ``706f788c9e984e8fb91447cf2e35740f5a18c0de1e750e4877e46cd6c50b2e06``.
+
+* ``virtual-usb-negative-20261017T152424.354078Z`` (PASS),
+  ``03af8c34059f06a920328a6501e9939f1a585016557e8928ce24023b69a1789c``.

@@ -1,6 +1,10 @@
 WS73 bounded C verification
 ===========================
 
+The separate USBStop.README describes the finite TLC stop-producer lifetime
+model and its historical-order counterexample. Its abstraction and evidence
+are independent of the production-C scalar checks described here.
+
   python3 tools/testing/ws73/formal/run.py
 
 Requires CBMC and a C preprocessor. The runner reserves the WS73 build lock,

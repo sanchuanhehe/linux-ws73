@@ -1,6 +1,11 @@
 WS73 development verification
 =============================
 
+The finite stop-work lifetime model in formal/USBStop.README maps the actual
+USB parent, BLE backend and USB-core join contracts. It checks the corrected
+teardown order and requires a counterexample from the historical order.
+This limited model does not replace the VM or physical-device gates below.
+
 Use a clean, committed x86-64 Linux kernel worktree with Clang/LLD, make,
 Python 3 and QEMU. Reserve the shared machine budget before starting: the
 builders below use four jobs, and KUnit uses a two-CPU hardware-free VM.

@@ -28,6 +28,7 @@ struct ws73_usb {
 	int error;
 	u8 in;
 	u8 out;
+	u8 notifications_seen; /* Observations only; never used to enable a function. */
 };
 
 static void ws73_usb_stop(struct work_struct *work)
@@ -191,6 +192,19 @@ static void ws73_usb_rx_complete(struct urb *urb)
 				ws73_usb_fail(ws, ret);
 				return;
 			}
+		}
+	}
+	if (!ret && rx.queue == 10) {
+		/* The decoder validated every record before publishing any status. */
+		for (i = 0; i < rx.count; i++) {
+			u8 bit = BIT(rx.notification[i]);
+
+			if (ws->notifications_seen & bit)
+				continue;
+			ws->notifications_seen |= bit;
+			dev_info(&ws->interface->dev,
+				 "function notification observation %u; no request completion\n",
+				 rx.notification[i]);
 		}
 	}
 	/* No function consumers yet. No borrowed URB storage escapes this call. */

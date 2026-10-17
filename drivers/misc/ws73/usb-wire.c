@@ -110,7 +110,7 @@ int ws73_usb_aggregate_decode(const u8 *data, size_t length,
 	if (get_unaligned_le32(data + 4) != length)
 		return -EMSGSIZE;
 	queue = get_unaligned_le32(data + 8);
-	if (!ws73_usb_queue_valid(queue))
+	if (!ws73_usb_queue_valid(queue) && queue != 10)
 		return -EOPNOTSUPP;
 	parsed.queue = queue;
 	for (i = 0; i < BTWS73_RX_MAX_RECORDS; i++) {
@@ -124,7 +124,11 @@ int ws73_usb_aggregate_decode(const u8 *data, size_t length,
 			return -EPROTO;
 		if (size > length - offset)
 			return -EMSGSIZE;
-		ret = ws73_usb_record_validate(data + offset, size, queue);
+		if (queue == 10)
+			ret = ws73_notification_decode(data + offset, size,
+						       &parsed.notification[parsed.count]);
+		else
+			ret = ws73_usb_record_validate(data + offset, size, queue);
 		if (ret)
 			return ret;
 		parsed.record[parsed.count].data = data + offset;

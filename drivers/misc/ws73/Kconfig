@@ -27,7 +27,8 @@ config WS73_USB
 	select WS73_CORE
 	help
 	  Issue fixed HCC READM on a boot interface, or a one-shot HCC chip
-	  query with independent RX on a five-endpoint runtime interface.
+	  and version query with independent RX on a five-endpoint runtime
+	  interface. Validated function notifications are observations only.
 	  This development path does not select firmware or enable
 	  Bluetooth/Wi-Fi: boot/runtime compatibility remains unqualified.
 	  No register write, generic register interface or reset is provided.

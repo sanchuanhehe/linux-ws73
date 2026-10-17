@@ -98,7 +98,7 @@ only validates/dispatches the bounded aggregate and requeues RX; fault work
 performs blocking URB cancellation. Disconnect closes submission admission,
 wakes the query, joins anchored and already-unanchored RX/TX callbacks, then
 joins initialization/fault work before releasing buffers and the USB reference.
-Interrupt and register endpoints are validated but not yet activated.
+Interrupt RX is active as described below; register endpoints remain inactive.
 
 Runtime identification remains an **observation**, including when the device
 was started by another host. Without a verified firmware epoch, tokenless HCC
@@ -120,6 +120,35 @@ printed ROM "1.0.0" is a constant, not the reported word. Neither that string
 nor a plausible version value proves the selected firmware image is running.
 The parent logs observations only after both queries succeed, and names the
 chip or version stage on failure.
+
+Interrupt endpoint reception
+----------------------------
+
+SDK110 ``usb_dev_notification`` is eight bytes: a little-endian u32 event
+bitmap followed by a little-endian u32 high-priority-pool field. The decoder
+requires the exact actual transfer length and preserves raw words, including
+zero and unknown bits. The pool field is not interpreted as a software send
+quota or Bluetooth command credit. SDK flow-control/PM/BCPU acknowledgements
+are not BLE enable replies; no function or PM state is derived from them here.
+
+Runtime initialization starts an independent interrupt-IN URB before bulk RX
+and the platform queries. Its own allocated DMA buffer is not shared with state
+updated by other callbacks. The descriptor supplies the interrupt endpoint and
+interval. A malformed notification or USB error enters the same terminal and
+stop/drain path as bulk RX. DEVICE_PANIC (bit 6) and BCPU_PANIC (bit 18) take
+precedence over BSP_READY and fail the device with -EIO. High-priority packet
+loss (bit 5) conservatively fails with -ENOBUFS because a missing control reply
+cannot establish successful initialization. No automatic recovery is inferred.
+
+BSP_READY (bit 0) is recorded once per object as an observation, including the
+raw pool word. Duplicate/zero notifications and unrelated bits do not complete
+queries or make functions available. A device fault after initialization still
+closes admission and cancels both receive URBs. Disconnect explicitly joins
+both URBs, including completions that already left their anchors, then joins
+initialization and fault work before freeing either buffer. An optional dynamic
+debug message marks that actual drain boundary for lifecycle verification.
+Register endpoints, real BLE control requests/waiters, firmware readiness and
+auxiliary/HCI consumers remain pending.
 
 Function notification reception
 -------------------------------

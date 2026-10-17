@@ -654,3 +654,79 @@ zero errors/warnings. A formal driver maintenance entry remains part of the
 actual-consumer submission series. No physical hardware was touched in this
 increment; cold U, E hardware, peer/AP, firmware loading, enable/disable request
 completion, native HCI and formal upstream gates remain open.
+
+Interrupt RX and fault/drain increment
+-------------------------------------
+
+Production commit ``07a693e8744c`` adds exact eight-byte interrupt decoding
+and a second, independently submitted receive URB. It starts before the bulk
+receiver and platform queries. Fault notifications close admission, wake the
+platform waiter and schedule shared draining. Device/BCPU panic bits take
+precedence over BSP_READY; packet-loss status fails conservatively. BSP, raw
+pool words, unrelated bits and USB completion do not enable BLE or establish
+device send credit. Every USB object owns its interrupt buffer and URB.
+
+The production commit passes 46 KUnit cases in
+``20261017T073658.372957Z`` (manifest SHA-256
+``70b9a3ff29a02c5910a3c422b08831877f9161b44bf63cbb7018fcc5a2d62fa0``).
+The two new cases cover unaligned little-endian words, every event/pool bit,
+zero words, all short lengths, oversize/SIZE_MAX, null arguments and unchanged
+error outputs. Existing codec, firmware, boot, USB and runtime tests remain.
+Checkpatch reports zero errors and warnings for this implementation.
+
+The first virtual USB attempt on that source, build
+``virtual-usb-build-20261017T073757.406994Z`` (manifest SHA-256
+``587e8ed062ba2a5a2437cae3cdf1050e83f9b288870e76e261797f5be918a751``),
+fails in ``virtual-usb-20261017T073843.332075Z`` (manifest SHA-256
+``2ae021064ea03ee335f3e8411d586bb7c9458fbf44124c504a9ecdcad9583547``).
+The fixture accepted only -ENODEV/-ESHUTDOWN during its intentional unplug,
+but dummy_hcd can return -EPROTO when the endpoint disappears before driver
+disconnect joins the URB. Its ``dummy_timer`` missing-endpoint branch explicitly
+returns that error. The USB disconnect announcement also precedes the actual
+drain, allowing the old callback's diagnostic to appear in the next fixture
+case. This failed attempt is retained; it is not hardware recovery evidence.
+
+Commit ``a175a23eadd7`` adds one optional dynamic-debug message after joining
+both receive URBs and initialization/stop work. It changes no protocol behavior.
+The final virtual USB kernel enables DYNAMIC_DEBUG, KASAN, UBSAN, lockdep and
+DEBUG_ATOMIC_SLEEP with NET/BT/KUnit disabled. The fixture waits for the actual
+drain marker before starting another instance. Removal-related interrupt errors
+are allowed only after the explicit removal injection and before that marker,
+at most one per instance. The waiting-query unplug case accepts the documented
+dummy_hcd -EPROTO ordering as well. Unrelated/pre-removal failures, absent drain
+or a post-drain callback cannot pass. No driver fault is converted to success.
+
+The final USB build and both speed runs bind clean source ``a175a23eadd7``;
+the 46-case KUnit evidence above remains bound to ``07a693e8744c`` and is not
+silently relabeled after the diagnostic-only addition:
+
+* ``virtual-usb-build-20261017T074028.829018Z``, manifest SHA-256
+  ``01632c3b3010f403bc591aa038a0ee3edecf8434b1cf0247c45a3678b32dd5ba``.
+* ``virtual-usb-20261017T074315.674446Z``, manifest SHA-256
+  ``2acea25406f8f3706b6e3f055c359a7c861abfad738c04f03db351db3c477d15``.
+* ``virtual-usb-20261017T074351.558035Z``, manifest SHA-256
+  ``70b6472f8dba54cb56b3e03dd964e1c9ce4c2341f3d32db9e36e67f88d42d65c``.
+
+Full-speed and high-speed each pass 17 synthetic cases, verifying 65 exact
+bulk OUT, 30 bulk IN, eight interrupt IN, 17 removals and 17 drains. The six
+new cases cover zero/unrelated/duplicate BSP notifications with a raw pool
+word, seven-byte interrupt truncation, device panic with BSP_READY, BCPU panic
+with BSP_READY, high-priority loss with BSP_READY, and panic after both platform
+queries completed. Fatal packets publish no BSP observation; pending queries
+fail with the expected error. The two runs record respectively six and five
+allowed interrupt errors during injected removal, consistent with competing
+USB completion/disconnect ordering. All original cases continue to pass.
+
+The updated supervisor rejects 31 negative controls in
+``virtual-usb-supervisor-negative-v6.json``. Its exact checker source is retained
+as ``virtual-usb-supervisor-negative-v6.py`` alongside hashes and the corrected
+positive fixture. New controls remove the drain/removal marker or interrupt,
+alter pool/interrupt bits/fault status, or inject false BSP success on panic.
+No sanitizer, lockdep or atomic-sleep failure was reported. These observations
+do not exhaust all interleavings, allocation failures or native USB PM behavior.
+
+No physical device, reset, firmware download or BLE control request occurred.
+BSP observation remains separate from customization/action/HCI completion.
+Cold U identity evidence, E/peer/AP resources, board-derived customization,
+actual BLE request/waiters, firmware integration, auxiliary/HCI and Wi-Fi
+consumers, portable USB test tooling and formal upstream submission remain open.

@@ -12,10 +12,12 @@ struct ws73_runtime_mock {
 	struct completion sent;
 	wait_queue_head_t stop_wait;
 	u8 reply[32];
+	u8 version_reply[32];
 	u64 now;
 	unsigned int calls;
 	unsigned int mode;
 	int received;
+	int busy_result;
 };
 
 static u64 ws73_runtime_now(void *context)
@@ -34,12 +36,40 @@ static int ws73_runtime_send(void *context, const u8 *data, size_t length,
 	struct ws73_runtime_mock *mock = context;
 
 	mock->calls++;
+	if (mock->mode == 11) {
+		struct ws73_version version;
+
+		mock->busy_result = ws73_platform_get_version(&mock->request, &mock->tx,
+							     &mock->io, 100, &version);
+	}
 	if (mock->mode == 6) {
 		ws73_platform_abort(&mock->request, -ENODEV);
 		return length;
 	}
 	if (get_unaligned_le32(data))
 		return length; /* Queue control precedes the HCC request. */
+	if (get_unaligned_le16(data + 68) == 13) {
+		if (data[72] != 1)
+			return -EPROTO;
+		if (mock->mode == 10)
+			return length;
+		if (mock->mode == 8) {
+			mock->received = ws73_platform_receive(&mock->request, mock->reply,
+							       32, mock->now);
+			if (mock->received != -ENOENT)
+				return -EPROTO;
+		}
+		ws73_platform_receive(&mock->request, mock->version_reply, 32, mock->now);
+		if (mock->mode == 12)
+			ws73_platform_receive(&mock->request, mock->version_reply, 32, mock->now);
+		return length;
+	}
+	if (mock->mode == 13) {
+		mock->received = ws73_platform_receive(&mock->request, mock->version_reply,
+						       32, mock->now);
+		if (mock->received != -ENOENT)
+			return -EPROTO;
+	}
 	if (mock->mode == 1)
 		return length; /* Real bounded timeout: no injected completion. */
 	if (mock->mode == 7) {
@@ -87,7 +117,122 @@ static struct ws73_runtime_mock *ws73_runtime_fixture(struct kunit *test, unsign
 	put_unaligned_le16(10, mock->reply + 6);
 	put_unaligned_le32(2, mock->reply + 12);
 	mock->reply[16] = 2;
+	memcpy(mock->version_reply, mock->reply, 32);
+	put_unaligned_le16(7, mock->version_reply + 4);
+	put_unaligned_le16(16, mock->version_reply + 6);
+	put_unaligned_le32(8, mock->version_reply + 12);
+	put_unaligned_le32(0x010a6e7f, mock->version_reply + 16);
+	put_unaligned_le32(0x12345678, mock->version_reply + 20);
+	if (mode == 9)
+		put_unaligned_le32(1, mock->version_reply + 8);
 	return mock;
+}
+
+static void ws73_version_wire_test(struct kunit *test)
+{
+	static const u8 expected[32] = { 0x19, 9, 32, 0, 13, 0, 1, 0, 1 };
+	struct ws73_runtime_mock *mock = ws73_runtime_fixture(test, 0);
+	struct ws73_version version;
+	u8 out[33];
+	unsigned int i;
+
+	KUNIT_ASSERT_NOT_NULL(test, mock);
+	memset(out, 0xa5, sizeof(out));
+	for (i = 0; i < 32; i++) {
+		KUNIT_EXPECT_EQ(test, ws73_version_query_encode(out, i), -ENOSPC);
+		KUNIT_EXPECT_PTR_EQ(test, memchr_inv(out, 0xa5, sizeof(out)), NULL);
+	}
+	KUNIT_ASSERT_EQ(test, ws73_version_query_encode(out, 32), 32);
+	KUNIT_EXPECT_MEMEQ(test, out, expected, 32);
+	KUNIT_EXPECT_EQ(test, out[32], 0xa5);
+	/* Explicitly unaligned response, preserving even unknown version bits. */
+	memcpy(out + 1, mock->version_reply, 32);
+	KUNIT_ASSERT_EQ(test, ws73_version_reply_decode(out + 1, 32, &version), 0);
+	KUNIT_EXPECT_EQ(test, version.firmware, 0x010a6e7fU);
+	KUNIT_EXPECT_EQ(test, version.rom, 0x12345678U);
+	memset(out + 17, 0, 8);
+	KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(out + 1, 32, &version), 0);
+	KUNIT_EXPECT_EQ(test, version.firmware, 0);
+	KUNIT_EXPECT_EQ(test, version.rom, 0);
+}
+
+static void ws73_version_invalid_test(struct kunit *test)
+{
+	struct ws73_runtime_mock *mock = ws73_runtime_fixture(test, 0);
+	struct ws73_version version, before = { 0xa5a5a5a5, 0x5a5a5a5a };
+	unsigned int i;
+
+	KUNIT_ASSERT_NOT_NULL(test, mock);
+	for (i = 0; i < 32; i++) {
+		version = before;
+		KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(mock->version_reply, i, &version),
+				-EMSGSIZE);
+		KUNIT_EXPECT_MEMEQ(test, &version, &before, sizeof(version));
+	}
+	for (i = 0; i <= U16_MAX; i++) {
+		version = before;
+		put_unaligned_le16(i, mock->version_reply + 2);
+		KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(mock->version_reply, 32, &version),
+				i >= 24 && i <= 32 ? 0 : -EMSGSIZE);
+		if (i < 24 || i > 32)
+			KUNIT_EXPECT_MEMEQ(test, &version, &before, sizeof(version));
+	}
+	put_unaligned_le16(32, mock->version_reply + 2);
+	version = before;
+	put_unaligned_le16(10, mock->version_reply + 6);
+	KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(mock->version_reply, 32, &version),
+			-EMSGSIZE);
+	put_unaligned_le16(16, mock->version_reply + 6);
+	put_unaligned_le32(7, mock->version_reply + 12);
+	KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(mock->version_reply, 32, &version),
+			-EMSGSIZE);
+	put_unaligned_le32(8, mock->version_reply + 12);
+	put_unaligned_le32(1, mock->version_reply + 8);
+	KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(mock->version_reply, 32, &version),
+			-EREMOTEIO);
+	put_unaligned_le32(0, mock->version_reply + 8);
+	mock->version_reply[4] = 10;
+	KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(mock->version_reply, 32, &version),
+			-EPROTO);
+	KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(NULL, 32, &version), -EINVAL);
+	KUNIT_EXPECT_EQ(test, ws73_version_reply_decode(mock->version_reply, 32, NULL), -EINVAL);
+	KUNIT_EXPECT_EQ(test, ws73_version_query_encode(NULL, 32), -EINVAL);
+	KUNIT_EXPECT_MEMEQ(test, &version, &before, sizeof(version));
+}
+
+static void ws73_runtime_versions_test(struct kunit *test)
+{
+	struct ws73_runtime_mock *mock;
+	struct ws73_version version, before = { 0xa5a5a5a5, 0x5a5a5a5a };
+	struct btws73_chip_identity chip;
+	unsigned int mode;
+	int expected;
+
+	for (mode = 8; mode <= 13; mode++) {
+		mock = ws73_runtime_fixture(test, mode);
+		KUNIT_ASSERT_NOT_NULL(test, mock);
+		KUNIT_ASSERT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
+				&mock->io, 100, &chip), 0);
+		version = before;
+		expected = mode == 9 ? -EREMOTEIO : mode == 10 ? -ETIMEDOUT :
+			mode == 12 ? -EPROTO : 0;
+		KUNIT_EXPECT_EQ(test, ws73_platform_get_version(&mock->request, &mock->tx,
+				&mock->io, mode == 10 ? 1 : 100, &version), expected);
+		KUNIT_EXPECT_EQ(test, mock->calls, 4);
+		if (!expected) {
+			KUNIT_EXPECT_EQ(test, version.firmware, 0x010a6e7fU);
+			KUNIT_EXPECT_EQ(test, version.rom, 0x12345678U);
+			if (mode == 11)
+				KUNIT_EXPECT_EQ(test, mock->busy_result, -EBUSY);
+		} else {
+			KUNIT_EXPECT_MEMEQ(test, &version, &before, sizeof(version));
+		}
+		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
+				&mock->io, 100, &chip), expected ? expected : -EALREADY);
+		KUNIT_EXPECT_EQ(test, ws73_platform_get_version(&mock->request, &mock->tx,
+				&mock->io, 100, &version), expected ? expected : -EALREADY);
+		KUNIT_EXPECT_EQ(test, mock->calls, 4);
+	}
 }
 
 static void ws73_runtime_query_test(struct kunit *test)
@@ -228,6 +373,9 @@ static void ws73_runtime_independent_rx_test(struct kunit *test)
 }
 
 static struct kunit_case ws73_runtime_cases[] = {
+	KUNIT_CASE(ws73_version_wire_test),
+	KUNIT_CASE(ws73_version_invalid_test),
+	KUNIT_CASE(ws73_runtime_versions_test),
 	KUNIT_CASE(ws73_runtime_query_test),
 	KUNIT_CASE(ws73_runtime_failures_test),
 	KUNIT_CASE(ws73_runtime_reply_errors_test),

@@ -214,6 +214,7 @@ static void ws73_usb_initialize(struct work_struct *work)
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	struct ws73_chip_observation observation;
 	struct btws73_chip_identity identity;
+	struct ws73_version version;
 	const struct ws73_usb_tx_io runtime_io = {
 		.context = ws,
 		.now_ms = ws73_usb_now,
@@ -230,19 +231,31 @@ static void ws73_usb_initialize(struct work_struct *work)
 	int ret;
 
 	if (ws->runtime) {
+		u64 deadline = ws73_usb_now(ws) + 4000;
+		const char *stage = "chip";
+
 		ret = ws73_usb_submit_rx(ws);
 		if (!ret)
 			ret = ws73_platform_get_chip(&ws->identity, &ws->tx, &runtime_io,
-						  ws73_usb_now(ws) + 4000, &identity);
+						     deadline, &identity);
+		if (!ret) {
+			stage = "version";
+			ret = ws73_platform_get_version(&ws->identity, &ws->tx, &runtime_io,
+							deadline, &version);
+		}
 		if (ret) {
 			ws73_usb_fail(ws, ret);
-			dev_err(&ws->interface->dev, "runtime chip observation failed: %d\n", ret);
+			dev_err(&ws->interface->dev, "runtime %s observation failed: %d\n",
+				stage, ret);
 			return;
 		}
-		if (!ws73_usb_cancelled(ws))
+		if (!ws73_usb_cancelled(ws)) {
 			dev_info(&ws->interface->dev,
 				 "runtime chip observation: package %u bus %u; firmware compatibility unverified\n",
 				 identity.package, identity.bus);
+			dev_info(&ws->interface->dev, "runtime version observation: firmware %#010x ROM %#010x\n",
+				 version.firmware, version.rom);
+		}
 		return;
 	}
 	ret = ws73_boot_read_chip(&io, ws73_usb_now(ws) + 4000, &observation);

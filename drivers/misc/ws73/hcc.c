@@ -63,6 +63,48 @@ int btws73_chip_reply_decode(const u8 *data, size_t len,
 }
 EXPORT_SYMBOL_NS_GPL(btws73_chip_reply_decode, "WS73");
 
+int ws73_version_query_encode(u8 *out, size_t capacity)
+{
+	if (!out)
+		return -EINVAL;
+	if (capacity < 32)
+		return -ENOSPC;
+	memset(out, 0, 32);
+	out[0] = 0x19;
+	out[1] = 9;
+	put_unaligned_le16(32, out + 2);
+	put_unaligned_le16(13, out + 4); /* GET_VERSION */
+	put_unaligned_le16(1, out + 6);
+	out[8] = 1;
+	return 32;
+}
+EXPORT_SYMBOL_NS_GPL(ws73_version_query_encode, "WS73");
+
+int ws73_version_reply_decode(const u8 *data, size_t len, struct ws73_version *version)
+{
+	struct ws73_version parsed;
+	u16 record_len;
+
+	if (!data || !version)
+		return -EINVAL;
+	if (len < 24 || len > BTWS73_RX_MAX_RECORD_SIZE)
+		return -EMSGSIZE;
+	if (data[0] != 0x19 || data[1] != 9 || get_unaligned_le16(data + 4) != 7)
+		return -EPROTO;
+	record_len = get_unaligned_le16(data + 2);
+	if (record_len < 24 || record_len > len ||
+	    get_unaligned_le16(data + 6) != 16 || get_unaligned_le32(data + 12) != 8)
+		return -EMSGSIZE;
+	if (get_unaligned_le32(data + 8))
+		return -EREMOTEIO;
+	parsed.firmware = get_unaligned_le32(data + 16);
+	parsed.rom = get_unaligned_le32(data + 20);
+	/* Preserve all bits; a reported number is not firmware authentication. */
+	*version = parsed;
+	return 0;
+}
+EXPORT_SYMBOL_NS_GPL(ws73_version_reply_decode, "WS73");
+
 int btws73_hcc_decode(const u8 *data, size_t len, struct btws73_rx *rx)
 {
 	struct btws73_rx parsed = {};

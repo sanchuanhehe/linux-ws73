@@ -28,10 +28,17 @@ struct btws73_chip_identity {
 	u8 bus;
 };
 
+struct ws73_version {
+	u32 firmware;
+	u32 rom;
+};
+
 /* These encode/decode HCC records, not USB transactions or live identity. */
 int btws73_chip_query_encode(u8 *out, size_t capacity);
 int btws73_chip_reply_decode(const u8 *data, size_t len,
 			     struct btws73_chip_identity *identity);
+int ws73_version_query_encode(u8 *out, size_t capacity);
+int ws73_version_reply_decode(const u8 *data, size_t len, struct ws73_version *version);
 
 /*
  * Decode one complete USB aggregate on the BLE queue. The returned views

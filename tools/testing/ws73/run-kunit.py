@@ -168,6 +168,8 @@ def main():
                     "ws73_usb_tx_admission_test",
                 },
                 "ws73-runtime": {
+                    "ws73_version_wire_test", "ws73_version_invalid_test",
+                    "ws73_runtime_versions_test",
                     "ws73_runtime_query_test", "ws73_runtime_failures_test",
                     "ws73_runtime_reply_errors_test", "ws73_runtime_admission_test",
                     "ws73_runtime_independent_rx_test",

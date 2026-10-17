@@ -80,7 +80,7 @@ def main():
             names = [".config", "arch/x86/boot/bzImage", "vmlinux"]
             names += [f"drivers/misc/ws73/{name}.o" for name in
                       ("usb", "boot", "firmware", "runtime", "usb-tx", "usb-wire",
-                       "service", "ble-control", "customize", "customize-request", "startup")]
+                       "service", "ble-control", "customize", "customize-request", "startup", "ble", "ble-link")]
             for name in names:
                 dest = record / name
                 dest.parent.mkdir(parents=True, exist_ok=True)

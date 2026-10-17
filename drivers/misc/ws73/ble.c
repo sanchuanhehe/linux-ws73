@@ -173,8 +173,8 @@ static void ws73_ble_release(struct device *dev)
 	module_put(THIS_MODULE);
 }
 
-struct auxiliary_device *ws73_ble_add(struct device *parent,
-				      const struct ws73_ble_backend *backend, void *context)
+struct auxiliary_device *ws73_ble_prepare(struct device *parent,
+					  const struct ws73_ble_backend *backend, void *context)
 {
 	struct ws73_ble *ble;
 	int ret;
@@ -203,12 +203,30 @@ struct auxiliary_device *ws73_ble_add(struct device *parent,
 		ws73_ble_release(&ble->adev.dev);
 		return ERR_PTR(ret);
 	}
-	ret = auxiliary_device_add(&ble->adev);
+	return &ble->adev;
+}
+
+/* Unpublished allocation: no auxiliary_device_delete() is needed. */
+void ws73_ble_discard(struct auxiliary_device *adev)
+{
+	auxiliary_device_uninit(adev);
+}
+
+struct auxiliary_device *ws73_ble_add(struct device *parent,
+				      const struct ws73_ble_backend *backend, void *context)
+{
+	struct auxiliary_device *adev;
+	int ret;
+
+	adev = ws73_ble_prepare(parent, backend, context);
+	if (IS_ERR(adev))
+		return adev;
+	ret = auxiliary_device_add(adev);
 	if (ret) {
-		auxiliary_device_uninit(&ble->adev);
+		ws73_ble_discard(adev);
 		return ERR_PTR(ret);
 	}
-	return &ble->adev;
+	return adev;
 }
 EXPORT_SYMBOL_NS_GPL(ws73_ble_add, "WS73");
 

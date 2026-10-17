@@ -23,6 +23,12 @@ struct ws73_ble_backend {
 struct auxiliary_device *ws73_ble_add(struct device *parent,
 				      const struct ws73_ble_backend *backend, void *context);
 void ws73_ble_remove(struct auxiliary_device *adev);
+/* Internal two-phase publication: install RX routing before synchronous probe.
+ * On auxiliary_device_add() failure, detach/drain routing then discard.
+ */
+struct auxiliary_device *ws73_ble_prepare(struct device *parent,
+					  const struct ws73_ble_backend *backend, void *context);
+void ws73_ble_discard(struct auxiliary_device *adev);
 /* Borrowed validated H4 fragment. No URB memory survives this callback. */
 void ws73_ble_receive(struct auxiliary_device *adev, const u8 *data, size_t length);
 

@@ -12,6 +12,7 @@
 #include <linux/workqueue.h>
 
 #include "boot.h"
+#include "ble-link.h"
 #include "startup.h"
 #include "runtime.h"
 
@@ -25,6 +26,8 @@ struct ws73_usb {
 	struct ws73_platform_request identity;
 	struct ws73_startup startup;
 	struct ws73_ble_control_io ble_io;
+	struct ws73_usb_tx_io runtime_io;
+	struct ws73_ble_link ble;
 	struct ws73_boot_io boot_io;
 	struct urb *rx_urb;
 	struct urb *interrupt_urb;
@@ -63,6 +66,7 @@ static void ws73_usb_fail(struct ws73_usb *ws, int error)
 	spin_unlock_irqrestore(&ws->lock, flags);
 	ws73_platform_abort(&ws->identity, error);
 	ws73_startup_abort(&ws->startup, error);
+	ws73_ble_link_abort(&ws->ble, error);
 	if (first)
 		schedule_work(&ws->stop);
 }
@@ -271,8 +275,8 @@ static void ws73_usb_rx_complete(struct urb *urb)
 		for (i = 0; i < rx.count; i++) {
 			u8 bit = BIT(rx.notification[i]);
 
-			ret = ws73_startup_receive(&ws->startup, rx.notification[i],
-						       ws73_usb_now(ws));
+			ret = ws73_ble_link_notify(&ws->ble, rx.notification[i],
+						   ws73_usb_now(ws));
 			if (ret && ret != -ENOENT) {
 				/* An action failure belongs to BLE, not an active sibling. */
 				dev_dbg_ratelimited(&ws->interface->dev,
@@ -287,7 +291,9 @@ static void ws73_usb_rx_complete(struct urb *urb)
 				 rx.notification[i]);
 		}
 	}
-	/* No function consumers yet. No borrowed URB storage escapes this call. */
+	if (!ret && rx.queue == 7)
+		ws73_ble_link_receive(&ws->ble, &rx);
+	/* Routing copies via the consumer before the URB is submitted again. */
 	ret = ws73_usb_submit_rx(ws, urb);
 	if (ret && !ws73_usb_cancelled(ws))
 		ws73_usb_fail(ws, ret);
@@ -325,12 +331,6 @@ static void ws73_usb_initialize(struct work_struct *work)
 	struct ws73_chip_observation observation;
 	struct btws73_chip_identity identity;
 	struct ws73_version version;
-	const struct ws73_usb_tx_io runtime_io = {
-		.context = ws,
-		.now_ms = ws73_usb_now,
-		.cancelled = ws73_usb_cancelled,
-		.send = ws73_usb_send,
-	};
 	int ret;
 
 	if (ws->runtime) {
@@ -341,11 +341,11 @@ static void ws73_usb_initialize(struct work_struct *work)
 		if (!ret)
 			ret = ws73_usb_submit_rx(ws, ws->rx_urb);
 		if (!ret)
-			ret = ws73_platform_get_chip(&ws->identity, &ws->tx, &runtime_io,
+			ret = ws73_platform_get_chip(&ws->identity, &ws->tx, &ws->runtime_io,
 						     deadline, &identity);
 		if (!ret) {
 			stage = "version";
-			ret = ws73_platform_get_version(&ws->identity, &ws->tx, &runtime_io,
+			ret = ws73_platform_get_version(&ws->identity, &ws->tx, &ws->runtime_io,
 							deadline, &version);
 		}
 		if (ret) {
@@ -375,6 +375,11 @@ static void ws73_usb_initialize(struct work_struct *work)
 		 "boot chip observation %#010x: package %u bus %u; cold-read qualification pending\n",
 		 observation.raw, observation.chip.package, observation.chip.bus);
 	/* No profile selection, calibration writes, download or child registration. */
+}
+
+static void ws73_usb_transport_fault(void *context, int error)
+{
+	ws73_usb_fail(context, error);
 }
 
 static int ws73_usb_probe(struct usb_interface *interface, const struct usb_device_id *id)
@@ -436,6 +441,14 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 		.cancelled = ws73_usb_cancelled,
 		.send = ws73_usb_ble_send,
 	};
+	ws->runtime_io = (struct ws73_usb_tx_io) {
+		.context = ws,
+		.now_ms = ws73_usb_now,
+		.cancelled = ws73_usb_cancelled,
+		.send = ws73_usb_send,
+	};
+	ws73_ble_link_init(&ws->ble, &ws->startup, &ws->tx, &ws->runtime_io,
+			   &ws->ble_io, ws73_usb_transport_fault, ws);
 	if (runtime) {
 		ws->rx_urb = usb_alloc_urb(0, GFP_KERNEL);
 		ws->interrupt_urb = usb_alloc_urb(0, GFP_KERNEL);
@@ -474,11 +487,13 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	spin_unlock_irqrestore(&ws->lock, flags);
 	ws73_platform_abort(&ws->identity, -ENODEV);
 	ws73_startup_abort(&ws->startup, -ENODEV);
+	ws73_ble_link_abort(&ws->ble, -ENODEV);
 	usb_kill_anchored_urbs(&ws->submitted);
 	usb_kill_urb(ws->rx_urb);
 	usb_kill_urb(ws->interrupt_urb);
 	cancel_work_sync(&ws->initialize);
 	cancel_work_sync(&ws->stop);
+	ws73_ble_link_remove(&ws->ble);
 	dev_dbg(&interface->dev, "device callbacks drained\n");
 	usb_free_urb(ws->rx_urb);
 	usb_free_urb(ws->interrupt_urb);

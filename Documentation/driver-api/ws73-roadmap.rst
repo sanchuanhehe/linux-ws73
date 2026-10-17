@@ -143,3 +143,28 @@ board material is published without the applicable delivery evidence.
 Prepare exact cover letters, patches and recipients before requesting the
 user's authorization for external mail or submission to another project.
 Partial progress never closes an entire issue or claims mainline acceptance.
+
+Current implementation increment
+--------------------------------
+
+Shared HCC helpers are now in drivers/misc/ws73, linked without Bluetooth or
+mac80211. Their original 13 regression cases passed unchanged at 92f2e06c7800.
+Firmware requests use ``hisilicon/ws73/1.10.110/{us,e}/`` and the three original
+basenames. All files are requested and verified before publishing a bundle;
+on failure all acquired firmware references are released. The profile table
+is selected only from the caller's verified live HCC identity. The helper
+itself does not turn an arbitrary struct or eFuse byte into trusted identity.
+
+The download executor consumes already validated payload views after the
+caller completes board preparation. It uses 32 KiB chunks, SDK start/middle/
+end/single flags, READY, a minimum 5 ms wait, and FILES OK. I/O shares an
+absolute deadline, with at most 2000 ms for each operation. Short I/O,
+malformed replies, cancellation or errors stop immediately; ambiguous writes
+are not replayed. Replies currently accept exact tokens plus optional NUL
+padding, pending real 110 capture confirmation.
+
+One further SDK correction: MSG_FROM_DEV_QUIT_OK is the EMPTY string. USB
+firmware_send_quit_func waits for hcc_usb_reload instead of a text ACK.
+Therefore the executor returns WAIT_RUNTIME after sending QUIT; its success
+is not runtime readiness or identity verification. No USB caller is enabled
+before the boot identity/board prerequisites are established.

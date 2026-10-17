@@ -1,8 +1,21 @@
 # SPDX-License-Identifier: GPL-2.0-only
 config WS73_CORE
 	tristate
+	select FW_LOADER
+	select CRYPTO_LIB_SHA256
 	help
 	  Shared WS73 protocol helpers used by actual function consumers.
 	  This initial component validates HCC records and chip replies.
 	  It has no Bluetooth or Wi-Fi stack dependency and does not yet
 	  register a USB driver, download firmware or enable a function.
+
+config WS73_KUNIT_TEST
+	tristate "WS73 firmware and boot transaction tests" if !KUNIT_ALL_TESTS
+	depends on KUNIT
+	select WS73_CORE
+	default KUNIT_ALL_TESTS
+	help
+	  Validate original firmware profiles and download transactions.
+	  Run production hashing and chunk sequencing with synthetic data
+	  and an injectable synchronous transport. No USB device is used.
+	  Success does not establish boot identity or firmware execution.

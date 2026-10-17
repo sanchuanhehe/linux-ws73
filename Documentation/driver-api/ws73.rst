@@ -8,8 +8,10 @@ Status and scope
 
 This branch is a development series based on Linux
 70dd4ee72eb2d5793c62e71c14e3aba78e5a4e56. The initial codec is executable
-kernel code, currently linked only by its KUnit test. It does not register a
-USB driver or hci_dev, download firmware, or provide functional BLE/Wi-Fi.
+kernel code consumed by its KUnit tests. The shared module also contains
+firmware validation and a bounded download executor with injectable I/O.
+It does not register a USB driver or hci_dev, execute hardware downloads,
+or provide functional BLE/Wi-Fi.
 Synthetic HCI event fixtures are parser inputs, never generated completions
 for an HCI device. No hardware or SparkLink qualification is inherited.
 
@@ -127,7 +129,8 @@ requirements for the forthcoming loader, not implemented transport states:
    chunks. Each FILES command needs READY before payload, then FILES_OK;
    increment the address and verify the total payload count. A short USB
    transfer or missing acknowledgment cannot count as success. Send QUIT
-   only after all required images succeed and check its response.
+   only after all required images succeed. The SDK defines an empty QUIT
+   response for USB; runtime re-enumeration, not a text ACK, is the gate.
 #. PATCH_LAUCH refreshes the bus state. USB ``hcc_usb_reload`` waits for the
    runtime probe before enabling HCC traffic. The SDK distinguishes two
    boot endpoints from five runtime endpoints; the new driver must also
@@ -231,8 +234,10 @@ generated after malformed input.
 Architecture decision 0001 (provisional)
 ----------------------------------------
 
-Keep this BLE-specific codec local to drivers/bluetooth. There is no
-exported registration API, auxiliary child or unused SLE interface. The
+HCI validation and H4 transmit framing stay local to drivers/bluetooth.
+HCC receive and chip identity helpers now live in drivers/misc/ws73 and
+are exported in the WS73 namespace. There is no registration API, auxiliary
+child or unused SLE interface yet. The
 eventual single USB owner will manage firmware, HCC, bounded transport and
 physical teardown. Only actual Wi-Fi/BLE consumer needs justify extraction
 into a shared directory. The preferred shared-layer location is now

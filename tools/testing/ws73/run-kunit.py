@@ -93,7 +93,7 @@ def main():
                "--timeout=120", "--kernel_args=panic_on_warn=1",
                "--qemu_args=-smp 2 -nic none "
                f"-qmp unix:{work / 'kunit.qmp'},server=on,wait=off",
-               f"--json={record / 'results.json'}", "btws73-proto"]
+               f"--json={record / 'results.json'}", "*ws73*"]
         manifest["command"] = cmd
         manifest_path = record / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
@@ -110,7 +110,8 @@ def main():
         manifest["artifacts"] = {}
         for name in (".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
                      "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o",
-                     "drivers/misc/ws73/hcc.o"):
+                     "drivers/misc/ws73/hcc.o", "drivers/misc/ws73/firmware.o",
+                     "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o"):
             path = build / name
             if path.is_file():
                 dest = record / "artifacts" / name
@@ -129,15 +130,28 @@ def main():
                 "btws73_null_args",
                 "btws73_chip_query", "btws73_chip_reply", "btws73_chip_invalid",
             }
+            expected_groups = {
+                "btws73-proto": expected,
+                "ws73-fw-boot": {
+                    "ws73_profiles_test", "ws73_file_test", "ws73_boot_sequence_test",
+                    "ws73_boot_faults_test", "ws73_boot_admission_test",
+                },
+            }
+            passed = len(groups) == len(expected_groups)
+            seen = set()
             for group in groups:
                 cases = group.get("test_cases", [])
-                if group["name"] == "btws73-proto":
-                    passed = (len(cases) == len(expected) and
-                              {case["name"] for case in cases} == expected and
-                              all(case["status"] == "PASS" for case in cases))
+                names = expected_groups.get(group["name"], set())
+                passed = (passed and bool(names) and group["name"] not in seen
+                          and len(cases) == len(names)
+                          and {case["name"] for case in cases} == names
+                          and all(case["status"] == "PASS" for case in cases))
+                seen.add(group["name"])
+            passed = passed and seen == expected_groups.keys()
         required = {".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
                     "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o",
-                    "drivers/misc/ws73/hcc.o"}
+                    "drivers/misc/ws73/hcc.o", "drivers/misc/ws73/firmware.o",
+                    "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o"}
         passed = (passed and run.returncode == 0 and before == manifest["source_after"]
                   and required <= manifest["artifacts"].keys())
         manifest["status"] = "PASS" if passed else "FAIL"

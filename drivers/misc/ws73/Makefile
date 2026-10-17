@@ -7,5 +7,6 @@ obj-$(CONFIG_WS73_KUNIT_TEST) += ws73-test.o
 ws73-test-y := test.o usb-wire-test.o usb-tx-test.o runtime-test.o service-test.o ble-control-test.o
 ws73-test-y += customize-test.o customize-request-test.o
 ws73-test-y += startup-test.o
+ws73-test-y += board-test.o
 obj-$(CONFIG_WS73_USB) += ws73-usb.o
 ws73-usb-y := usb.o

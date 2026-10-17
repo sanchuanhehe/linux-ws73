@@ -7,6 +7,7 @@
 #define WS73_BOOT_CHUNK_SIZE (32 * 1024)
 
 enum ws73_boot_stage {
+	WS73_BOOT_PREPARE,
 	WS73_BOOT_COMMAND,
 	WS73_BOOT_READY,
 	WS73_BOOT_PAYLOAD,
@@ -19,6 +20,12 @@ struct ws73_boot_progress {
 	enum ws73_boot_stage stage;
 	unsigned int image;
 	size_t acknowledged;
+	unsigned int preparation_writes;
+};
+
+struct ws73_boot_board {
+	u8 xo_coarse;
+	u8 xo_fine;
 };
 
 /*
@@ -64,5 +71,18 @@ int ws73_boot_read_chip(const struct ws73_boot_io *io, u64 deadline_ms,
 int ws73_boot_download(const struct ws73_boot_io *io,
 		       const struct ws73_fw_view image[WS73_FW_COUNT],
 		       u64 deadline_ms, struct ws73_boot_progress *progress);
+
+/*
+ * Fixed SDK110 USB RAM2/3/4 preparation and explicit XO trim, then the three
+ * original images and QUIT. No generic register address/value interface.
+ * All image ranges and trim bounds are checked before any write. Caller must
+ * first validate all file hashes, live identity and board compatibility.
+ * Retain immutable inputs throughout; discard the session after any failure.
+ * No automatic retry or rollback of partially acknowledged register writes.
+ */
+int ws73_boot_load(const struct ws73_boot_io *io,
+		   const struct ws73_fw_view image[WS73_FW_COUNT],
+		   const struct ws73_boot_board *board, u64 deadline_ms,
+		   struct ws73_boot_progress *progress);
 
 #endif

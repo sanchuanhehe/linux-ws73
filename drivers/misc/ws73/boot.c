@@ -117,17 +117,12 @@ int ws73_boot_read_chip(const struct ws73_boot_io *io, u64 deadline_ms,
 }
 EXPORT_SYMBOL_NS_GPL(ws73_boot_read_chip, "WS73");
 
-int ws73_boot_download(const struct ws73_boot_io *io,
-		       const struct ws73_fw_view image[WS73_FW_COUNT],
-		       u64 deadline_ms, struct ws73_boot_progress *progress)
+static int ws73_boot_images_validate(const struct ws73_fw_view image[WS73_FW_COUNT])
 {
 	static const u32 addresses[WS73_FW_COUNT] = { 0x400000, 0x430000, 0x440000 };
-	char command[80];
 	unsigned int i;
-	int ret;
 
-	if (!io || !image || !progress || !io->now_ms || !io->cancelled ||
-	    !io->send || !io->receive || !io->wait_ready)
+	if (!image)
 		return -EINVAL;
 	/* Check every range before the first side effect, including overlap. */
 	for (i = 0; i < WS73_FW_COUNT; i++) {
@@ -137,6 +132,23 @@ int ws73_boot_download(const struct ws73_boot_io *io,
 		    (i + 1 < WS73_FW_COUNT && image[i].size > addresses[i + 1] - addresses[i]))
 			return -EINVAL;
 	}
+	return 0;
+}
+
+int ws73_boot_download(const struct ws73_boot_io *io,
+		       const struct ws73_fw_view image[WS73_FW_COUNT],
+		       u64 deadline_ms, struct ws73_boot_progress *progress)
+{
+	char command[80];
+	unsigned int i;
+	int ret;
+
+	if (!io || !progress || !io->now_ms || !io->cancelled ||
+	    !io->send || !io->receive || !io->wait_ready)
+		return -EINVAL;
+	ret = ws73_boot_images_validate(image);
+	if (ret)
+		return ret;
 
 	for (i = 0; i < WS73_FW_COUNT; i++) {
 		size_t offset = 0;
@@ -185,3 +197,57 @@ int ws73_boot_download(const struct ws73_boot_io *io,
 	return 0;
 }
 EXPORT_SYMBOL_NS_GPL(ws73_boot_download, "WS73");
+
+int ws73_boot_load(const struct ws73_boot_io *io,
+		   const struct ws73_fw_view image[WS73_FW_COUNT],
+		   const struct ws73_boot_board *board, u64 deadline_ms,
+		   struct ws73_boot_progress *progress)
+{
+	/* SDK cali_dyn_mem_cfg followed by bsle_cali_dyn_mem_cfg. */
+	static const struct {
+		u32 address;
+		u32 value;
+	} ram[] = {
+		{ 0x40017750, 0x33 },
+		{ 0x40017790, 0 },
+		{ 0x40017794, 0 },
+		{ 0x4001775c, 0x430000 },
+		{ 0x40017760, 0x438000 },
+		{ 0x40017750, 0x3f },
+		{ 0x40017750, 0x2f },
+		{ 0x40017798, 0 },
+		{ 0x40017764, 0x440000 },
+		{ 0x40017750, 0x3f },
+	};
+	char command[64];
+	unsigned int i;
+	int ret, length;
+
+	if (!io || !board || !progress || !io->now_ms || !io->cancelled ||
+	    !io->send || !io->receive || !io->wait_ready)
+		return -EINVAL;
+	if (board->xo_coarse > 15 || board->xo_fine > 127)
+		return -ERANGE;
+	ret = ws73_boot_images_validate(image);
+	if (ret)
+		return ret;
+	*progress = (struct ws73_boot_progress) { .stage = WS73_BOOT_PREPARE };
+	for (i = 0; i <= ARRAY_SIZE(ram); i++) {
+		u32 address = i < ARRAY_SIZE(ram) ? ram[i].address : 0x40019408;
+		u32 value = i < ARRAY_SIZE(ram) ? ram[i].value :
+			board->xo_coarse | ((u32)board->xo_fine << 8);
+
+		/* SDK write_device_reg uses decimal value and a trailing space. */
+		length = scnprintf(command, sizeof(command), "WRITEM 4 0x%x %u ",
+				   address, value);
+		ret = ws73_boot_send(io, command, length, deadline_ms);
+		if (ret)
+			return ret;
+		ret = ws73_boot_expect(io, "WRITEM OK", deadline_ms);
+		if (ret)
+			return ret;
+		progress->preparation_writes++;
+	}
+	return ws73_boot_download(io, image, deadline_ms, progress);
+}
+EXPORT_SYMBOL_NS_GPL(ws73_boot_load, "WS73");

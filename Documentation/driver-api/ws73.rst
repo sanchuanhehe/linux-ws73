@@ -279,6 +279,47 @@ adding a caller must join it before releasing the parent; the current parent
 has no customization caller. Synthetic tests cover actual production transport
 sequencing and an independent RX thread, not a physical customization exchange.
 
+Board preparation and three-file execution
+------------------------------------------
+
+``ws73_boot_load`` adds the fixed SDK110 USB preparation sequence before the
+existing FILES/QUIT executor. It checks every image range and explicit XO trim
+before the first write. Ten fixed RAM2/3/4 writes are followed by one XO write
+at 0x40019408, packing coarse in the low byte and fine in the next byte.
+Coarse 0..15 and fine 0..127 are admitted; no default trim is supplied. Each
+``WRITEM 4 <address> <decimal-value> `` requires ``WRITEM OK`` before proceeding.
+Only NUL response padding is allowed. Actual-length, cancellation and deadline
+checks use the existing boot transport. A failed write/ack stops immediately;
+it cannot continue with FILES or QUIT. The caller must discard a failed session,
+not retry or restore guessed register values. Acknowledged preparation writes
+are recorded separately from acknowledged image bytes.
+
+The SDK ``plat_cali.c`` supplies the symbolic RAM sequence and values.
+``plat_pm_board_ws73.c`` invokes RAM2/3 under ON_CHIP_LINUX_SDK, which the Linux
+platform Makefile defines, and RAM4 under BT_EM_BUFFER_CALI_SUPPORT, enabled
+in both inspected USB light configurations. ``hcc_usb_write_reg`` dispatches
+boot writes to ``write_device_reg`` (decimal value and trailing space). The
+firmware command table puts XO trim before the three files; the trim originates
+from build configuration or INI, not from a universal device default.
+
+The numeric RAM register addresses are cross-referenced to the pinned
+``libws73-usb/src/ws73_usb_firmware.c`` preload sequence. This SDK checkout
+references but does not contain the generated CLDO register-offset header;
+no corresponding local platform object was found. Consequently that numeric
+mapping is reference-implementation evidence, not independently verified vendor
+register documentation or this project's U/E hardware qualification. The XO
+address/width are explicit in the SDK ``plat_firmware.h``. This provenance and
+board applicability remain gates for physical use; no register operation runs
+in the USB observation driver yet.
+
+The executor borrows already validated immutable image views. Full image/header
+hash checks remain the firmware-request layer's prerequisite, as do live HCC
+identity, cold-read qualification and board compatibility. Range checks alone
+do not establish any of these. The new integrated transcript uses tiny synthetic
+images and explicit non-production trim, checks all 35 send/receive operations,
+and injects errors at every operation. Runtime XO temperature compensation,
+device address provenance and native consumers remain separate pending work.
+
 Startup handshake coordinator
 -----------------------------
 

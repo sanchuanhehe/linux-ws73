@@ -2746,3 +2746,84 @@ Records and manifest SHA-256:
   ``2352b340f9652174ab02542a98600f19ae849e88c6b4c0b19bdb05e62afe2040``.
 * ``wifi-frw-supervisor-20261017T160248.853248Z`` (46 corruptions rejected),
   ``8929c79e2b9159a30e8b7a841082b794abb03eb64217e4a52cdfd08d23334aba``.
+
+
+Physical U command-echo ACK discovery and fix (2026-10-18 SGT)
+------------------------------------------------------------
+
+After a new user-confirmed single-device power cycle, the allocated U remained
+at the same port/serial/topology and changed from USB device number 116 to 117.
+Source ``87a946f9cabde2e2eac402451ca2f76dea245a7c`` passed empty-VM admission
+preflight, then ran one actual device-level passthrough attempt. The first READM
+before any writes completed with exactly four zero bytes; VERSION returned
+``BOOTVER001`` plus two NUL bytes, and the loader's fresh READM again returned
+four zero bytes. This adds one user-confirmed cold initial read on the same U
+sample, not E qualification or independent power instrumentation.
+
+The first fixed command ``WRITEM 4 0x40017750 51 `` completed OUT with 23 bytes.
+Its IN completed successfully with 34 actual bytes. The first 32 captured bytes
+were ``WRITEM OK:WRITEM 4 0x40017750 51``; usbmon text did not capture the last
+two bytes. The old parser rejected the command echo with EPROTO (-71), leaving
+``phase=3 stage=0 prep=0 image=0 ack=0``. The zero preparation counter records
+accepted ACKs: it must not be interpreted as no hardware writes. Register effect
+was not independently read back. No second WRITEM, FILES, payload or QUIT was
+sent. Two callback drains, QMP removal, VM exit zero and no post-exit owner were
+verified. The failure is retained, not relabeled as firmware-load success.
+
+The pinned SDK110 Host compares only the success prefix. Independent fix
+``5f4b7d964fb70a7f9e5a62c5546d7de7db339d21`` instead accepts only a bare
+WRITEM ACK or colon plus the entire issued command, followed by zero padding.
+It does not admit arbitrary suffixes or replay uncertain writes. All 85 KUnit
+cases passed, including every echo truncation, mutation of every byte and
+padding, maximum receive padding, and stop-before-second-write assertions.
+The full 34-byte physical reply's ending remains to be verified in a new trial;
+its successful return must not be inferred from the candidate test vector.
+
+The FunctionFS loader fixture now returns 11 exact command echoes in one
+successful original-file case, retains bare ACK cases, and injects a wrong
+address echo that must fail before the second write. Full-speed and high-speed
+runs each passed all ten scenarios with production USB, hashing and loaders,
+original U/E files, no-extra-OUT checks and complete teardown. These remain
+synthetic USB results, not physical firmware execution. Final executable source
+is ``720bc66130370cd2105805b3d2b63e6185233d35``; it differs from the KUnit
+source only in test formatting and supervisor checks, with production boot code
+unchanged. Full-speed execution used ``6b5bdcfe6cf01f55ccc1c7afa2f441295f0a8b83``.
+
+A new duplicate-echo corruption initially escaped the log supervisor when
+appended outside all cases. That failure is archived. Global echo/bare-reply
+counts fix the omission; 37 log and nine artifact corruptions are now rejected.
+The tagged hardware trial additionally captures every successful boot RX byte
+in bounded 32-byte chunks. Its private supervisor requires contiguous offsets,
+exact full lengths, usbmon prefix agreement and the constrained ACK grammar;
+22 synthetic trace corruptions were rejected. Final hardware build and empty
+VM admission preflight passed. A new power cycle is required before the next
+physical trial because the failed attempt submitted a RAM-control write.
+
+Records and manifest SHA-256:
+
+* ``power-cycle-confirmation-20261017T160819.051257Z``,
+  ``c3e2d33575f540cb284495d94bb27afc2437fda1e596604d9376f65076e8478c``.
+* ``hardware-build-20261017T160755.894777Z``,
+  ``c63472698a03f5812ce41639a2f8cc92b73eb9164046f88a734073844604bad6``.
+* ``ram-trial-20261017T160829.047812Z``,
+  ``59027bfe2f6466b068df83423fa6d82ecc2dfd616aa979651f8e52efde4945e3``.
+* ``ram-trial-20261017T160855.339264Z``,
+  ``18b1bec4851def386afec995b6d4816af8554060680e0195bf4fea939650e0ad``.
+* ``ram-trial-ack-analysis-20261017``,
+  ``08ba17a0834ba09951d8893cb0b004a20352400a2b73edef525b413ae2b34099``.
+* ``20261017T161238.336164Z``,
+  ``3ad2a8c9faace3c31c7b4a7fe56105c54d5d8e0fc503eec270d404482ee0c41a``.
+* ``virtual-usb-20261017T161642.578825Z``,
+  ``609ace45f030df55cae837a0a92e732da38cf67ffdeee98c9d16c48b53f38a1f``.
+* ``rom-echo-supervisor-first``,
+  ``6459eb1cd2c64ebcc06638e68bc1abf4b52d6c7d66c3164acc346dff1c41a77d``.
+* ``virtual-usb-negative-20261017T161751.032690Z``,
+  ``22373efc7891342b1dfe23153c58cb8bee452d6fc7ce757830f2a5f91883e070``.
+* ``virtual-usb-20261017T161826.290074Z``,
+  ``95ba408da4cb82b48bad1662cde231adac5922806659202f1a0c58e2b4dd38ed``.
+* ``ram-trial-verifier-20261017T161408.431817Z``,
+  ``5726a9edbbd93eb1f7cd64fd1673e82154884805cc944da8af70e3dc2983c812``.
+* ``hardware-build-20261017T161834.625174Z``,
+  ``13af4f7c3fa2c0db4f3d9bc7c7c0cc694247d3cfe420f7587acd9652daf69fa5``.
+* ``ram-trial-20261017T161850.906430Z``,
+  ``36586e62bafe2712b9bbbf1bad62523e5bf452216c1be1f70358bbeb2af6b63f``.

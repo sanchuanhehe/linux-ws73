@@ -453,6 +453,15 @@ before the first write. Ten fixed RAM2/3/4 writes are followed by one XO write
 at 0x40019408, packing coarse in the low byte and fine in the next byte.
 Coarse 0..15 and fine 0..127 are admitted; no default trim is supplied. Each
 ``WRITEM 4 <address> <decimal-value> `` requires ``WRITEM OK`` before proceeding.
+The allocated U ROM additionally returned a command echo after a colon. Accept
+either the bare token with NUL padding or ``WRITEM OK:`` followed by the exact
+issued command (including its trailing space) and optional NUL padding. Reject
+changed width/address/value, partial echoes and other suffixes. This is narrower
+than the SDK Host's prefix-only comparison. READY and FILES OK still use their
+existing exact-token/NUL-padding rules. No ambiguous write is automatically
+replayed; the preparation counter counts accepted ACKs, not submitted writes.
+The tagged hardware trial captures complete boot RX in bounded chunks because
+usbmon text alone retains only the first 32 bytes.
 Only NUL response padding is allowed. Actual-length, cancellation and deadline
 checks use the existing boot transport. A failed write/ack stops immediately;
 it cannot continue with FILES or QUIT. The caller must discard a failed session,

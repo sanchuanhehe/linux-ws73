@@ -99,7 +99,7 @@ def validate_boot(kernel, log, speed="full"):
   incoming=[] if n in (10,11) else [(str(lengths[n]),f'{words[n]:08x}')]
   assert re.findall(r'WS73_BOOT_IN actual=(\d+) word=([0-9a-f]+) synthetic',part)==incoming,number
   assert part.count('WS73_BOOT_WITHHOLD_REPLY')==(1 if n==10 else 0),number
-  assert part.count('WS73_BOOT_NO_EXTRA_OUT')==(0 if n==11 else 1),number
+  assert part.count('WS73_BOOT_NO_EXTRA_OUT window_ms=100')==(0 if n==11 else 1),number
   assert part.count('WS73_TEST_REMOVE')==1,number
   assert part.index('WS73_TEST_REMOVE')<part.index('USB disconnect')<part.index('device callbacks drained'),number
   if n==11:assert part.index('WS73_TEST_REMOVE')<part.index('boot chip observation failed:')<part.index('device callbacks drained'),number

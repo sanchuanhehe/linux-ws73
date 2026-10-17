@@ -48,7 +48,9 @@ the exact fixed READM command, U/USB (including zero), E/USB, S/SDIO and E/UART
 observations, replies of 0/1/3/5/512 bytes, a withheld reply timeout, removal
 while awaiting a reply and fresh U/E instances after removal. Decoding S/SDIO
 or E/UART does not enable those transports. Thirteen cases also check that no
-extra OUT command is pending before removal. These are live USB transfers in
+extra OUT command arrives during a 100-ms window before removal. FunctionFS
+synchronous reads are interrupted and drained by a periodic signal timer;
+O_NONBLOCK alone does not bound queued IO. These are live USB transfers in
 dummy_hcd, not proof that a real cold chip exposes the strap register.
 
 These tests do not execute boot firmware download, 32-KiB boot TX, the READY

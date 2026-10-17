@@ -13,6 +13,7 @@
 #include <sys/mount.h>
 #include <sys/reboot.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <time.h>
 #include <termios.h>
 #include <unistd.h>
@@ -23,6 +24,13 @@
 #define WS73_TEST_BOOT 0
 #endif
 static int disconnected;
+static volatile sig_atomic_t alarm_seen;
+
+static void quiet_alarm(int signal)
+{
+ (void)signal;
+ alarm_seen = 1;
+}
 
 static void stop(int failed)
 {
@@ -187,6 +195,8 @@ static void interrupt_event(int in, int log, unsigned int trial)
 }
 static void boot_trials(int control, int *eps, int log, const char *udc)
 {
+ struct sigaction action = { .sa_handler = quiet_alarm };
+ if (sigemptyset(&action.sa_mask) || sigaction(SIGALRM, &action, NULL)) die("quiet signal");
  static const uint32_t words[] = {0, 0x0a, 0x0c, 4, 0x28, 0, 0, 0, 0, 0, 0, 0, 0, 0x0a};
  static const unsigned int lengths[] = {4, 4, 4, 4, 4, 0, 1, 3, 5, 512, 0, 0, 4, 4};
  static const char *expected[] = {
@@ -217,13 +227,20 @@ static void boot_trials(int control, int *eps, int log, const char *udc)
             trial == 11 ? "boot chip observation failed: " : expected[trial - 12];
   wait_kernel(log, message);
   if (trial != 11) {
-   /* An ambiguous result must not provoke retries or firmware writes. */
-   int flags = fcntl(eps[1], F_GETFL);
-   if (flags < 0 || fcntl(eps[1], F_SETFL, flags | O_NONBLOCK)) die("boot nonblock");
+   /* FunctionFS O_NONBLOCK only governs locks/enable, not queued IO.
+    * Interrupt this read after a 100-ms quiet window; FunctionFS dequeues
+    * and joins its request before returning EINTR. Repeat the timer so a
+    * signal delivered before read admission cannot leave it stuck.
+    */
+   struct itimerval timer = { .it_interval.tv_usec = 100000, .it_value.tv_usec = 100000 };
+   alarm_seen = 0;
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("quiet timer");
    n = read(eps[1], got, sizeof(got));
-   if (n != -1 || errno != EAGAIN) die("unexpected extra boot OUT");
-   if (fcntl(eps[1], F_SETFL, flags)) die("boot restore flags");
-   puts("WS73_BOOT_NO_EXTRA_OUT");
+   int saved_errno = errno;
+   memset(&timer, 0, sizeof(timer));
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("quiet timer stop");
+   if (n != -1 || saved_errno != EINTR || !alarm_seen) die("unexpected extra boot OUT");
+   puts("WS73_BOOT_NO_EXTRA_OUT window_ms=100");
    puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n");
   }
   if (!disconnected) wait_kernel(log, "USB disconnect");

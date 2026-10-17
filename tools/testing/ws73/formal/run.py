@@ -85,7 +85,7 @@ def main():
         record.mkdir(parents=True)
         print(record, flush=True)
         files = [SOURCE / "drivers/misc/ws73/hcc.c", SOURCE / "include/linux/ws73.h",
-                 HERE / "hcc.c", HERE / "run.py", *sorted((HERE / "shim/linux").glob("*.h"))]
+                 HERE / "hcc.c", HERE / "run.py", *sorted((HERE / "shim").rglob("*.h"))]
         manifest = {"status": "INCOMPLETE", "source": git("rev-parse", "HEAD"), "sources": {},
                     "tools": {}, "attempts": [], "timeout_seconds": 60, "address_space_limit_gib": 4,
                     "scope": "four scalar HCC converters; valid retained caller objects; modeled kernel helpers; no concurrency or hardware"}

@@ -14,7 +14,7 @@ with (work/'build.lock').open('a') as lock:
  assert not git('status','--porcelain')
  head=git('rev-parse','HEAD');record=work/'records'/('hci-build-'+args.mode+'-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'));record.mkdir(parents=True);print(record,flush=True)
  build=work/'build-hci';build.mkdir(exist_ok=True)
- text=(source/'tools/testing/ws73/usb-vm/usb.config').read_text().replace('CONFIG_WS73_USB_BOOT_TEST=y', '# CONFIG_WS73_USB_BOOT_TEST is not set').replace('# CONFIG_NET is not set','CONFIG_NET=y\nCONFIG_BT=y\nCONFIG_BT_WS73=y')
+ text=(source/'tools/testing/ws73/usb-vm/usb.config').read_text().replace('CONFIG_WS73_USB_BOOT_TEST=y', '# CONFIG_WS73_USB_BOOT_TEST is not set')
  if args.mode=='module':text=text.replace('CONFIG_WS73_USB=y','CONFIG_WS73_USB=m').replace('CONFIG_BT=y','CONFIG_BT=m').replace('CONFIG_BT_WS73=y','CONFIG_BT_WS73=m').replace('CONFIG_WS73_USB_STARTUP_TEST=y','CONFIG_WS73_USB_STARTUP_TEST=m');text+='CONFIG_MODULES=y\n'
  (record/'config').write_text(text);shutil.copyfile(__file__,record/'build.py')
  result={'status':'INCOMPLETE','source':head,'mode':args.mode,'jobs':4,'builder_sha256':sha(Path(__file__)),'config_sha256':sha(record/'config'),'commands':[],'tools':{},'artifacts':{},'scope':'native HCI compile/link only; no HCI runtime or hardware qualification'}

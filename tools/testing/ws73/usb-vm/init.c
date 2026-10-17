@@ -14,6 +14,7 @@
 #include <sys/mount.h>
 #include <sys/reboot.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
 #include <termios.h>
@@ -32,6 +33,9 @@
 #endif
 #ifndef WS73_TEST_STARTUP
 #define WS73_TEST_STARTUP 0
+#endif
+#ifndef WS73_TEST_HCI
+#define WS73_TEST_HCI 0
 #endif
 static int disconnected;
 static volatile sig_atomic_t alarm_seen;
@@ -530,13 +534,136 @@ static void startup_action(int control, unsigned int message, int stall)
  if (n != sizeof(got) || memcmp(got, expected, sizeof(got))) die("startup action data");
  printf("WS73_STARTUP_ACTION message=%u actual=%zd verified\n", message, n);
 }
+/* Explicit userspace controller fixture; never linked into the driver. */
+static unsigned int get16(const unsigned char *p) { return p[0] | (p[1] << 8); }
+static uint32_t get32(const unsigned char *p) { return get16(p) | ((uint32_t)get16(p + 2) << 16); }
+static const unsigned char hci_test_address[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+static int hci_management_socket(void)
+{
+ struct { sa_family_t family; unsigned short device, channel; } address = { AF_BLUETOOTH, 0xffff, 3 };
+ int fd = socket(AF_BLUETOOTH, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, 1);
+ if (fd < 0 || bind(fd, (struct sockaddr *)&address, sizeof(address))) die("HCI management socket");
+ return fd;
+}
+static void hci_management_info(int fd)
+{
+ unsigned char data[512], request[] = {4, 0, 0, 0, 0, 0};
+ unsigned int index = 0xffff;
+ for (unsigned int tries = 0; tries < 20; tries++) {
+  struct pollfd p = { .fd = fd, .events = POLLIN };
+  if (poll(&p, 1, 250) < 0) die("management index poll");
+  if (!p.revents) continue;
+  ssize_t n = recv(fd, data, sizeof(data), 0);
+  if (n < 6 || get16(data + 4) != n - 6) die("management index event");
+  if (get16(data) == 4) {
+   if (n != 6 || get16(data + 2) != 0) die("unexpected HCI index");
+   index = get16(data + 2); break;
+  }
+ }
+ if (index == 0xffff) die("missing configured HCI index");
+ printf("WS73_HCI_MGMT_INDEX index=%u configured\n", index);
+ le16(request + 2, index);
+ if (send(fd, request, sizeof(request), 0) != sizeof(request)) die("management Read Info");
+ for (unsigned int tries = 0; tries < 20; tries++) {
+  struct pollfd p = { .fd = fd, .events = POLLIN };
+  if (poll(&p, 1, 250) < 0) die("management info poll");
+  if (!p.revents) continue;
+  ssize_t n = recv(fd, data, sizeof(data), 0);
+  if (n < 6 || get16(data + 4) != n - 6) die("management info size");
+  if (get16(data) != 1) continue;
+  if (n != 289 || get16(data + 2) != index || get16(data + 6) != 4 || data[8] ||
+      memcmp(data + 9, hci_test_address, 6) || data[15] != 6 || get16(data + 16) != 0xffff ||
+      !(get32(data + 18) & (1U << 9)) || !(get32(data + 22) & (1U << 9)) ||
+      (get32(data + 18) & (1U << 7))) die("management controller info");
+  printf("WS73_HCI_MGMT_INFO actual=%zd address=112233445566 version=6 manufacturer=ffff LE_only verified\n", n);
+  return;
+ }
+ die("missing management controller info");
+}
+static void hci_event_fragment(int in, const unsigned char *data, unsigned int size)
+{
+ unsigned char wire[180] = {0};
+ unsigned int record = (size + 4 + 7) & ~7U, length = 92 + record;
+ if (length > sizeof(wire)) die("fixture HCI fragment capacity");
+ le32(wire, 2); le32(wire + 4, length); le32(wire + 8, 7); le16(wire + 12, record);
+ wire[93] = 7; le16(wire + 94, size); memcpy(wire + 96, data, size);
+ if (write(in, wire, length) != length) die("HCI event fragment");
+ printf("WS73_HCI_FRAGMENT h4=%u actual=%u synthetic\n", size, length);
+}
+static void hci_command(int out, int in, unsigned int step, int reply)
+{
+ static const unsigned int opcodes[] = {0x1003,0x1009,0x0c03,0x1003,0x1001,0x1009,0x1002,0x2003,0x2002,0x201c,0x0c01,0x2001};
+ unsigned char got[512], expected[128] = {0}, event[71] = {4, 0x0e, 0, 1};
+ unsigned int opcode = opcodes[step], parameters = opcode == 0x0c01 || opcode == 0x2001 ? 8 : 0;
+ unsigned int size = 7;
+ le32(expected + 4, sizeof(expected)); le32(expected + 8, step + 9);
+ expected[65] = 7; le16(expected + 66, parameters + 4);
+ expected[68] = 1; le16(expected + 69, opcode); expected[71] = parameters;
+ if (opcode == 0x0c01) { expected[73] = 0xe0; expected[79] = 0x20; }
+ ssize_t n = read(out, got, sizeof(got));
+ if (n != sizeof(expected) || memcmp(got, expected, sizeof(expected))) {
+  fprintf(stderr, "WS73_HCI_UNEXPECTED step=%u length=%zd opcode=%04x\n", step, n, n >= 72 ? get16(got + 69) : 0);
+  die("HCI command bytes");
+ }
+ printf("WS73_HCI_COMMAND step=%u sequence=%u opcode=%04x actual=%zd verified\n", step, step + 9, opcode, n);
+ if (!reply) return;
+ le16(event + 4, opcode);
+ switch (opcode) {
+ case 0x1003: event[11] = 0x60; size = 15; break; /* LE + no BR/EDR. */
+ case 0x1009: memcpy(event + 7, hci_test_address, 6); size = 13; break;
+ case 0x1001:
+  event[7] = 6; le16(event + 8, 0x0110); event[10] = 6;
+  le16(event + 11, 0xffff); le16(event + 13, 0x0110); size = 15; break;
+ case 0x1002: size = 71; break; /* Minimal fixture, no optional command bits. */
+ case 0x2003: case 0x201c: size = 15; break;
+ case 0x2002: le16(event + 7, 64); event[9] = 4; size = 10; break;
+ case 0x0c03: case 0x0c01: case 0x2001: break;
+ default: die("fixture HCI opcode");
+ }
+ event[2] = size - 3;
+ hci_event_fragment(in, event, 1);
+ hci_event_fragment(in, event + 1, 2);
+ hci_event_fragment(in, event + 3, size - 3);
+ printf("WS73_HCI_COMPLETE step=%u opcode=%04x h4=%u synthetic\n", step, opcode, size);
+}
+static int startup_hci(int control, int *eps, int log, int management, unsigned int trial)
+{
+ wait_kernel(log, "synthetic auxiliary result=0");
+ startup_action(control, 25, 0);
+ startup_notification(eps[0], 2, 0);
+ for (unsigned int step = 7; step < 9; step++) {
+  unsigned char got[512], expected[36] = {0};
+  le32(expected, 3); le32(expected + 8, step);
+  le32(expected + 12, step == 7 ? 1 : 0); le32(expected + 16, step == 7 ? 7 : 0);
+  ssize_t n = read(eps[1], got, sizeof(got));
+  if (n != sizeof(expected) || memcmp(got, expected, sizeof(expected))) die("HCI queue controls");
+  printf("WS73_HCI_QUEUE step=%u actual=%zd verified\n", step, n);
+ }
+ for (unsigned int step = 0; step < 12; step++) {
+  hci_command(eps[1], eps[0], step, !(trial == 1 && step == 2));
+  if (trial == 1 && step == 2) {
+   puts("WS73_HCI_WITHHOLD_RESET");
+   puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n");
+   return 1;
+  }
+ }
+ hci_management_info(management);
+ /* Native HCI auto-off must close through the shared real USB backend. */
+ startup_action(control, 26, 0);
+ startup_notification(eps[0], 3, 0);
+ puts("WS73_HCI_AUTO_OFF_ACK");
+ return 0;
+}
+
 static void startup_trials(int control, int *eps, int log, const char *udc)
 {
  struct sigaction action = { .sa_handler = quiet_alarm };
  if (sigemptyset(&action.sa_mask) || sigaction(SIGALRM, &action, NULL)) die("startup signal");
- for (unsigned int trial = 0; trial < 7; trial++) {
+ for (unsigned int trial = 0; trial < (WS73_TEST_HCI ? 3U : 7U); trial++) {
+  unsigned int scenario = WS73_TEST_HCI ? 0 : trial;
+  int removed = 0, management = WS73_TEST_HCI ? hci_management_socket() : -1;
   unsigned char reply[124] = {0}, interrupt[8] = {0};
-  printf("WS73_STARTUP_CASE %u BEGIN\n", trial); disconnected = 0;
+  printf("WS73_%s_CASE %u BEGIN\n", WS73_TEST_HCI ? "HCI" : "STARTUP", trial); disconnected = 0;
   setting(G "UDC", udc); enabled(control);
   for (unsigned int step = 0; step < 3; step++) transaction(eps[1], step);
   le32(reply, 2); le32(reply + 4, sizeof(reply)); le32(reply + 8, 9);
@@ -551,26 +678,27 @@ static void startup_trials(int control, int *eps, int log, const char *udc)
   if (write(eps[0], reply, sizeof(reply)) != sizeof(reply)) die("startup version reply");
   puts("WS73_TEST_IN kind=version actual=124 synthetic");
   wait_kernel(log, "synthetic runtime identity verified");
-  if (trial != 5) startup_notification(eps[0], 0, 0); /* Early BOOT. */
-  unsigned int bits = trial == 5 ? 0x41 : 1;
+  if (scenario != 5) startup_notification(eps[0], 0, 0); /* Early BOOT. */
+  unsigned int bits = scenario == 5 ? 0x41 : 1;
   le32(interrupt, bits); le32(interrupt + 4, 0xabcdef12);
   if (write(eps[2], interrupt, 8) != 8) die("startup BSP interrupt");
   printf("WS73_STARTUP_INT actual=8 bits=%08x synthetic\n", bits);
-  if (trial != 5) {
+  if (scenario != 5) {
    startup_customization(eps[1]);
-   startup_notification(eps[0], 1, trial == 3);
-   if (trial != 3) {
-    startup_action(control, 25, trial == 2);
-    if (trial == 0 || trial == 6) {
+   startup_notification(eps[0], 1, scenario == 3);
+   if (scenario != 3) {
+    startup_action(control, 25, scenario == 2);
+    if (scenario == 0 || scenario == 6) {
      startup_notification(eps[0], 2, 0);
      startup_action(control, 26, 0);
      startup_notification(eps[0], 3, 0);
-    } else if (trial == 1) puts("WS73_STARTUP_WITHHOLD_ACTION_REPLY");
-    else if (trial == 4) { puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); }
+    } else if (scenario == 1) puts("WS73_STARTUP_WITHHOLD_ACTION_REPLY");
+    else if (scenario == 4) { puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); }
    }
   }
   wait_kernel(log, "synthetic startup result=");
-  if (trial != 4) {
+  if (WS73_TEST_HCI) removed = startup_hci(control, eps, log, management, trial);
+  if (scenario != 4 && !removed) {
    unsigned char got[1024];
    struct itimerval timer = { .it_value = { .tv_usec = 100000 } };
    alarm_seen = 0;
@@ -586,7 +714,9 @@ static void startup_trials(int control, int *eps, int log, const char *udc)
   }
   if (!disconnected) wait_kernel(log, "USB disconnect");
   wait_kernel(log, "device callbacks drained");
-  printf("WS73_STARTUP_CASE %u PASS\n", trial);
+  if (management >= 0) close(management);
+  if (WS73_TEST_HCI && !access("/sys/class/bluetooth/hci0", F_OK)) die("HCI survived USB disconnect");
+  printf("WS73_%s_CASE %u PASS\n", WS73_TEST_HCI ? "HCI" : "STARTUP", trial);
  }
 }
 
@@ -620,7 +750,7 @@ int main(void)
  }
  closedir(dir);
  if (!udc[0]) die("missing dummy UDC");
- directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", WS73_TEST_STARTUP ? "0x3736" : WS73_TEST_LOADER ? "0x3735" : WS73_TEST_DOWNLOAD ? "0x3734" : "0x3733");
+ directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", WS73_TEST_HCI ? "0x3737" : WS73_TEST_STARTUP ? "0x3736" : WS73_TEST_LOADER ? "0x3735" : WS73_TEST_DOWNLOAD ? "0x3734" : "0x3733");
  setting(G "bcdUSB", "0x0200");
  directory(G "strings/0x409"); setting(G "strings/0x409/serialnumber", "WS73-VM-SYNTHETIC");
  directory(G "configs/c.1"); directory(G "functions/ffs.ws73"); directory("/dev/ffs");
@@ -636,7 +766,7 @@ int main(void)
   if (eps[i] < 0) die(path);
  }
  if (symlink(G "functions/ffs.ws73", G "configs/c.1/ffs.ws73")) die("function link");
- if (WS73_TEST_STARTUP) startup_trials(control, eps, log, udc);
+ if (WS73_TEST_HCI || WS73_TEST_STARTUP) startup_trials(control, eps, log, udc);
  else if (WS73_TEST_LOADER) loader_trials(control, eps, log, udc);
  else if (WS73_TEST_DOWNLOAD) download_trials(control, eps, log, udc);
  else if (WS73_TEST_BOOT) boot_trials(control, eps, log, udc);

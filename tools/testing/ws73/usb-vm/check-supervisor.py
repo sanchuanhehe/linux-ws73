@@ -14,7 +14,7 @@ proof=json.loads((p/'manifest.json').read_text())
 assert proof['status']=='PASS' and proof['speed']=='full'
 for name in ['kernel.log','fixture.log']:
  assert hashlib.sha256((p/name).read_bytes()).hexdigest()==proof['materials'][name]
-k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_startup if proof.get('phase')=='startup' else m.validate_loader if proof.get('phase')=='loader' else m.validate_download if proof.get('phase')=='download' else m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
+k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_hci if proof.get('phase')=='hci' else m.validate_startup if proof.get('phase')=='startup' else m.validate_loader if proof.get('phase')=='loader' else m.validate_download if proof.get('phase')=='download' else m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
 builddir=pathlib.Path(proof['build_record'])
 build=json.loads((builddir/'manifest.json').read_text())
 m.validate_build(builddir,build,proof['compiled_source'])
@@ -202,6 +202,39 @@ if proof.get('phase')=='startup':
   'missing_remove':(k,s.replace('WS73_TEST_REMOVE','',1)),
   'wrong_identity':(k,s.replace('WS73_TEST_IN kind=chip actual=124 synthetic','',1)),
   'panic_loses_priority':(k,s.replace('bits=00000041','bits=00000001',1)),
+  'wrong_speed':(k.replace('new full-speed','new high-speed',1),s),
+  'kasan':(k+'\nBUG: KASAN',s),
+  'ubsan':(k+'\nUBSAN:',s),
+  'lockdep':(k+'\npossible circular locking dependency',s),
+  'skip':(k,s+'\nSKIP\n'),
+ }
+
+if proof.get('phase')=='hci':
+ trials={
+  'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
+  'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
+  'missing_case':(k,s.replace('WS73_HCI_CASE 1 PASS','')),
+  'missing_auxiliary':(k,s.replace('synthetic auxiliary result=0','missing auxiliary',1)),
+  'missing_kernel_auxiliary':(k.replace('synthetic auxiliary result=0','missing auxiliary',1),s),
+  'wrong_action':(k,s.replace('message=25','message=26',1)),
+  'short_action':(k,s.replace('message=25 actual=4','message=25 actual=3',1)),
+  'wrong_setup':(k,s.replace('2100000000000400','a100000000000400',1)),
+  'wrong_queue':(k,s.replace('WS73_HCI_QUEUE step=7','WS73_HCI_QUEUE step=6',1)),
+  'wrong_opcode':(k,s.replace('sequence=9 opcode=1003','sequence=9 opcode=1009',1)),
+  'wrong_sequence':(k,s.replace('sequence=9 opcode=1003','sequence=10 opcode=1003',1)),
+  'missing_reply':(k,s.replace('WS73_HCI_COMPLETE step=0 opcode=1003 h4=15 synthetic','',1)),
+  'missing_fragment':(k,s.replace('WS73_HCI_FRAGMENT h4=1 actual=100 synthetic','',1)),
+  'wrong_fragment_size':(k,s.replace('h4=1 actual=100','h4=1 actual=99',1)),
+  'wrong_management_address':(k,s.replace('address=112233445566','address=000000000000',1)),
+  'short_management_info':(k,s.replace('INFO actual=289','INFO actual=288',1)),
+  'missing_management_index':(k,s.replace('WS73_HCI_MGMT_INDEX index=0 configured','',1)),
+  'missing_management_info':(k,s.replace('WS73_HCI_MGMT_INFO','MISSING_INFO',1)),
+  'missing_auto_off':(k,s.replace('WS73_HCI_AUTO_OFF_ACK','',1)),
+  'missing_withhold':(k,s.replace('WS73_HCI_WITHHOLD_RESET','')),
+  'missing_quiet':(k,s.replace('WS73_STARTUP_NO_EXTRA_OUT','',1)),
+  'missing_drain':(k,s.replace('device callbacks drained','missing drain',1)),
+  'post_drain':(k,s.replace('WS73_HCI_CASE 0 PASS','WS73_TEST_KMSG function notification observation 0; delivered to armed request\nWS73_HCI_CASE 0 PASS')),
+  'missing_remove':(k,s.replace('WS73_TEST_REMOVE','',1)),
   'wrong_speed':(k.replace('new full-speed','new high-speed',1),s),
   'kasan':(k+'\nBUG: KASAN',s),
   'ubsan':(k+'\nUBSAN:',s),

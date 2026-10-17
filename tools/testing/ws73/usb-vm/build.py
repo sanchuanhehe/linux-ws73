@@ -78,6 +78,7 @@ def main():
             assert not git("status", "--porcelain")
             assert git("rev-parse", "HEAD") == manifest["source"]
             names = [".config", "arch/x86/boot/bzImage", "vmlinux"]
+            names += ["drivers/bluetooth/btws73.o", "drivers/bluetooth/btws73_proto.o"]
             names += [f"drivers/misc/ws73/{name}.o" for name in
                       ("usb", "usb-io", "usb-boot-test", "usb-startup-test", "boot", "boot-loader", "firmware", "runtime", "usb-tx", "usb-wire",
                        "service", "ble-control", "customize", "customize-request", "startup", "ble", "ble-link")]

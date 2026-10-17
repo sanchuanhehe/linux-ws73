@@ -4,7 +4,7 @@
 
 #include "usb-owner.h"
 
-static void ws73_test_initialize(struct work_struct *work)
+static void ws73_test_initialize_common(struct work_struct *work, bool publish)
 {
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	/* Fixture parameters only: no physical board applicability is claimed. */
@@ -55,6 +55,22 @@ done:
 	dev_info(&ws->interface->dev,
 		 "synthetic startup result=%d stage=%s state=%u action=%u\n",
 		 ret, stage, state, action);
+	if (!ret && publish) {
+		ret = ws73_ble_link_publish(&ws->ble, &ws->interface->dev);
+		if (ret)
+			ws73_usb_fail(ws, ret);
+		dev_info(&ws->interface->dev, "synthetic auxiliary result=%d\n", ret);
+	}
+}
+
+static void ws73_test_initialize(struct work_struct *work)
+{
+	ws73_test_initialize_common(work, false);
+}
+
+static void ws73_test_initialize_hci(struct work_struct *work)
+{
+	ws73_test_initialize_common(work, true);
 }
 
 static int ws73_test_probe(struct usb_interface *interface, const struct usb_device_id *id)
@@ -67,11 +83,14 @@ static int ws73_test_probe(struct usb_interface *interface, const struct usb_dev
 	    udev->descriptor.bNumConfigurations != 1 ||
 	    interface->cur_altsetting->desc.bNumEndpoints != 5)
 		return -ENODEV;
-	return ws73_usb_bind(interface, ws73_test_initialize);
+	return ws73_usb_bind(interface, id->driver_info ?
+			     ws73_test_initialize_hci : ws73_test_initialize);
 }
 
 static const struct usb_device_id ws73_test_ids[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0xffff, 0x3736, 0xe0, 0x02, 0x02) },
+	{ USB_DEVICE_AND_INTERFACE_INFO(0xffff, 0x3737, 0xe0, 0x02, 0x02),
+	  .driver_info = 1 },
 	{}
 };
 MODULE_DEVICE_TABLE(usb, ws73_test_ids);

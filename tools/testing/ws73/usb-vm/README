@@ -131,3 +131,18 @@ profile. This test registers no HCI controller and supplies no hardware,
 firmware execution, BLE peer or RF qualification. Keep physical observations
 and actual function qualification separate. The physical USB ID still uses
 the observation worker; no startup test parameter enables hardware loading.
+
+Native HCI over USB
+------------------
+The `--phase hci` fixture uses ffff:3737 (dummy_hcd only) to publish the
+actual auxiliary endpoint after the acknowledged startup/disable sequence.
+The native BT_WS73 consumer then enables BLE, performs setup and HCI init
+through real USB HCC transfers, and closes through the same action backend.
+The explicit userspace peer supplies synthetic LE-only identity, no optional
+command bits, no optional LE features and no RF behavior. It is not a model
+of WS73 controller capabilities or Bluetooth conformance. The standard HCI
+management channel must announce a configured index and return the fixture
+address/version/LE-only identity. A separate case removes USB while Reset
+is pending, followed by a fresh successful instance. These tests supplement
+physical boot observations; they do not qualify physical HCI, BlueZ scanning,
+connections, L2CAP, security, ACL traffic or a real peer.

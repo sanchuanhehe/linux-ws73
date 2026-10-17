@@ -68,4 +68,6 @@ config WS73_USB_STARTUP_TEST
 	  Exercise the production USB owner's startup and BLE action paths
 	  against a FunctionFS peer in a hardware-free VM. The separate test
 	  USB ID binds only on dummy_hcd. Synthetic replies and parameters
-	  do not qualify firmware, boards, HCI readiness or BLE communication.
+	  do not qualify firmware, boards or BLE communication. A second test
+	  ID publishes the real auxiliary consumer; enable BT_WS73 to exercise
+	  native HCI initialization against the synthetic USB peer.

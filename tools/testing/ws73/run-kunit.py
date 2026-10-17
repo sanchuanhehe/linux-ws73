@@ -18,6 +18,26 @@ import sys
 SOURCE = Path(__file__).resolve().parents[3]
 
 
+def sanitizer_summary(raw, config, kcsan=False):
+    """Reject diagnostics even when KTAP cases themselves say PASS."""
+    bad = re.search(r"BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|"
+                    r"inconsistent lock state|sleeping function called", raw)
+    if bad:
+        raise ValueError("kernel diagnostic: " + bad.group(0))
+    if not kcsan:
+        return {}
+    required = {"CONFIG_KCSAN=y", "CONFIG_KCSAN_STRICT=y", "CONFIG_KCSAN_WEAK_MEMORY=y",
+                "CONFIG_KCSAN_SELFTEST=y", "CONFIG_KCSAN_EARLY_ENABLE=y",
+                "CONFIG_KCSAN_SKIP_WATCH=1000", "CONFIG_SMP=y", "CONFIG_PROVE_LOCKING=y",
+                "CONFIG_DEBUG_ATOMIC_SLEEP=y", "CONFIG_UBSAN=y", "# CONFIG_KASAN is not set"}
+    if not required <= set(config.splitlines()):
+        raise ValueError("missing KCSAN instrumentation configuration")
+    if raw.count("kcsan: enabled early") != 1 or raw.count("kcsan: selftest: 3/3 tests passed") != 1:
+        raise ValueError("missing/duplicate KCSAN activation or selftest")
+    return {"early_enabled": True, "selftests_passed": 3, "skip_watch": 1000,
+            "scope": "sampled detection only; no race-freedom proof"}
+
+
 def mutation_summary(raw, usb=True, h4=True):
     """Require the bounded campaigns' actual counters, not just case names."""
     seeds = {"0073e110", "00387373", "deadbeef", "10203040"}
@@ -76,7 +96,7 @@ def source_identity(record):
 
 def tools_identity():
     result = {}
-    for name in ("python3", "make", "clang", "ld.lld", "qemu-system-x86_64"):
+    for name in ("python3", "make", "clang", "ld.lld", "llvm-nm", "qemu-system-x86_64"):
         path = shutil.which(name)
         if not path:
             raise RuntimeError(f"missing tool: {name}")
@@ -94,6 +114,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs", type=int, default=4,
                         help="reserved share of the whole-machine budget (1..8)")
+    parser.add_argument("--kcsan", action="store_true",
+                        help="use a separate strict KCSAN build instead of KASAN")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--hci-only", action="store_true",
                       help="run native HCI synthetic data/lifecycle and codec tests")
@@ -110,7 +132,7 @@ def main():
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         record = work / "records" / stamp
         record.mkdir(parents=True)
-        build = work / "build-kunit"
+        build = work / ("build-kunit-kcsan" if args.kcsan else "build-kunit")
         before = source_identity(record)
         config = record / "kunitconfig"
         config_text = (SOURCE / "tools/testing/ws73/kunitconfig").read_text()
@@ -125,12 +147,20 @@ def main():
             config_text = config_text.replace("# CONFIG_BT_WS73 is not set", "CONFIG_BT_WS73=y")
             config_text += ("CONFIG_FAULT_INJECTION=y\nCONFIG_FAILSLAB=y\n"
                             "CONFIG_WS73_HCI_KUNIT_TEST=y\n")
+        if args.kcsan:
+            config_text = "\n".join(line for line in config_text.splitlines()
+                                      if not line.startswith("CONFIG_KASAN")) + "\n"
+            config_text += ("# CONFIG_KASAN is not set\nCONFIG_KCSAN=y\n"
+                            "CONFIG_KCSAN_STRICT=y\nCONFIG_KCSAN_WEAK_MEMORY=y\n"
+                            "CONFIG_KCSAN_SELFTEST=y\nCONFIG_KCSAN_EARLY_ENABLE=y\n"
+                            "CONFIG_KCSAN_SKIP_WATCH=1000\n")
         config.write_text(config_text)
         manifest = {
             "scope": ("native auxiliary/HCI synthetic data/lifecycle and codecs in VM; no real controller/peer"
                       if args.hci_only else "synthetic protocol/firmware/endpoint tests in VM; no native HCI registration or peer"),
             "hci_only": args.hci_only,
             "core_only": args.core_only,
+            "kcsan": args.kcsan,
             "source": before,
             "tools": tools_identity(),
             "runner_sha256": digest(Path(__file__)),
@@ -185,6 +215,8 @@ def main():
             required = {name for name in required if not name.endswith(("-test.o", "/test.o"))}
             required.update({"drivers/misc/ws73/ble-hci-test.o", "drivers/misc/ws73/ble-hci-data-test.o",
                              "drivers/bluetooth/btws73.o"})
+        if args.kcsan:
+            required.update({"kernel/kcsan/core.o", "kernel/kcsan/selftest.o"})
         for name in sorted(required):
             path = build / name
             if path.is_file():
@@ -303,11 +335,25 @@ def main():
         passed = (passed and run.returncode == 0 and before == manifest["source_after"]
                   and required <= manifest["artifacts"].keys())
         try:
+            raw = (record / "artifacts/test.log").read_text()
+            manifest["sanitizer"] = sanitizer_summary(
+                raw, (record / "artifacts/.config").read_text(), kcsan=args.kcsan)
+            if args.kcsan:
+                instrumented = ["drivers/misc/ws73/ble.o", "drivers/misc/ws73/ble-link.o"]
+                if args.hci_only:
+                    instrumented.append("drivers/bluetooth/btws73.o")
+                manifest["instrumentation"] = {}
+                for name in instrumented:
+                    symbols = subprocess.check_output(
+                        ["llvm-nm", "-u", str(record / "artifacts" / name)], text=True)
+                    if not re.search(r"\b__tsan_(?:read|write|volatile|atomic)", symbols):
+                        raise ValueError("no memory-access instrumentation: " + name)
+                    manifest["instrumentation"][name] = symbols.splitlines()
             manifest["mutation_counts"] = mutation_summary(
-                (record / "artifacts/test.log").read_text(),
+                raw,
                 usb=not args.hci_only, h4=not args.core_only)
-        except (OSError, ValueError) as error:
-            manifest["mutation_error"] = str(error)
+        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+            manifest["validation_error"] = str(error)
             passed = False
         manifest["status"] = "PASS" if passed else "FAIL"
         manifest["evidence_sha256"] = {

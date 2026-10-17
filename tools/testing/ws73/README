@@ -10,6 +10,7 @@ Never install these kernels/modules or run driver experiments on the host.
   python3 tools/testing/ws73/run-kunit.py --jobs 4
   python3 tools/testing/ws73/run-kunit.py --jobs 4 --core-only
   python3 tools/testing/ws73/run-kunit.py --jobs 4 --hci-only
+  python3 tools/testing/ws73/run-kunit.py --jobs 4 --hci-only --kcsan
   python3 tools/testing/ws73/build-hci.py module
   python3 tools/testing/ws73/build-hci.py builtin
 
@@ -38,6 +39,17 @@ Reset is deliberately left unanswered, so full HCI initialization, Bluetooth
 connections, BlueZ and peer behavior remain unqualified. Codec tests also run.
 The checked-in KUnit configuration enables SMP, KASAN, UBSAN, lockdep and
 DEBUG_ATOMIC_SLEEP. Expected suite/case sets reject missing or skipped tests.
+
+--kcsan replaces KASAN with strict KCSAN in the separate fixed
+build-kunit-kcsan directory; UBSAN, SMP, lockdep and DEBUG_ATOMIC_SLEEP remain.
+It enables weak-memory modeling, early detection and boot selftests, with
+KCSAN_SKIP_WATCH=1000. The runner requires the activation and 3/3 selftest
+messages, the exact instrumentation configuration and compiler memory-access
+hooks in shared endpoint/link objects (and native HCI in --hci-only mode).
+Kernel diagnostics fail validation independently of KTAP PASS lines. Existing
+concurrent HCI cases exercise blocked TX, flush, RX and abort against explicit
+synthetic backends. KCSAN is sampled detection: a successful bounded run does
+not prove absence of races, hardware behavior or all lifecycle interleavings.
 
 The USB aggregate and H4 tests also run bounded deterministic mutation campaigns
 with four fixed xorshift32 seeds each. USB supplies 16,384 unaligned inputs in

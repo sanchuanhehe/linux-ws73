@@ -457,8 +457,11 @@ The allocated U ROM additionally returned a command echo after a colon. Accept
 either the bare token with NUL padding or ``WRITEM OK:`` followed by the exact
 issued command (including its trailing space) and optional NUL padding. Reject
 changed width/address/value, partial echoes and other suffixes. This is narrower
-than the SDK Host's prefix-only comparison. READY and FILES OK still use their
-existing exact-token/NUL-padding rules. No ambiguous write is automatically
+than the SDK Host's prefix-only comparison. The same U ROM returned
+``READY:FILE01:`` plus the entire issued FILES command and a NUL. READY accepts
+this exact tagged echo or the bare token with zero padding; mismatched block
+address, length, flag or tag is rejected before the payload. FILES OK retains
+its exact-token/NUL-padding rule pending physical evidence. No ambiguous write is automatically
 replayed; the preparation counter counts accepted ACKs, not submitted writes.
 The tagged hardware trial captures complete boot RX in bounded chunks because
 usbmon text alone retains only the first 32 bytes.
@@ -1195,3 +1198,17 @@ Relevant upstream process references (checked 2026-10-17):
 No maintainer endorsement or RFC submission is claimed. Issues #1--#15 in
 https://github.com/sanchuanhehe/linux-ws73 retain their existing scopes;
 UP-05 remains open, deferred and non-blocking.
+
+Shared TX admission under contention
+------------------------------------
+
+The shared USB TX mutex acquisition is bounded by the caller's absolute
+transport deadline. A contending caller waits on a waitqueue with a timed
+trylock condition; release wakes waiters. Cancellation/deadline are checked
+again after acquisition and before encoding or submitting. Expiration before
+admission leaves the active owner's scratch buffer, sequence and failure state
+unchanged. Once admitted, transport failure remains terminal for subsequent
+callers. Cancellation during contention is observed on lock acquisition or
+bounded wait expiry; this is not an immediate cancellation wake or a hard
+real-time scheduling guarantee. Owners still stop producers, cancel transport
+and join callers before freeing the object or its waitqueue.

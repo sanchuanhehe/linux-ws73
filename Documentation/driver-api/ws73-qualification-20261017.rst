@@ -2827,3 +2827,106 @@ Records and manifest SHA-256:
   ``13af4f7c3fa2c0db4f3d9bc7c7c0cc694247d3cfe420f7587acd9652daf69fa5``.
 * ``ram-trial-20261017T161850.906430Z``,
   ``36586e62bafe2712b9bbbf1bad62523e5bf452216c1be1f70358bbeb2af6b63f``.
+
+
+U ROM READY echo and bounded shared TX admission (2026-10-18 SGT)
+----------------------------------------------------------------
+
+Signed change ``bf799e7664e91224652ca30ef9f938b5c3c48233`` bounds shared USB
+TX mutex admission using the absolute deadline and a waitqueue. Contention
+expiry cannot poison or modify an active sender's scratch buffer/sequence.
+New tests hold one actual production send in its injected backend, check a
+second caller's timeout, then check owner completion and later reuse. Separate
+handoffs cover successful ownership transfer and propagation of the first
+owner's transport error. All 87 KUnit cases passed under SMP x86-64 KASAN,
+UBSAN, lockdep and DEBUG_ATOMIC_SLEEP. Full/high-speed native HCI synthetic USB
+regressions each passed three scenarios (27 commands, 26 synthetic replies,
+78 fragments, three drains). They do not establish radio operation or absence
+of all concurrency defects.
+
+The new user confirmation ``ACK 修复后已断电重插`` was recorded separately
+from the previously consumed confirmation. The assigned U remained at 1-1.1.1
+with the same serial/topology and changed node 117 to 118. One VM-only physical
+trial used the clean bf799 source. Initial READM returned four zero bytes,
+VERSION returned BOOTVER001 and two NULs, and the loader's fresh READM again
+returned zero before any preparation writes. This is another user-confirmed
+cold initial read on the same U sample, without independent power measurement.
+
+All eleven fixed RAM/XO WRITEM transactions completed with full replies
+``WRITEM OK:`` plus the exact issued command and one NUL. In particular, the
+first 34-byte reply ends with space/NUL, now verified beyond usbmon's first
+32 bytes. This closes the previous physical suffix uncertainty. Register
+contents were not independently read back, and the explicit reference board
+settings are still not universal hardware defaults.
+
+The next command was ``FILES 1 0x400000 0x8000 0x0 ``. Its complete 42-byte
+reply was ``READY:FILE01:FILES 1 0x400000 0x8000 0x0 `` followed by one NUL.
+The old strict READY parser correctly stopped rather than accepting an unknown
+suffix: ``result=-71 phase=3 stage=2 prep=11 image=0 ack=0``. Independent
+transcript verification found exactly 15 OUT and 15 IN completions, including
+13 completely captured trial replies. No firmware payload or QUIT was sent;
+no runtime enumeration occurred. Two drains, VM exit zero and post-exit
+unowned allocated device were verified. The physical trial remains FAIL, not
+firmware-start success; this confirmation is consumed by this attempt.
+
+Signed fix ``62d7821cf8567ec91b217d32f9ba4b9e114afaa4`` accepts bare READY
+or the observed exact ``:FILE01:`` tag plus the entire current FILES command
+and optional zero padding. It does not infer meaning for arbitrary FILE tags,
+change FILES OK grammar or add retries. All 89 KUnit cases passed. The new
+cases cover every truncated/padded length through 513, mutation at every byte
+of a 512-byte receive, and rejection of a prior block's valid echo before the
+next payload. Existing bare-token cases remain covered.
+
+Full/high-speed original U/E-file FunctionFS loader runs each passed ten
+scenarios with the production parser and USB path. The successful U fixture
+supplies seven exact READY echoes across its blocks; other cases retain bare
+READY replies. These are synthetic extensions of the one observed physical
+first-block reply, not measured ROM behavior for all blocks or E. All 41 log
+and nine artifact corruptions were rejected, including missing, duplicate,
+wrong-length and wrong-tag READY evidence. The private complete-RX verifier
+passed a synthetic transcript and rejected 24 corruptions. Its TX evidence
+still combines full input hashes with usbmon's first 32 payload bytes, not
+full wire capture.
+
+The first loader command was rejected before VM creation because its CLI
+omitted --firmware-root; the corrected invocation used the explicit SDK110
+firmware directory. Hardware rebuild and empty VM admission preflight passed
+at 62d782. A fresh allocated-U power cycle was requested for the next one-shot
+trial because eleven preparation writes have now been submitted. The pending
+trial must not reuse the consumed confirmation. E, board identity, runtime
+firmware compatibility, real BLE peer/STA and upstream review remain open.
+
+Records and manifest SHA-256:
+
+* ``20261017T162748.206058Z``,
+  ``f656af49cac008c1137b08b12206b8171430403607d484cae0f7a27ca1754a14``.
+* ``virtual-usb-20261017T162915.228606Z``,
+  ``0ee6e95aede76328470b770194a199bdf21e91cb4568da912d96e069a00a8335``.
+* ``virtual-usb-20261017T162923.437139Z``,
+  ``aa98d2a3bbbbe73755cb5e8f693998fd7f011990c3f191ffcc31655d7b8909ae``.
+* ``power-cycle-confirmation-20261017T162930.462371Z``,
+  ``a5fb1592936c62bff5a7284a26a477fd6a7a195c3578f295f426c4f8f733c77a``.
+* ``hardware-build-20261017T162931.573520Z``,
+  ``3cd9dac444a57faee63fc729a049343a127829e9a607b3f755ceb5499af50141``.
+* ``ram-trial-20261017T162948.311091Z``,
+  ``408d844b681c14ae098a8174a3bc211b8f52a3d978ccdca6afd0382ec6902e9b``.
+* ``ram-trial-20261017T163233.162085Z``,
+  ``86f6c0e43e5828cc9f107a9678b75e274477c20fea25f2d33a12c25260d7a585``.
+* ``ram-trial-ready-analysis-20261017``,
+  ``36e5380d0a9b9f1b86cb9174975f7ceb48cbb987b83c3bd89181361fa7f34cde``.
+* ``20261017T163501.143241Z``,
+  ``5f7a8f33ad20d77f53fda10038547b5a03894ac41e35b723a0d397e85ca9ec63``.
+* ``ram-trial-verifier-20261017T163450.630580Z``,
+  ``43687c1cb919692ca970e3bb716aa888315a07af592811198eeeb2ecddadc9c7``.
+* ``virtual-usb-build-20261017T163547.830571Z``,
+  ``24dfb09c354e31a46043a7f18fd70452f7449ed452f2c33e77401724dfc72715``.
+* ``virtual-usb-20261017T163629.672957Z``,
+  ``19fa40ea3f8871d9aef1dc603b3fd47a061f3fcffabcadcd442f1552789b3e9d``.
+* ``virtual-usb-20261017T163639.704156Z``,
+  ``1e84fb0f62a87bfe301a8346d13ab3ad701db470c7866929f5091c045488841d``.
+* ``virtual-usb-negative-20261017T163654.495024Z``,
+  ``5df23438e421c2d92fb8fd52a970b73edc4dbd8f7792ce08da8608460493117a``.
+* ``hardware-build-20261017T163647.842799Z``,
+  ``e27c427393288c3405324c9aff4cd28db1450f2fcd67c61fc858240a0cb1570f``.
+* ``ram-trial-20261017T163704.118738Z``,
+  ``cde216711081143d7ebf1ee736c1a55e81d474005e72d858d00d8a047a7e4b7a``.

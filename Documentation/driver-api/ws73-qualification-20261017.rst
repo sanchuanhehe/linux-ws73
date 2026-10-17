@@ -2057,3 +2057,41 @@ Records and manifest SHA-256 (including all preparation failures):
   ``690e26b31d4079622043976ba2b0297b60b90ef03d6d6b77a533621095b860c3``.
 
 Separate failure-analysis SHA-256: ``2e11ef4b37bb5ac2b14a15c5a9c7b512db5e9269aa3f76d142bf6fafc2f8fb65``.
+
+Wi-Fi framing/control audit and compiler layout checks
+------------------------------------------------------
+
+Clean probe source: ``a26a1504ba4b``. The follow-up Wi-Fi interface audit
+byte-compares 23 source files against SDK110 commit
+``d5e68a58fe38c2b04a16769c69de1e8a80e86d74``. It distinguishes control and
+frame services/lengths, traces Host scan and channel switching, identifies
+an SDK channel-error path that returns success, and follows the asynchronous
+TPC table submission. These are Host source findings, not device behavior.
+
+The independent probe compiles the actual pinned FRW declarations and fixed
+sentinels for x86-64, i386, arm64, RISC-V32 and big-endian PowerPC64, then
+extracts object sections without executing any compiled code. All five
+match their independently specified byte vectors. The communication envelope
+is 28 bytes on all targets; the pointer-bearing native structure is 28/40
+on 32/64-bit, and big-endian integer/bitfield layouts differ. This is not
+proof of the original firmware compiler ABI or a big-endian driver build.
+
+The first attempt failed in ccache before compilation because its cache was
+not writable. Disabling ccache resolved it. The subsequent development run
+and clean committed run pass; their separate manifests preserve source/tool
+hashes, exact bytes and all private SDK excerpts. Those excerpts and objects
+are not uploaded. No kernel/runtime test or new physical operation occurred;
+the allocated-U power-cycle request remains pending. Prior KUnit and hardware
+results retain their original source IDs. No Wi-Fi capability is registered.
+
+See :doc:`ws73-wifi-interface` and ``tools/testing/ws73/wifi/README``.
+Private manifest SHA-256 values:
+
+* ``wifi-framing-control-audit-20261017`` (STATIC_HOST_SOURCE_AUDIT_NOT_DEVICE_QUALIFICATION),
+  ``4ae3b2bf157ec66955cab896447b1bf19aa33ad671b5a82e22ffa296009159b8``.
+* ``wifi-abi-20261017T132401.745338Z`` (FAIL),
+  ``1ed98181efeba025335dfd020bbf0363655f2bc41872b391b0f7db6e799a39be``.
+* ``wifi-abi-20261017T132420.920684Z`` (COMPILER_LAYOUT_CHECK_PASS_NOT_FIRMWARE_ABI_PROOF),
+  ``941b330766d6227d07dcc7fab7b6d9d11ea94e9a437fe02c32500e852b1af6d3``.
+* ``wifi-abi-20261017T132706.912949Z`` (COMPILER_LAYOUT_CHECK_PASS_NOT_FIRMWARE_ABI_PROOF),
+  ``66866b091c0e25449271cc33b803d74108309c8f8befbc2e82ce4b69ae035fc1``.

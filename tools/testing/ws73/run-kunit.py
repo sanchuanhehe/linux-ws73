@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""Run the WS73 codec in a private, hardware-free VM and retain provenance."""
+"""Run WS73 protocol tests in a private, hardware-free VM with provenance."""
 
 import argparse
 import datetime
@@ -62,6 +62,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs", type=int, default=4,
                         help="reserved share of the whole-machine budget (1..8)")
+    parser.add_argument("--core-only", action="store_true",
+                        help="verify the shared core with NET and Bluetooth disabled")
     args = parser.parse_args()
     if not 1 <= args.jobs <= 8:
         parser.error("reserve 1..8 jobs after checking other builds and hardware VMs")
@@ -75,8 +77,17 @@ def main():
         record.mkdir(parents=True)
         build = work / "build-kunit"
         before = source_identity(record)
+        config = record / "kunitconfig"
+        config_text = (SOURCE / "tools/testing/ws73/kunitconfig").read_text()
+        if args.core_only:
+            config_text = "\n".join(
+                line for line in config_text.splitlines()
+                if not line.startswith(("CONFIG_NET=", "CONFIG_BT=", "CONFIG_BT_WS73_"))
+            ) + "\n# CONFIG_NET is not set\n# CONFIG_BT is not set\n"
+        config.write_text(config_text)
         manifest = {
-            "scope": "synthetic codec tests in QEMU; no USB, firmware, HCI registration or peer",
+            "scope": "synthetic protocol/firmware tests in QEMU; no physical USB, firmware execution, HCI registration or peer",
+            "core_only": args.core_only,
             "source": before,
             "tools": tools_identity(),
             "runner_sha256": digest(Path(__file__)),
@@ -88,7 +99,7 @@ def main():
             manifest["qboot"] = {"path": str(qboot), "sha256": digest(qboot)}
         cmd = [sys.executable, "tools/testing/kunit/kunit.py", "run",
                "--arch=x86_64", f"--build_dir={build}",
-               f"--kunitconfig={SOURCE / 'tools/testing/ws73/kunitconfig'}",
+               f"--kunitconfig={config}",
                f"--jobs={args.jobs}", "--make_options=LLVM=1", "--make_options=W=1",
                "--timeout=120", "--kernel_args=panic_on_warn=1",
                "--qemu_args=-smp 2 -nic none "
@@ -108,10 +119,13 @@ def main():
         after_dir.mkdir()
         manifest["source_after"] = source_identity(after_dir)
         manifest["artifacts"] = {}
-        for name in (".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
-                     "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o",
-                     "drivers/misc/ws73/hcc.o", "drivers/misc/ws73/firmware.o",
-                     "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o"):
+        required = {".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
+                    "drivers/misc/ws73/hcc.o", "drivers/misc/ws73/firmware.o",
+                    "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o"}
+        if not args.core_only:
+            required.update({"drivers/bluetooth/btws73_proto.o",
+                             "drivers/bluetooth/btws73_test.o"})
+        for name in sorted(required):
             path = build / name
             if path.is_file():
                 dest = record / "artifacts" / name
@@ -137,6 +151,8 @@ def main():
                     "ws73_boot_faults_test", "ws73_boot_admission_test",
                 },
             }
+            if args.core_only:
+                del expected_groups["btws73-proto"]
             passed = len(groups) == len(expected_groups)
             seen = set()
             for group in groups:
@@ -148,10 +164,12 @@ def main():
                           and all(case["status"] == "PASS" for case in cases))
                 seen.add(group["name"])
             passed = passed and seen == expected_groups.keys()
-        required = {".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
-                    "drivers/bluetooth/btws73_proto.o", "drivers/bluetooth/btws73_test.o",
-                    "drivers/misc/ws73/hcc.o", "drivers/misc/ws73/firmware.o",
-                    "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o"}
+        if args.core_only:
+            built_config = record / "artifacts/.config"
+            lines = built_config.read_text().splitlines() if built_config.exists() else []
+            passed = (passed and "# CONFIG_NET is not set" in lines
+                      and not any(line.startswith(("CONFIG_BT=", "CONFIG_BT_WS73_"))
+                                  for line in lines))
         passed = (passed and run.returncode == 0 and before == manifest["source_after"]
                   and required <= manifest["artifacts"].keys())
         manifest["status"] = "PASS" if passed else "FAIL"

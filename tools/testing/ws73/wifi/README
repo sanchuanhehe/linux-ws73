@@ -1,0 +1,31 @@
+WS73 Wi-Fi interface audit
+=========================
+
+From the kernel worktree:
+
+  python3 tools/testing/ws73/wifi/check-abi.py
+
+Requires the sibling ws73_SDK checkout, Clang and llvm-objcopy. Three SDK
+headers must byte-match commit d5e68a58fe38c2b04a16769c69de1e8a80e86d74.
+The tool compiles declarations and sentinel initializers sequentially for
+x86-64, i386, arm64, RISC-V32 and big-endian PowerPC64. It extracts object
+sections and checks exact bytes and sizes. It does not execute the objects,
+build/load a driver, open USB, or change the allocated hardware's state.
+
+Records live in the private sibling .dev/ws73-upstream/records directory.
+They include SDK excerpts, objects, tool/source hashes and expected/observed
+bytes. Do not publish those SDK excerpts or treat the sentinel initializers
+as device commands. The repository contains only the independent probe tool.
+The first local attempt failed in ccache before compilation; disabling the
+cache resolved that environmental failure. All attempts remain recorded.
+
+Passing means these pinned declarations have the expected layout under the
+recorded Clang targets. It does not establish the compiler/options used to
+build SDK110 firmware, a device producer's layout, valid FRW message values,
+real USB transfers, STA support or big-endian driver qualification. The test
+deliberately shows why directly copying native pointer structs or bitfields
+is unsuitable for a portable byte-oriented codec.
+
+See Documentation/driver-api/ws73-wifi-interface.rst for the source call
+chains, configuration/data length differences and remaining implementation
+dependencies. No Wi-Fi hardware capability is enabled by this tool.

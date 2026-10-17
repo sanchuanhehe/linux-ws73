@@ -1136,6 +1136,11 @@ SDK source files and six findings (SHA-256
 No Wi-Fi parser, firmware metadata producer, STA or security capability is
 qualified by this static audit. The mac80211 implementation route is unchanged.
 
+The follow-up :doc:`ws73-wifi-interface` records the distinct Wi-Fi control
+and frame envelopes, a five-target compiler layout check, Host scan ownership,
+channel error propagation, aggregation and power-table application gaps.
+It adds implementation evidence without claiming STA or RF qualification.
+
 Reproduction and remaining gates
 --------------------------------
 

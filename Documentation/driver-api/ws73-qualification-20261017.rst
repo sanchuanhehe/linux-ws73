@@ -872,3 +872,60 @@ must be aborted and joined before parent release. Cold U confirmation, E/peer/AP
 resources, three-file loading integration, actual auxiliary consumers, Wi-Fi,
 portable USB test tooling and formal submission remain open. The documentation
 commit does not replace the compiled source identity above.
+
+Integrated startup handshakes
+----------------------------
+
+Functional source ``3886d506558c4f071484232e5575b1248c118baf`` adds the
+per-device startup coordinator, owning the existing customization and BLE action
+engines. One-shot arm precedes RX, while run follows independent firmware,
+identity and board qualification. It requires BSP before customization, successful
+customization TX/ack before BLE enable, actual enable TX/action, and BOOT before
+DONE. BOOT can arrive earlier in the current armed session; it cannot substitute
+for another stage. Status duplicates are idempotent, transaction duplicates retain
+the existing terminal policy, and panic/loss overrides BSP in one IRQ word.
+
+One absolute deadline starts at arm and is capped at 12000 ms. BSP/BOOT waits
+have additional 6000/2000-ms caps, and customization/action retain their 2000-ms
+caps. The SDK board wait is actually 1000 plus 5000 ms, not the nearby commented
+20000; its status helper compares millisecond timestamps against 2000 while
+sleeping 10 ms. The independent driver uses monotonic time. These bounds are host
+policy, not measured hardware guarantees. Abort wakes status waiters and both
+transaction engines without nesting the coordinator lock with their locks.
+There is no uncertain-startup disable/reset/retry or successful Ready publication.
+
+All 66 KUnit pass in the instrumented x86-64 VM. The six new cases call the real
+coordinator, customization, bounded USB TX and BLE action engines with injected
+IO. They check both BOOT orders, missing each handshake, failed/short TX, abort
+between stages, IRQ fault priority, unarmed/repeated/reentrant admission,
+cancellation, absolute expiry, U64_MAX arithmetic and independent RX completion.
+In particular, absent BSP sends no data; failed customization sends no BLE open;
+BOOT cannot hide a failed enable. Fixtures contain no usable board/RF profile.
+
+The separate KASAN/UBSAN/lockdep/DEBUG_ATOMIC_SLEEP USB build and full/high-speed
+regressions bind the same clean functional source. Each speed passes 17 cases,
+with 65 bulk OUT, 30 bulk IN, eight interrupt IN and 17 removals/drains. These
+exercise the parent's migrated notification/abort ownership with startup unarmed;
+**they do not run the startup transaction or USB class-control backend**. The
+unchanged verifier matches its previous 32-negative-control qualification; no
+new negative executions are claimed. The three new files pass strict checkpatch.
+
+Evidence manifests (SHA-256):
+
+* ``20261017T082931.614158Z``,
+  ``e01973bd239b1c07f9a932f0336ad00e3d4710882dbd17854197e72b8e5ab2bd``.
+* ``virtual-usb-build-20261017T083006.661404Z``,
+  ``86d404e34bbbc5dfc72fd2a4fa4baf44ee48e2d675e8cc3222fc008e1635eefd``.
+* ``virtual-usb-20261017T083050.089035Z``,
+  ``ee1ff168951d10d4cbc3115b755233fe3662f2a28ec9fddb33b54e38251b904f``.
+* ``virtual-usb-20261017T083125.717461Z``,
+  ``30961138e9eff1dbf47fbc053eae67872d88ec2b3fcdbb7afd6691828e4aa61b``.
+
+USB initialization still does not arm/run the coordinator. DONE would mean only
+BSP/customization/action/BOOT handshakes, not trusted firmware, board suitability,
+address setup, actual HCI command completion or consumer registration. Those
+preconditions and the eventual caller's stop/join contract remain required.
+No physical device, firmware download, BLE peer exchange or external submission
+was performed. Cold U evidence, E/peer/AP resources, board preparation/three-file
+loader integration, auxiliary/HCI, Wi-Fi and upstream acceptance remain open.
+The following documentation commit is not the compiled source identity.

@@ -74,6 +74,8 @@ word size and endianness. Each record retains logs, configuration, kernel,
 module and tool hashes; failure records are retained too. No kernel/module is
 installed or executed. This does not qualify cross-architecture runtime or
 hardware behavior, module loading, Wi-Fi, or all built-in/module combinations.
+The native Bluetooth stack has LE enabled and BR/EDR disabled explicitly;
+the allnoconfig default would otherwise omit LE conditional compilation.
 PowerPC64 supplies the big-endian build; arm64 big endian currently depends
 on BROKEN and is deliberately excluded.
 

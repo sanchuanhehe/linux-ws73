@@ -20,7 +20,8 @@ PROFILES = {
                       ["CONFIG_PPC64=y", "CONFIG_CPU_BIG_ENDIAN=y"]),
     "x86_64-gcc": ("x86_64", False, 2, 1, 62, ["CONFIG_64BIT=y"]),
 }
-COMMON = ["CONFIG_MODULES=y", "CONFIG_NET=y", "CONFIG_BT=m",
+COMMON = ["CONFIG_MODULES=y", "CONFIG_NET=y", "CONFIG_BT=m", "CONFIG_BT_LE=y",
+          "# CONFIG_BT_BREDR is not set",
           "CONFIG_USB_SUPPORT=y", "CONFIG_USB=m", "CONFIG_WS73_USB=m",
           "CONFIG_BT_WS73=m"]
 RESOLVED = ["CONFIG_WS73_CORE=m", "CONFIG_WS73_USB_IO=m", "CONFIG_BT_WS73_PROTO=m"]

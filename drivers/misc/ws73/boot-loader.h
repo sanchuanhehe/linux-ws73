@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#ifndef _WS73_BOOT_LOADER_H
+#define _WS73_BOOT_LOADER_H
+
+#include "boot.h"
+
+enum ws73_boot_session_stage {
+	WS73_SESSION_NEW,
+	WS73_SESSION_IDENTITY,
+	WS73_SESSION_INPUTS,
+	WS73_SESSION_TRANSFER,
+	WS73_SESSION_WAIT_RUNTIME,
+};
+
+struct ws73_boot_session {
+	enum ws73_boot_session_stage stage;
+	int error;
+	struct ws73_chip_observation observation;
+	struct ws73_boot_progress progress;
+};
+
+/*
+ * One serialized, sleepable attempt per zero-initialized session. Caller owns
+ * the device/IO/session until return and must interrupt blocked IO on removal.
+ * The owner must first qualify cold boot register access and board/trim for
+ * this hardware; this API cannot establish those facts from a successful read.
+ * It performs a fresh READM, selects exactly one USB U/E profile, acquires and
+ * validates all three original files, prepares RAM/XO, then sends FILES/QUIT.
+ * Firmware references stay live until all synchronous transfers have joined.
+ * Filesystem acquisition is synchronous; cancellation/deadline is checked
+ * again before any write. No userspace firmware fallback or retry is used.
+ * First error is retained, successful reuse returns -EALREADY. WAIT_RUNTIME
+ * is not Ready and conveys no state/cache to a re-enumerated runtime instance.
+ */
+int ws73_boot_start(struct device *dev, const struct ws73_boot_io *io,
+		    const struct ws73_boot_board *board, u64 deadline_ms,
+		    struct ws73_boot_session *session);
+
+#endif

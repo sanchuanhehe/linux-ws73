@@ -27,6 +27,9 @@
 #ifndef WS73_TEST_DOWNLOAD
 #define WS73_TEST_DOWNLOAD 0
 #endif
+#ifndef WS73_TEST_LOADER
+#define WS73_TEST_LOADER 0
+#endif
 static int disconnected;
 static volatile sig_atomic_t alarm_seen;
 
@@ -63,7 +66,7 @@ static void le32(unsigned char *p, uint32_t v) { le16(p, v); le16(p + 2, v >> 16
 static void descriptors(int fd)
 {
  unsigned char d[108] = {0}, s[23] = {0};
- unsigned int endpoints = (WS73_TEST_BOOT || WS73_TEST_DOWNLOAD) ? 2 : 5;
+ unsigned int endpoints = (WS73_TEST_BOOT || WS73_TEST_DOWNLOAD || WS73_TEST_LOADER) ? 2 : 5;
  unsigned int stride = 9 + endpoints * 7, length = 20 + stride * 2;
  le32(d, FUNCTIONFS_DESCRIPTORS_MAGIC_V2); le32(d + 4, length);
  le32(d + 8, FUNCTIONFS_HAS_FS_DESC | FUNCTIONFS_HAS_HS_DESC);
@@ -335,6 +338,131 @@ static void download_trials(int control, int *eps, int log, const char *udc)
   printf("WS73_DOWNLOAD_CASE %u PASS\n", trial);
  }
 }
+#define FWROOT "/lib/firmware/hisilicon/ws73/1.10.110/"
+struct loader_blob { unsigned char *data; size_t size; };
+static struct loader_blob loader_file(const char *path, size_t expected)
+{
+ struct loader_blob blob = { .size = expected };
+ struct stat status;
+ int fd = open(path, O_RDONLY);
+ if (fd < 0 || fstat(fd, &status) || status.st_size != (off_t)expected) die("loader input size");
+ blob.data = malloc(expected);
+ if (!blob.data) die("loader input allocation");
+ size_t done = 0;
+ while (done < expected) {
+  ssize_t n = read(fd, blob.data + done, expected - done);
+  if (n <= 0) die("loader input read");
+  done += n;
+ }
+ close(fd);
+ return blob;
+}
+static void loader_install(const char *path, struct loader_blob blob)
+{
+ int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+ if (fd < 0) die("loader input install");
+ size_t done = 0;
+ while (done < blob.size) {
+  ssize_t n = write(fd, blob.data + done, blob.size - done);
+  if (n <= 0) die("loader input write");
+  done += n;
+ }
+ if (close(fd)) die("loader input close");
+}
+static void loader_trials(int control, int *eps, int log, const char *udc)
+{
+ static const char *paths[2][3] = {
+  { FWROOT "us/ws73.bin", FWROOT "us/wifi_cali.bin", FWROOT "us/btc_cali.bin" },
+  { FWROOT "e/ws73.bin", FWROOT "e/wifi_cali.bin", FWROOT "e/btc_cali.bin" },
+ };
+ static const unsigned int sizes[2][3] = {{143956,21044,7772},{137644,21060,34120}};
+ static const unsigned int address[] = {0x400000,0x430000,0x440000};
+ static const char *writes[] = {
+  "WRITEM 4 0x40017750 51 ", "WRITEM 4 0x40017790 0 ", "WRITEM 4 0x40017794 0 ",
+  "WRITEM 4 0x4001775c 4390912 ", "WRITEM 4 0x40017760 4423680 ",
+  "WRITEM 4 0x40017750 63 ", "WRITEM 4 0x40017750 47 ", "WRITEM 4 0x40017798 0 ",
+  "WRITEM 4 0x40017764 4456448 ", "WRITEM 4 0x40017750 63 ", "WRITEM 4 0x40019408 513 ",
+ };
+ static const uint32_t words[] = {0,10,0,0,0,4,40,0,0,0};
+ struct loader_blob blobs[2][3], mutant = loader_file("/mutant.bin", 143956);
+ struct sigaction action = { .sa_handler = quiet_alarm };
+ if (sigemptyset(&action.sa_mask) || sigaction(SIGALRM, &action, NULL)) die("loader signal");
+ for (unsigned int m = 0; m < 2; m++)
+  for (unsigned int i = 0; i < 3; i++) blobs[m][i] = loader_file(paths[m][i], sizes[m][i]);
+ for (unsigned int trial = 0; trial < 10; trial++) {
+  unsigned char got[32768], reply[4];
+  unsigned int model = trial == 1;
+  printf("WS73_LOADER_CASE %u BEGIN\n", trial); disconnected = 0;
+  if (trial == 2 && unlink(paths[0][2])) die("remove BTC input");
+  if (trial == 3) loader_install(paths[0][0], mutant);
+  if (trial == 4) loader_install(paths[0][1], blobs[1][1]);
+  setting(G "UDC", udc); enabled(control);
+  ssize_t n = read(eps[1], got, sizeof(got));
+  if (n != 19 || memcmp(got, "READM 0x40019000 4 ", 19)) die("loader identity before writes");
+  puts("WS73_LOADER_READM actual=19 verified");
+  if (trial == 7) { puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n"); }
+  else {
+   le32(reply, words[trial]);
+   if (write(eps[0], reply, 4) != 4) die("loader identity reply");
+   printf("WS73_LOADER_ID actual=4 word=%08x synthetic\n", words[trial]);
+  }
+  if (trial == 0 || trial == 1 || trial == 8 || trial == 9) {
+   for (unsigned int step = 0; step < 11; step++) {
+    n = read(eps[1], got, sizeof(got));
+    if (n != (ssize_t)strlen(writes[step]) || memcmp(got, writes[step], n)) die("board write bytes");
+    printf("WS73_LOADER_WRITEM step=%u actual=%zd verified\n", step, n);
+    const char *ack = trial == 8 ? "WRITEM NO" : "WRITEM OK";
+    if (write(eps[0], ack, 9) != 9) die("board reply");
+    printf("WS73_LOADER_REPLY %s actual=9\n", ack);
+    if (trial == 8) break;
+   }
+  }
+  if (trial == 0 || trial == 1 || trial == 9) {
+   for (unsigned int image = 0; image < 3; image++) {
+    size_t payload = sizes[model][image] - 64, offset = 0;
+    while (offset < payload) {
+     char command[80];
+     size_t amount = payload - offset > 32768 ? 32768 : payload - offset;
+     unsigned int flag = !offset ? (amount == payload ? 3 : 0) : amount == payload - offset ? 2 : 1;
+     int length = snprintf(command, sizeof(command), "FILES 1 0x%x 0x%zx 0x%x ", address[image] + (unsigned int)offset, amount, flag);
+     n = read(eps[1], got, sizeof(got));
+     if (n != length || memcmp(got, command, length)) die("loader FILES bytes");
+     printf("WS73_LOADER_FILES image=%u offset=%zu size=%zu flag=%u verified\n", image, offset, amount, flag);
+     if (write(eps[0], "READY", 5) != 5) die("loader READY");
+     n = read(eps[1], got, amount);
+     if (n != (ssize_t)amount || memcmp(got, blobs[model][image].data + 64 + offset, amount)) die("original payload bytes");
+     printf("WS73_LOADER_PAYLOAD image=%u offset=%zu actual=%zd original\n", image, offset, n);
+     if (write(eps[0], "FILES OK", 8) != 8) die("loader FILES OK");
+     puts("WS73_LOADER_FILES_OK actual=8");
+     offset += amount;
+    }
+   }
+   n = read(eps[1], got, sizeof(got));
+   if (n != 5 || memcmp(got, "QUIT ", 5)) die("loader QUIT");
+   puts("WS73_LOADER_QUIT actual=5 verified");
+  }
+  wait_kernel(log, "synthetic loader result=");
+  if (trial != 7) {
+   struct itimerval timer = { .it_interval.tv_usec = 100000, .it_value.tv_usec = 100000 };
+   alarm_seen = 0;
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("loader quiet timer");
+   n = read(eps[1], got, sizeof(got));
+   int saved_errno = errno;
+   memset(&timer, 0, sizeof(timer));
+   if (setitimer(ITIMER_REAL, &timer, NULL)) die("loader timer stop");
+   if (n != -1 || saved_errno != EINTR || !alarm_seen) die("extra loader OUT");
+   puts("WS73_LOADER_NO_EXTRA_OUT window_ms=100");
+   puts("WS73_TEST_REMOVE"); setting(G "UDC", "\n");
+  }
+  if (!disconnected) wait_kernel(log, "USB disconnect");
+  wait_kernel(log, "synthetic download callbacks drained");
+  for (unsigned int i = 0; i < 3; i++) loader_install(paths[0][i], blobs[0][i]);
+  printf("WS73_LOADER_CASE %u PASS\n", trial);
+ }
+ for (unsigned int m = 0; m < 2; m++)
+  for (unsigned int i = 0; i < 3; i++) free(blobs[m][i].data);
+ free(mutant.data);
+}
 int main(void)
 {
  if (getpid() != 1) return 2;
@@ -365,7 +493,7 @@ int main(void)
  }
  closedir(dir);
  if (!udc[0]) die("missing dummy UDC");
- directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", WS73_TEST_DOWNLOAD ? "0x3734" : "0x3733");
+ directory(G); setting(G "idVendor", "0xffff"); setting(G "idProduct", WS73_TEST_LOADER ? "0x3735" : WS73_TEST_DOWNLOAD ? "0x3734" : "0x3733");
  setting(G "bcdUSB", "0x0200");
  directory(G "strings/0x409"); setting(G "strings/0x409/serialnumber", "WS73-VM-SYNTHETIC");
  directory(G "configs/c.1"); directory(G "functions/ffs.ws73"); directory("/dev/ffs");
@@ -374,14 +502,15 @@ int main(void)
  if (control < 0) die("ep0");
  descriptors(control);
  int eps[5];
- unsigned int endpoints = (WS73_TEST_BOOT || WS73_TEST_DOWNLOAD) ? 2 : 5;
+ unsigned int endpoints = (WS73_TEST_BOOT || WS73_TEST_DOWNLOAD || WS73_TEST_LOADER) ? 2 : 5;
  for (unsigned int i = 0; i < endpoints; i++) {
   char path[32]; snprintf(path, sizeof(path), "/dev/ffs/ep%u", i + 1);
   eps[i] = open(path, O_RDWR);
   if (eps[i] < 0) die(path);
  }
  if (symlink(G "functions/ffs.ws73", G "configs/c.1/ffs.ws73")) die("function link");
- if (WS73_TEST_DOWNLOAD) download_trials(control, eps, log, udc);
+ if (WS73_TEST_LOADER) loader_trials(control, eps, log, udc);
+ else if (WS73_TEST_DOWNLOAD) download_trials(control, eps, log, udc);
  else if (WS73_TEST_BOOT) boot_trials(control, eps, log, udc);
  else for (unsigned int trial = 0; trial < 17; trial++) {
   unsigned char reply[124] = {0};

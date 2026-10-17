@@ -14,7 +14,7 @@ proof=json.loads((p/'manifest.json').read_text())
 assert proof['status']=='PASS' and proof['speed']=='full'
 for name in ['kernel.log','fixture.log']:
  assert hashlib.sha256((p/name).read_bytes()).hexdigest()==proof['materials'][name]
-k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_download if proof.get('phase')=='download' else m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
+k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_loader if proof.get('phase')=='loader' else m.validate_download if proof.get('phase')=='download' else m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
 builddir=pathlib.Path(proof['build_record'])
 build=json.loads((builddir/'manifest.json').read_text())
 m.validate_build(builddir,build,proof['compiled_source'])
@@ -29,6 +29,19 @@ for name in ['stale_source','failed_build','missing_artifact','extra_artifact','
  try:m.validate_build(builddir,changed,proof['compiled_source'])
  except (AssertionError,ValueError):artifact_trials[name]='REJECTED'
  else:raise AssertionError('accepted '+name)
+
+
+if proof.get('phase')=='loader':
+ m.validate_loader_inputs(p,proof)
+ for name in ['missing_input','wrong_input_hash','wrong_provenance','wrong_mutant_hash']:
+  changed=copy.deepcopy(proof)
+  if name=='missing_input':del changed['firmware_inputs']['firmware/us/btc_cali.bin']
+  elif name=='wrong_input_hash':changed['materials']['firmware/us/ws73.bin']='0'*64
+  elif name=='wrong_provenance':changed['firmware_inputs']['firmware/e/ws73.bin']['sha256']='0'*64
+  else:changed['materials']['firmware/rehashed-ws73.bin']='0'*64
+  try:m.validate_loader_inputs(p,changed)
+  except (AssertionError,ValueError,KeyError):artifact_trials[name]='REJECTED'
+  else:raise AssertionError('accepted '+name)
 
 trials={
  'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
@@ -118,6 +131,44 @@ if proof.get('phase')=='download':
   'missing_drain':(k,s.replace('synthetic download callbacks drained','missing drain',1)),
   'post_drain_result':(k,s.replace('WS73_DOWNLOAD_CASE 0 PASS','WS73_TEST_KMSG synthetic download result=0 stage=6 image=2 ack=32\nWS73_DOWNLOAD_CASE 0 PASS')),
   'missing_kernel_result':(k.replace('synthetic download result=','missing result=',1),s),
+  'kasan':(k+'\nBUG: KASAN',s),
+  'ubsan':(k+'\nUBSAN:',s),
+  'lockdep':(k+'\npossible circular locking dependency',s),
+ }
+
+
+if proof.get('phase')=='loader':
+ trials={
+  'missing_overall':(k,s.replace('WS73_VIRTUAL_USB_PASS','')),
+  'duplicate_overall':(k,s+'\nWS73_VIRTUAL_USB_PASS\n'),
+  'missing_case':(k,s.replace('WS73_LOADER_CASE 9 PASS','')),
+  'wrong_speed':(k.replace('new full-speed','new high-speed',1),s),
+  'short_identity':(k,s.replace('READM actual=19','READM actual=18',1)),
+  'wrong_identity':(k,s.replace('word=0000000a','word=00000000',1)),
+  'wrong_identity_result':(k,s.replace('raw=0000000a','raw=00000000',1)),
+  'missing_preparation':(k,s.replace('WS73_LOADER_WRITEM step=10','MISSING_WRITEM step=10',1)),
+  'wrong_write_length':(k,s.replace('step=0 actual=23','step=0 actual=22',1)),
+  'wrong_chunk':(k,s.replace('offset=32768 size=32768','offset=32769 size=32768',1)),
+  'wrong_flag':(k,s.replace('size=32768 flag=1','size=32768 flag=3',1)),
+  'missing_payload':(k,s.replace('WS73_LOADER_PAYLOAD','MISSING_PAYLOAD',1)),
+  'short_payload':(k,s.replace('actual=32768 original','actual=32767 original',1)),
+  'missing_files_ack':(k,s.replace('WS73_LOADER_FILES_OK actual=8','',1)),
+  'missing_quit':(k,s.replace('WS73_LOADER_QUIT actual=5 verified','',1)),
+  'extra_quit':(k,s.replace('WS73_LOADER_CASE 2 PASS','WS73_LOADER_QUIT actual=5 verified\nWS73_LOADER_CASE 2 PASS')),
+  'missing_file_accepted':(k,s.replace('result=-2 repeat=-2','result=0 repeat=0',1)),
+  'rehashed_modification_accepted':(k,s.replace('result=-129 repeat=-129','result=0 repeat=0',1)),
+  'mixed_profile_accepted':(k,s.replace('result=-90 repeat=-90','result=0 repeat=0',1)),
+  'unsupported_accepted':(k,s.replace('result=-95 repeat=-95','result=0 repeat=0',1)),
+  'failed_session_retried':(k,s.replace('repeat=-129','repeat=0',1)),
+  'completed_session_retried':(k,s.replace('repeat=-114','repeat=0',1)),
+  'false_ready':(k,s.replace('phase=4 stage=6','phase=4 stage=0',1)),
+  'wrong_preparation_count':(k,s.replace('prep=11','prep=10',1)),
+  'wrong_progress':(k,s.replace('ack=34056','ack=7708',1)),
+  'missing_quiet':(k,s.replace('WS73_LOADER_NO_EXTRA_OUT','',1)),
+  'missing_remove':(k,s.replace('WS73_TEST_REMOVE','',1)),
+  'missing_drain':(k,s.replace('synthetic download callbacks drained','missing drain',1)),
+  'missing_kernel_result':(k.replace('synthetic loader result=','missing result=',1),s),
+  'short_helper_wait':(re.sub(r'synthetic READY wait ns=\d+','synthetic READY wait ns=4999999',k,count=1),s),
   'kasan':(k+'\nBUG: KASAN',s),
   'ubsan':(k+'\nUBSAN:',s),
   'lockdep':(k+'\npossible circular locking dependency',s),

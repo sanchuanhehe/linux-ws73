@@ -9,7 +9,7 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def validate_build(proofdir, proof, expected_head):
  required={'.config','arch/x86/boot/bzImage','vmlinux'}
  required.update('drivers/misc/ws73/'+name+'.o' for name in
-                 ['usb','usb-io','usb-boot-test','boot','firmware','runtime','usb-tx','usb-wire','service',
+                 ['usb','usb-io','usb-boot-test','boot','boot-loader','firmware','runtime','usb-tx','usb-wire','service',
                   'ble-control','customize','customize-request','startup','ble','ble-link'])
  assert proof['status']=='PASS','failed/incomplete build'
  assert proof['source']==expected_head,'stale source artifact'
@@ -156,13 +156,113 @@ def validate_download(kernel, log, speed="full"):
  assert kernel.count('synthetic download result=')==7 and kernel.count('synthetic download callbacks drained')==7
  assert 'boot chip observation' not in kernel and 'runtime chip observation' not in kernel
  return {'cases':7,'files_commands':13,'payloads':payload_count,'quit_commands':2,'disconnects':7,'drains':7,'no_extra_out_checks':5,'scope':'synthetic download only; READY timing measured from gadget submission to first payload read'}
+def validate_loader(kernel, log, speed="full"):
+ bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL',kernel+'\n'+log)
+ assert not bad,bad.group(0) if bad else ''
+ assert len(re.findall(r'new '+speed+r'-speed USB device',kernel))==10
+ assert log.count('WS73_VIRTUAL_USB_PASS')==1
+ assert re.findall(r'WS73_LOADER_CASE (\d+) BEGIN',log)==list(map(str,range(10)))
+ assert re.findall(r'WS73_LOADER_CASE (\d+) PASS',log)==list(map(str,range(10)))
+ parts=re.findall(r'WS73_LOADER_CASE (\d+) BEGIN(.*?)WS73_LOADER_CASE \1 PASS',log,re.S)
+ assert [int(n) for n,_ in parts]==list(range(10))
+ words=[0,10,0,0,0,4,40,0,0,0]
+ writes=['WRITEM 4 0x40017750 51 ','WRITEM 4 0x40017790 0 ','WRITEM 4 0x40017794 0 ','WRITEM 4 0x4001775c 4390912 ','WRITEM 4 0x40017760 4423680 ','WRITEM 4 0x40017750 63 ','WRITEM 4 0x40017750 47 ','WRITEM 4 0x40017798 0 ','WRITEM 4 0x40017764 4456448 ','WRITEM 4 0x40017750 63 ','WRITEM 4 0x40019408 513 ']
+ for number,part in parts:
+  n=int(number);success=n in (0,1,9)
+  records=re.findall(r'WS73_TEST_KMSG ([^\r\n]*)',part)
+  assert len(records)==3,number
+  results=re.findall(r'synthetic loader result=(-?\d+) repeat=(-?\d+) phase=(\d+) stage=(\d+) prep=(\d+) image=(\d+) ack=(\d+) raw=([0-9a-f]{8})',part)
+  assert len(results)==1,number
+  result,repeated,phase,stage,prep,image,ack=map(int,results[0][:7]);raw=int(results[0][7],16)
+  assert raw==words[n],number
+  if success:assert (result,repeated,phase,stage,prep,image,ack)==(0,-114,4,6,11,2,34056 if n==1 else 7708),number
+  else:
+   assert repeated==result,number
+   if n==7:assert result in (-19,-108,-71,-2,-104) and phase==1,number
+   else:assert (result,phase)==({2:-2,3:-129,4:-90,5:-95,6:-95,8:-71}[n],3 if n==8 else 2),number
+   assert (stage,prep,image,ack)==(0,0,0,0),number
+  assert part.count('WS73_LOADER_READM actual=19 verified')==1,number
+  assert re.findall(r'WS73_LOADER_ID actual=(\d+) word=([0-9a-f]+) synthetic',part)==([] if n==7 else [('4',f'{words[n]:08x}')]),number
+  assert re.findall(r'WS73_LOADER_WRITEM step=(\d+) actual=(\d+) verified',part)==[(str(i),str(len(writes[i]))) for i in range(11 if success else 1 if n==8 else 0)],number
+  assert re.findall(r'WS73_LOADER_REPLY ([A-Z ]+) actual=(\d+)',part)==([('WRITEM OK','9')]*11 if success else [('WRITEM NO','9')] if n==8 else []),number
+  expected=[]
+  if success:
+   for image,size in enumerate([137580,20996,34056] if n==1 else [143892,20980,7708]):
+    for offset in range(0,size,32768):
+     amount=min(32768,size-offset);flag=(3 if amount==size else 0) if not offset else 2 if amount==size-offset else 1
+     expected.append(tuple(map(str,(image,offset,amount,flag))))
+  assert re.findall(r'WS73_LOADER_FILES image=(\d+) offset=(\d+) size=(\d+) flag=(\d+) verified',part)==expected,number
+  assert re.findall(r'WS73_LOADER_PAYLOAD image=(\d+) offset=(\d+) actual=(\d+) original',part)==[x[:3] for x in expected],number
+  assert part.count('WS73_LOADER_FILES_OK actual=8')==len(expected),number
+  assert part.count('WS73_LOADER_QUIT actual=5 verified')==int(success),number
+  assert part.count('WS73_LOADER_NO_EXTRA_OUT window_ms=100')==int(n!=7),number
+  assert part.count('WS73_TEST_REMOVE')==1 and sum('USB disconnect' in x for x in records)==1,number
+  assert records[-1].endswith('synthetic download callbacks drained'),number
+  assert part.index('WS73_TEST_REMOVE')<part.index('USB disconnect')<part.index('synthetic download callbacks drained'),number
+  if n==7:assert part.index('WS73_TEST_REMOVE')<part.index('synthetic loader result='),number
+  else:assert part.index('synthetic loader result=')<part.index('WS73_LOADER_NO_EXTRA_OUT')<part.index('WS73_TEST_REMOVE'),number
+  if success:assert part.index('WS73_LOADER_ID')<part.index('WS73_LOADER_WRITEM')<part.index('WS73_LOADER_FILES')<part.index('WS73_LOADER_QUIT')<part.index('synthetic loader result='),number
+ assert log.count('WS73_TEST_KMSG ')==30
+ assert log.count('WS73_LOADER_READM ')==10 and log.count('WS73_LOADER_ID ')==9
+ assert log.count('WS73_LOADER_WRITEM ')==34 and log.count('WS73_LOADER_FILES ')==22 and log.count('WS73_LOADER_PAYLOAD ')==22
+ assert log.count('WS73_LOADER_QUIT ')==3
+ assert kernel.count('synthetic loader result=')==10 and kernel.count('synthetic download callbacks drained')==10
+ waits=re.findall(r'synthetic READY wait ns=(\d+)',kernel)
+ assert len(waits)==22 and all(int(x)>=5000000 for x in waits)
+ assert 'runtime chip observation' not in kernel and 'synthetic download result=' not in kernel
+ return {'cases':10,'identity_queries':10,'preparation_commands':34,'files_commands':22,'payloads':22,'quit_commands':3,'drains':10,'no_extra_out_checks':9,'scope':'original SDK files via kernel firmware loader to synthetic USB; no physical firmware execution'}
+
+def validate_loader_inputs(record, manifest):
+ import importlib.util
+ import sys
+ sys.dont_write_bytecode=True
+ source=TOOLS.parent/'check-firmware.py'
+ spec=importlib.util.spec_from_file_location('ws73_expected_firmware',source)
+ checker=importlib.util.module_from_spec(spec);spec.loader.exec_module(checker)
+ expected={'firmware/'+variant+'/'+name for variant,files in checker.PROFILES.items() for name in files}
+ assert set(manifest['firmware_inputs'])==expected,'firmware input set'
+ for variant,files in checker.PROFILES.items():
+  for name,(size,digest) in files.items():
+   key='firmware/'+variant+'/'+name;p=record/key
+   assert p.stat().st_size==size and sha(p)==digest,'original firmware identity'
+   assert manifest['materials'][key]==digest,'firmware material hash'
+   entry=manifest['firmware_inputs'][key]
+   assert entry['status']=='PASS' and entry['sha256']==digest and entry['size_read']==size,'firmware provenance'
+ original=(record/'firmware/us/ws73.bin').read_bytes();mutant=bytearray(original);mutant[100]^=1
+ mutant[:64]=hashlib.sha256(mutant[64:]).hexdigest().encode()
+ p=record/'firmware/rehashed-ws73.bin'
+ assert p.read_bytes()==mutant and manifest['materials']['firmware/rehashed-ws73.bin']==sha(p),'rehashed negative input'
+
+def loader_materials(record, directory):
+ import importlib.util
+ import sys
+ sys.dont_write_bytecode=True
+ source=TOOLS.parent/'check-firmware.py'
+ spec=importlib.util.spec_from_file_location('ws73_firmware_inputs',source)
+ checker=importlib.util.module_from_spec(spec);spec.loader.exec_module(checker)
+ archive_files={};materials={};provenance={}
+ shutil.copyfile(source,record/'check-firmware.py');materials['check-firmware.py']=sha(record/'check-firmware.py')
+ for variant in ['us','e']:
+  report=checker.check(directory/variant,variant);assert report['status']=='PASS',report
+  for entry in report['images']:
+   local='firmware/'+variant+'/'+entry['file'];dest=record/local;dest.parent.mkdir(parents=True,exist_ok=True)
+   shutil.copyfile(entry['path'],dest);assert sha(dest)==entry['sha256']
+   archive_files['lib/firmware/hisilicon/ws73/1.10.110/'+variant+'/'+entry['file']]=dest
+   materials[local]=sha(dest);provenance[local]=entry
+ original=record/'firmware/us/ws73.bin';mutant=bytearray(original.read_bytes());mutant[100]^=1
+ mutant[:64]=hashlib.sha256(mutant[64:]).hexdigest().encode()
+ dest=record/'firmware/rehashed-ws73.bin';dest.write_bytes(mutant)
+ assert len(mutant)==original.stat().st_size and sha(dest)!=sha(original)
+ archive_files['mutant.bin']=dest;materials['firmware/rehashed-ws73.bin']=sha(dest)
+ return archive_files,materials,provenance
+
 def library(name):
  path=pathlib.Path(subprocess.check_output(['gcc','-print-file-name='+name],text=True).strip()).resolve()
  if not path.is_file():raise RuntimeError('Missing host runtime library: '+name)
  return path
 def source_identity():
  return {key:subprocess.check_output(['git','-C',str(SOURCE),*args],text=True).strip() for key,args in [('head',['rev-parse','HEAD']),('status',['status','--porcelain'])]}
-def archive(init_binary):
+def archive(init_binary, firmware):
  result=bytearray();ino=1
  def item(name,mode,data=b'',major=0,minor=0):
   nonlocal ino
@@ -173,11 +273,15 @@ def archive(init_binary):
  for name in ['dev','proc','sys','lib64']:item(name,stat.S_IFDIR|0o755)
  item('dev/console',stat.S_IFCHR|0o600,major=5,minor=1)
  files={'init':init_binary,'lib64/libc.so.6':library('libc.so.6'),'lib64/ld-linux-x86-64.so.2':library('ld-linux-x86-64.so.2')}
+ files.update(firmware)
+ parents={str(parent) for name in firmware for parent in pathlib.PurePosixPath(name).parents if str(parent)!='.'}
+ for name in sorted(parents,key=lambda x:(x.count('/'),x)):item(name,stat.S_IFDIR|0o755)
  for name,path in files.items():item(name,stat.S_IFREG|0o755,path.read_bytes())
  item('TRAILER!!!',0)
  return gzip.compress(bytes(result),mtime=0),{str(path):sha(path) for path in files.values()}
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');parser.add_argument('--phase',choices=['runtime','boot','download'],default='runtime');args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--speed',choices=['full','high'],default='full');parser.add_argument('--phase',choices=['runtime','boot','download','loader'],default='runtime');parser.add_argument('--firmware-root',type=pathlib.Path);args=parser.parse_args()
+ assert bool(args.firmware_root)==(args.phase=='loader'),'loader phase requires the local SDK firmware root; other phases take no firmware'
  with (WORK/'build.lock').open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   proofdir=pathlib.Path((WORK/'usb-vm-build-record').read_text().strip());proof=json.loads((proofdir/'manifest.json').read_text())
@@ -186,25 +290,31 @@ def main():
   stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ');record=WORK/'records'/('virtual-usb-'+stamp);record.mkdir();print(record,flush=True)
   manifest={'status':'INCOMPLETE','compiled_source':proof['source'],'speed':args.speed,'phase':args.phase,'scope':'FunctionFS/dummy_hcd synthetic USB integration in hardware-free VM; no physical/firmware/HCI qualification','build_record':str(proofdir),'harness_source':before,'tools':{},'materials':{}}
   def save():(record/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-  for tool in ['gcc','qemu-system-x86_64','python3']:
-   path=pathlib.Path(shutil.which(tool));manifest['tools'][tool]={'path':str(path),'sha256':sha(path),'version':subprocess.check_output([tool,'--version'],text=True).splitlines()[0]}
-   candidates={(pathlib.Path(entry)/tool).resolve() for entry in os.get_exec_path() if (pathlib.Path(entry)/tool).is_file()}
-   manifest['tools'][tool]['path_candidates_sha256']={str(p):sha(p) for p in sorted(candidates)}
-  for source,name in [(proofdir/'manifest.json','build-proof.json'),(proofdir/'arch/x86/boot/bzImage','bzImage'),(proofdir/'.config','.config'),(TOOLS/'init.c','init.c'),(TOOLS/'run.py','run.py'),(TOOLS/'build.py','build.py')]:
-   shutil.copyfile(source,record/name);manifest['materials'][name]=sha(record/name)
-  compile_cmd=['gcc','-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-DWS73_TEST_DOWNLOAD='+('1' if args.phase=='download' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
-  manifest['init_compile']=compile_cmd
-  with (record/'init-build.log').open('w') as build_log:
-   subprocess.run(compile_cmd,check=True,stdout=build_log,stderr=subprocess.STDOUT,env=dict(os.environ,CCACHE_DISABLE='1'))
-  manifest['materials']['init']=sha(record/'init')
-  blob,inputs=archive(record/'init');(record/'initramfs.cpio.gz').write_bytes(blob);manifest['materials']['initramfs.cpio.gz']=sha(record/'initramfs.cpio.gz');manifest['archive_inputs']=inputs
-  cmd=['qemu-system-x86_64','-machine','q35','-accel','kvm','-smp','2','-m','1024','-nodefaults','-display','none','-monitor','none','-serial','stdio','-serial','file:'+str(record/'fixture.log'),'-nic','none','-no-reboot','-kernel',str(record/'bzImage'),'-initrd',str(record/'initramfs.cpio.gz'),'-append','console=ttyS0 rdinit=/init panic_on_warn=1 panic=1 dyndbg="file drivers/misc/ws73/usb.c +p" dummy_hcd.is_high_speed='+('1' if args.speed=='high' else '0')]
-  manifest['command']=cmd;save()
+  save()
   try:
+   for tool in ['gcc','qemu-system-x86_64','python3']:
+    path=pathlib.Path(shutil.which(tool));manifest['tools'][tool]={'path':str(path),'sha256':sha(path),'version':subprocess.check_output([tool,'--version'],text=True).splitlines()[0]}
+    candidates={(pathlib.Path(entry)/tool).resolve() for entry in os.get_exec_path() if (pathlib.Path(entry)/tool).is_file()}
+    manifest['tools'][tool]['path_candidates_sha256']={str(p):sha(p) for p in sorted(candidates)}
+   for source,name in [(proofdir/'manifest.json','build-proof.json'),(proofdir/'arch/x86/boot/bzImage','bzImage'),(proofdir/'.config','.config'),(TOOLS/'init.c','init.c'),(TOOLS/'run.py','run.py'),(TOOLS/'build.py','build.py')]:
+    shutil.copyfile(source,record/name);manifest['materials'][name]=sha(record/name)
+   compile_cmd=['gcc','-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-DWS73_TEST_DOWNLOAD='+('1' if args.phase=='download' else '0'),'-DWS73_TEST_LOADER='+('1' if args.phase=='loader' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
+   manifest['init_compile']=compile_cmd
+   with (record/'init-build.log').open('w') as build_log:
+    subprocess.run(compile_cmd,check=True,stdout=build_log,stderr=subprocess.STDOUT,env=dict(os.environ,CCACHE_DISABLE='1'))
+   manifest['materials']['init']=sha(record/'init')
+   firmware={}
+   if args.phase=='loader':
+    firmware,materials,inputs=loader_materials(record,args.firmware_root.resolve())
+    manifest['materials'].update(materials);manifest['firmware_inputs']=inputs
+    validate_loader_inputs(record,manifest)
+   blob,inputs=archive(record/'init',firmware);(record/'initramfs.cpio.gz').write_bytes(blob);manifest['materials']['initramfs.cpio.gz']=sha(record/'initramfs.cpio.gz');manifest['archive_inputs']=inputs
+   cmd=['qemu-system-x86_64','-machine','q35','-accel','kvm','-smp','2','-m','1024','-nodefaults','-display','none','-monitor','none','-serial','stdio','-serial','file:'+str(record/'fixture.log'),'-nic','none','-no-reboot','-kernel',str(record/'bzImage'),'-initrd',str(record/'initramfs.cpio.gz'),'-append','console=ttyS0 rdinit=/init panic_on_warn=1 panic=1 dyndbg="file drivers/misc/ws73/usb.c +p" dummy_hcd.is_high_speed='+('1' if args.speed=='high' else '0')]
+   manifest['command']=cmd;save()
    with (record/'kernel.log').open('w') as log:
     result=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,timeout=45)
    manifest['exit_code']=result.returncode;assert result.returncode==0
-   manifest['observed']=(validate_download if args.phase=='download' else validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
+   manifest['observed']=(validate_loader if args.phase=='loader' else validate_download if args.phase=='download' else validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
    assert source_identity()==before,'source changed during VM test'
    manifest['status']='PASS'
   except BaseException as error:

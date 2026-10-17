@@ -6,6 +6,7 @@
 #include <linux/workqueue.h>
 
 #include "boot.h"
+#include "boot-loader.h"
 #include "usb-io.h"
 
 struct ws73_download_test {
@@ -13,6 +14,7 @@ struct ws73_download_test {
 	struct usb_anchor submitted;
 	spinlock_t lock; /* Admission and disconnect state shared with USB IO. */
 	bool disconnected;
+	bool loader;
 	int error;
 	struct work_struct work;
 	struct ws73_usb_io usb;
@@ -87,6 +89,23 @@ static void ws73_test_download(struct work_struct *work)
 	unsigned int i, j;
 	int ret;
 
+	if (test->loader) {
+		struct ws73_boot_session session = {};
+		/* Explicit fixture trim, not a default for any physical board. */
+		const struct ws73_boot_board board = { .xo_coarse = 1, .xo_fine = 2 };
+		u64 deadline = ws73_test_now(test) + 15000;
+		int repeated;
+
+		ret = ws73_boot_start(&test->intf->dev, &io, &board, deadline, &session);
+		repeated = ws73_boot_start(&test->intf->dev, &io, &board, deadline, &session);
+		dev_info(&test->intf->dev,
+			 "synthetic loader result=%d repeat=%d phase=%u stage=%u prep=%u image=%u ack=%zu raw=%08x\n",
+			 ret, repeated, session.stage, session.progress.stage,
+			 session.progress.preparation_writes, session.progress.image,
+			 session.progress.acknowledged, session.observation.raw);
+		return;
+	}
+
 	/* Explicit synthetic views, not original firmware or qualified boards.
 	 * Hash validation and RAM/XO preparation have separate tests. Exercise
 	 * the production download sequencer and actual USB lifetime here.
@@ -124,6 +143,7 @@ static int ws73_test_probe(struct usb_interface *intf, const struct usb_device_i
 		return -ENOMEM;
 	}
 	test->intf = intf;
+	test->loader = id->driver_info;
 	spin_lock_init(&test->lock);
 	init_usb_anchor(&test->submitted);
 	INIT_WORK(&test->work, ws73_test_download);
@@ -160,6 +180,7 @@ static void ws73_test_disconnect(struct usb_interface *intf)
 
 static const struct usb_device_id ws73_test_ids[] = {
 	{ USB_DEVICE(0xffff, 0x3734) },
+	{ USB_DEVICE(0xffff, 0x3735), .driver_info = 1 },
 	{ }
 };
 MODULE_DEVICE_TABLE(usb, ws73_test_ids);

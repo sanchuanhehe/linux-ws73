@@ -110,7 +110,8 @@ int ws73_firmware_request(struct device *dev, const struct btws73_chip_identity 
 	for (i = 0; i < WS73_FW_COUNT; i++) {
 		const struct ws73_fw_info *info = &loaded.profile->image[i];
 
-		ret = request_firmware(&loaded.file[i], info->name, dev);
+		/* No userspace fallback wait during a cancellable boot attempt. */
+		ret = request_firmware_direct(&loaded.file[i], info->name, dev);
 		if (ret)
 			goto fail;
 		ret = ws73_fw_validate(info, loaded.file[i]->data, loaded.file[i]->size,

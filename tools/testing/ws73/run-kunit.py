@@ -132,7 +132,7 @@ def main():
         manifest["artifacts"] = {}
         required = {".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
                     "drivers/misc/ws73/hcc.o", "drivers/misc/ws73/firmware.o",
-                    "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o",
+                    "drivers/misc/ws73/boot.o", "drivers/misc/ws73/boot-loader.o", "drivers/misc/ws73/test.o",
                     "drivers/misc/ws73/usb-wire.o", "drivers/misc/ws73/usb-wire-test.o",
                     "drivers/misc/ws73/usb-tx.o", "drivers/misc/ws73/usb-tx-test.o",
                     "drivers/misc/ws73/runtime.o", "drivers/misc/ws73/runtime-test.o",
@@ -142,7 +142,7 @@ def main():
                     "drivers/misc/ws73/customize-request.o",
                     "drivers/misc/ws73/customize-request-test.o",
                     "drivers/misc/ws73/startup.o", "drivers/misc/ws73/startup-test.o",
-                    "drivers/misc/ws73/board-test.o", "drivers/misc/ws73/ble.o",
+                    "drivers/misc/ws73/board-test.o", "drivers/misc/ws73/boot-loader-test.o", "drivers/misc/ws73/ble.o",
                     "drivers/misc/ws73/ble-test.o", "drivers/misc/ws73/ble-link.o",
                     "drivers/misc/ws73/ble-link-test.o"}
         if not args.core_only:
@@ -184,6 +184,7 @@ def main():
                     "ws73_ble_lifecycle_test", "ws73_ble_failure_release_test",
                     "ws73_ble_send_failure_test",
                 },
+                "ws73-boot-loader": {"ws73_loader_preflight_test"},
                 "ws73-board-load": {
                     "ws73_board_sequence_test", "ws73_board_faults_test",
                     "ws73_board_admission_test",

@@ -120,3 +120,28 @@ consumer. No command whitelist, register access, mac80211 adapter, firmware ABI
 qualification or device epoch/reset guarantee follows from these tests. The
 candidate codec's exact response profile still requires original-firmware
 observation. A new local object alone cannot justify retrying uncertain hardware.
+
+Bounded receive frame spans
+---------------------------
+rx-frame.c decodes the candidate non-WS53 record AFTER HCC/FRW validation and
+removal: 32-byte CB, 36-byte reserved MAC-header area, then frame body. It
+accepts only non-AMSDU, one-buffer storage, with an initial local 4096-byte
+allocation bound and at most 31 trailing DMA padding bytes. Those restrictions
+are local policy, not established SDK110 firmware limits or advertised MTU.
+
+Before returning immutable borrowed spans it checks the header reservation,
+frame length versus header length and actual received body capacity. Device
+header addresses are ignored. No in-place move or skb length update occurs;
+a future consumer can copy precisely the validated header and body. Cipher and
+status nibbles remain raw values, with no FCS/decryption/replay claim. 802.11
+header validity, FRW identity/length conventions, VAP/epoch and original firmware
+export still require validation before mac80211 delivery. Raw channel/RSSI are
+not a supported-channel or PHY declaration.
+
+Five RX cases cover an independent unaligned vector with a hostile device
+pointer and poisoned unused header space, every truncation in exact-sized
+allocations, all six-bit header lengths, every allowed padding extent,
+underflow/overflow, unsupported split/AMSDU storage, recovery after rejection,
+maximum local allocation, SIZE_MAX and NULL. There are now 22 cases in three
+suites. The strict runner requires their order and archives both new objects.
+No hardware or wireless interface is registered by these tests.

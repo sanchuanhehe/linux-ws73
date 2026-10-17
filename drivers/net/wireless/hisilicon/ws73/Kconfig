@@ -5,6 +5,7 @@ config WS73_WIFI_KUNIT_TEST
 	default KUNIT_ALL_TESTS
 	help
 	  Check bounded byte-oriented FRW configuration encoding and reply
-	  parsing and bounded transactions in a hardware-free VM. No adapter or USB consumer is
+	  parsing, bounded transactions and receive frame spans in a
+	  hardware-free VM. No adapter or USB consumer is
 	  registered. These tests do not qualify the original firmware ABI,
 	  radio, security or Wi-Fi connectivity.

@@ -352,3 +352,29 @@ needed board definitions, reply producer/layout, TX correlation, RX/security
 metadata and acknowledged RF control, together with acceptable evidence for
 each. This makes the external dependencies concrete without registering an
 unverified Wi-Fi consumer or changing the approved mac80211 architecture.
+
+
+Bounded receive header/body extraction
+-------------------------------------
+
+The already audited ``frw/frw_hmac.c:frw_hmac_rcv_mgnt_data`` copies the
+32-byte control block, moves the actual MAC header inside its 36-byte reserved
+area (outside the WS53 build), then resets the skb length from frame_len.
+``oal_netbuf_common_rom.h`` defines these reservation sizes. The device header
+address in the control block must not be used as a Host pointer. Bounds must
+be established before any move or skb length change, including frame_len less
+than header length and body length beyond the actual received allocation.
+
+``rx-frame.c`` independently validates this candidate inner storage format and
+returns borrowed, immutable header/body spans without moving memory. It checks
+header length 1..36, frame length at least header length, actual body capacity,
+and up to 31 trailing padding bytes. A 4096-byte local allocation ceiling,
+non-AMSDU and exactly one buffer are initial parser policy, not device limits.
+The future consumer still needs HCC/FRW validation, firmware profile, VAP/epoch,
+802.11 header validation and an owned skb before delivering these bytes.
+
+The parser exports raw channel, signed RSSI and cipher/status nibbles. It does
+not strip any crypto overhead, set mac80211 RX flags, validate FCS/PN, or follow
+the embedded device address. Its five VM cases supplement the 17 FRW cases;
+test vectors demonstrate buffer boundaries, not original-firmware packet ABI
+or working Wi-Fi. The component still builds only in the Wi-Fi KUnit module.

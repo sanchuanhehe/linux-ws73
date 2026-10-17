@@ -25,6 +25,8 @@ SUITES = {
     'ws73-wifi-frw-transaction': ['ws73_frw_transaction_' + name for name in (
         'success', 'failures', 'deadline', 'timeout', 'exhaustion', 'validation',
         'independent_rx', 'shutdown_drain', 'inactive')],
+    'ws73-wifi-rx-frame': ['ws73_wifi_rx_' + name for name in (
+        'spans', 'truncation', 'lengths', 'unsupported', 'limits')],
 }
 
 
@@ -32,10 +34,10 @@ def validate_raw(raw):
     lines = raw.splitlines()
     expected = [f'    ok {i} {name}' for names in SUITES.values()
                 for i, name in enumerate(names, 1)]
-    actual = [line for line in lines if re.match(r'^\s*(?:not )?ok \d+ ws73_frw_', line)]
+    actual = [line for line in lines if re.match(r'^\s*(?:not )?ok \d+ ws73_(?:frw|wifi_rx)_', line)]
     if actual != expected:
         raise ValueError('raw cases missing, duplicated, skipped, failed or reordered')
-    markers = ['1..2', 'reboot: machine restart']
+    markers = ['1..3', 'reboot: machine restart']
     for i, (suite, names) in enumerate(SUITES.items(), 1):
         count = len(names)
         markers += [f'    # Subtest: {suite}', f'    1..{count}',
@@ -102,7 +104,7 @@ def main():
         shutil.copyfile(HERE.parent / 'run-kunit.py', record / 'common-run-kunit.py')
         manifest = {'status': 'INCOMPLETE', 'source': COMMON.source_identity(record),
                     'tools': COMMON.tools_identity(), 'artifacts': {},
-                    'scope': 'candidate FRW codec and bounded transaction only; no adapter, transport, firmware or hardware qualification'}
+                    'scope': 'candidate FRW codec, bounded transaction and receive spans only; no adapter, transport, firmware or hardware qualification'}
         command = [sys.executable, 'tools/testing/kunit/kunit.py', 'run', '--arch=x86_64',
                    f'--build_dir={build}', f'--kunitconfig={record / "kunitconfig"}', '--jobs=4',
                    '--make_options=LLVM=1', '--make_options=W=1', '--timeout=120',
@@ -120,7 +122,7 @@ def main():
                                         env=dict(os.environ, CCACHE_DISABLE='1', PYTHONUNBUFFERED='1'))
             manifest['exit_code'] = result.returncode
             required = ['.config', 'arch/x86/boot/bzImage', 'vmlinux', 'test.log']
-            required += ['drivers/net/wireless/hisilicon/ws73/' + name for name in ('frw.o', 'frw-test.o', 'frw-transaction.o', 'frw-transaction-test.o')]
+            required += ['drivers/net/wireless/hisilicon/ws73/' + name for name in ('frw.o', 'frw-test.o', 'frw-transaction.o', 'frw-transaction-test.o', 'rx-frame.o', 'rx-frame-test.o')]
             for name in required:
                 target = record / 'artifacts' / name
                 target.parent.mkdir(parents=True, exist_ok=True)

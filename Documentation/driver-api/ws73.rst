@@ -410,7 +410,7 @@ at 512 bytes. Runtime transfers keep their existing bounds. All memory is
 allocated separately from borrowed inputs, and completion is joined before
 freeing it; the larger TX capacity does not change submission/cancellation
 ownership. No new user-triggerable entry point is added. The current parent
-uses this object only for the fixed identity observation. The shared private
+uses this object for fixed identity and boot-version observations. The shared private
 ``usb-io.c`` helper now owns synchronous URB allocation, submission, completion
 join and READY sleep; its borrowed owner pointers stay live until all callers
 are joined. The owner retains admission/error state and the anchor. Namespace
@@ -771,6 +771,25 @@ one pending platform query, enforces a deadline, and invalidates pending state
 at disconnect. Functional action callers must remain behind that initialization
 sequence and its firmware/board gates. The wire format has no transaction token;
 a late reply must not satisfy a new query after timeout or re-enumeration.
+
+Boot ROM version observation
+----------------------------
+
+After a successful fixed READM, the USB parent sends ``VERSION `` (eight
+bytes including the trailing space) on the same serialized boot channel.
+Both queries share one four-second absolute deadline. The SDK110
+``firmware_check_version`` helper defines this command, a 1-ms receive delay,
+and a 64-byte version capacity. Its existence does not imply the inspected
+SDK default download table actually schedules it; that table starts at WRITEM.
+
+The independent helper waits at least 1 ms, checks cancellation and remaining
+time again, then receives with a 512-byte capacity to detect oversized replies.
+Only actual counts 1..64 are retained. It publishes nothing on failed, empty,
+oversized or expired transfers; the owner terminates on error without retry.
+The data are opaque bytes, logged as length-bounded hex without assuming a NUL
+terminator or accepting a textual version as proof of compatibility. This adds
+no general register interface, firmware selection or function publication.
+The boot-loader entry remains unchanged and does not yet consume this version.
 
 USB observations and safety boundary
 ------------------------------------

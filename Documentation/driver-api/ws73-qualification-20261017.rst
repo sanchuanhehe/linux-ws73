@@ -2095,3 +2095,11 @@ Private manifest SHA-256 values:
   ``941b330766d6227d07dcc7fab7b6d9d11ea94e9a437fe02c32500e852b1af6d3``.
 * ``wifi-abi-20261017T132706.912949Z`` (COMPILER_LAYOUT_CHECK_PASS_NOT_FIRMWARE_ABI_PROOF),
   ``66866b091c0e25449271cc33b803d74108309c8f8befbc2e82ce4b69ae035fc1``.
+
+The probe was then tightened at clean source ``9e616107634f`` to verify each
+object's ELF class, byte order, relocatable type and machine ID independently
+of the requested compiler target. All five targets pass again. The earlier
+records retain their original scope; this verifies target objects, not a
+cross-architecture kernel build. Record
+``wifi-abi-20261017T132844.086882Z``, manifest SHA-256
+``5b5f8d469c82576b8f9a20f92e5da44e40568183db49c487fff3201b586a790d``.

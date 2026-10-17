@@ -409,8 +409,26 @@ at 512 bytes. Runtime transfers keep their existing bounds. All memory is
 allocated separately from borrowed inputs, and completion is joined before
 freeing it; the larger TX capacity does not change submission/cancellation
 ownership. No new user-triggerable entry point is added. The current parent
-uses this object only for the fixed identity observation, so the larger TX and
-READY-delay paths are prepared but have not yet executed through USB.
+uses this object only for the fixed identity observation. The shared private
+``usb-io.c`` helper now owns synchronous URB allocation, submission, completion
+join and READY sleep; its borrowed owner pointers stay live until all callers
+are joined. The owner retains admission/error state and the anchor. Namespace
+WS73_USB_IO and the hidden module preserve explicit module dependencies.
+
+A separate ``WS73_USB_BOOT_TEST`` driver executes FILES/QUIT through these exact
+helpers on dummy_hcd only, with synthetic ID ffff:3734. Its three synthetic
+views have sizes 32769/32/32, exercising a full 32-KiB chunk plus the final byte
+and two separate calibration-shaped inputs. FunctionFS independently verifies
+commands, payload bytes, progress and no extra OUT after completion/failure.
+Bad READY/FILES OK, timeout, removal at READY/payload admission, callback drain
+and a new successful instance are covered at full and high speed. The test
+checks both wire timing and the shared sleep call's own elapsed duration;
+USB scheduling alone cannot prove that the required sleep occurred.
+
+These are actual synthetic USB transfers, not original firmware execution.
+Hash selection, identity, RAM/XO preparation and runtime re-enumeration are
+not part of this fixture. Successful QUIT ends at WAIT_RUNTIME. The physical
+parent still does not call the loader or bypass cold U/E and board gates.
 
 Every USB deadline and BSP/function timestamp uses ``ws73_usb_now`` and its
 boottime clock. The earlier BSP path used ``ktime_get`` instead; those domains
@@ -893,10 +911,12 @@ config, binary/object hashes, raw serial log and all named test results.
 It rejects missing cases, skipped cases, source changes and absent artifacts.
 No firmware/board/device claim is made for this synthetic VM run.
 
-Still required: full USB envelope/notification codec, firmware/board checks
-and loader, independent device passthrough with before/after identity,
-bounded H4 stream reassembly, BLE enable/reply state machine, hci_dev
-integration, real command/event correlation, BlueZ and peer communication.
+Still required: qualified physical-parent firmware/board/startup integration,
+independent device passthrough with cold boot and runtime identity agreement,
+actual USB class-control/startup composition, complete HCI initialization,
+BlueZ and peer communication. Implemented codecs, loader sequencing, bounded
+H4 reassembly, BLE action engine and native HCI model coverage do not by
+themselves qualify those physical paths.
 The user reports no BLE peer available. PM, recovery, coexistence, multi-device,
 Wi-Fi STA, fuzzing and formal qualification remain separate open gates.
 

@@ -12,6 +12,8 @@ the compiled init fixture directly on the host or add physical USB passthrough.
   python3 tools/testing/ws73/usb-vm/run.py --speed high
   python3 tools/testing/ws73/usb-vm/run.py --phase boot --speed full
   python3 tools/testing/ws73/usb-vm/run.py --phase boot --speed high
+  python3 tools/testing/ws73/usb-vm/run.py --phase download --speed full
+  python3 tools/testing/ws73/usb-vm/run.py --phase download --speed high
   python3 tools/testing/ws73/usb-vm/check-supervisor.py <full-speed-record>
 
 Do not use python -O: assertions form part of the verification and optimized
@@ -26,7 +28,7 @@ pointer and timestamped artifacts live under ../.dev/ws73-upstream.
 The runner requires the build's clean source commit to match the current
 worktree, including tools and documentation. Rebuild after committing changes.
 It checks the exact required artifact set and hashes before starting QEMU,
-including the BLE endpoint and runtime-link objects. The fixture leaves
+including the BLE endpoint, runtime-link, shared USB IO and download-test objects. The fixture leaves
 publication gated; having those objects does not mean a BLE child was exercised.
 ACPI and PCI are required for this Q35 guest to power off: ACPI's default
 PCI_Config region handler depends on PCI. Guest shutdown must terminate QEMU
@@ -43,7 +45,8 @@ The negative checker corrupts a verified full-speed log in 32 ways and checks
 five invalid build manifests (stale source, failed build, missing/extra artifact
 and wrong hash). Every corruption must be rejected. It does not exercise a
 device. Run it once for each phase's full-speed PASS record. Boot mode checks
-22 log corruptions and the same five invalid build manifests.
+22 log corruptions and the same five invalid build manifests. Download mode
+checks 28 log corruptions and five invalid build manifests.
 
 The boot phase enumerates two-endpoint synthetic devices in 14 cases. It checks
 the exact fixed READM command, U/USB (including zero), E/USB, S/SDIO and E/UART
@@ -55,8 +58,26 @@ synchronous reads are interrupted and drained by a periodic signal timer;
 O_NONBLOCK alone does not bound queued IO. These are live USB transfers in
 dummy_hcd, not proof that a real cold chip exposes the strap register.
 
-These tests do not execute boot firmware download, 32-KiB boot TX, the READY
-delay, armed startup/customization, BLE class-control, HCI or Wi-Fi. They are
-not physical U/E, RF, PM or peer qualification. Missing resources, failed
+The download phase uses the separate synthetic ID ffff:3734 and a test-only
+USB driver that also requires the dummy_hcd controller. It calls the production
+FILES/QUIT executor and shared URB/READY-wait helpers with explicit synthetic
+views of 32769/32/32 bytes. The peer independently checks commands, all payload
+bytes and QUIT. Seven cases per speed cover success, bad READY, bad FILES OK,
+timeout, removal at READY/payload admission, then a fresh successful instance.
+Five cases check no extra OUT for 100 ms; every instance must report callback
+drain. Successful QUIT means WAIT_RUNTIME only. No runtime instance is started.
+
+The fixture reads the actual endpoint descriptor and sizes its first payload
+read to the negotiated 64/512-byte packet. A smaller high-speed read can
+truncate the transfer and overflow FunctionFS. Wire timing includes scheduling;
+the test driver separately measures the actual shared wait call and the
+supervisor requires all ten waits to be at least 5000000 ns. The production
+parent's boot transfer limit remains 32768 bytes, with no runtime ZLP flag.
+
+This phase does not request original firmware, validate hashes, perform RAM/XO
+preparation or prove device identity. Those contracts have separate tests;
+this synthetic executor is not an alternative physical loading path. These
+USB tests do not execute armed startup/customization, BLE class-control, HCI
+or Wi-Fi, nor qualify physical U/E, RF, PM or peers. Missing resources, failed
 configuration dependencies, malformed logs and unexpected driver records fail
 the run rather than broadening the accepted result.

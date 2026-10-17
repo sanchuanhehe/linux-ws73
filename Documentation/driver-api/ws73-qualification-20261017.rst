@@ -1439,3 +1439,92 @@ No full HCI initialization, L2CAP/peer, cold U/E, board/trim, hardware drain,
 parent firmware-loader integration, Wi-Fi or upstream qualification is added.
 No physical operation or external submission occurred. Documentation commits
 do not replace the exact tested source identities above.
+
+Synthetic boot download through actual USB requests
+---------------------------------------------------
+
+Pure extraction ``ef9b89ce921e5f8d945a59368652991cfc1cc9ca`` moves the existing
+bounded synchronous URB and READY-wait implementation to private usb-io helpers.
+The physical observer and a separate dummy_hcd-only download test share them.
+No physical loading or publication switch is added. The test uses ffff:3734,
+requires the dummy_hcd controller and is disabled in the native HCI module
+build. The ordinary physical observer retains ffff:3733 and its existing gates.
+
+Initial source ``245fd9745f264c243f61aef42064e9d6de34fc19`` builds and passes
+seven full-speed download cases. Source
+``78f0a4534b581dd30931158fe7d05a5d7f983dae`` adds direct timing of the actual
+shared sleep, because gadget wire timing includes USB scheduling and cannot
+alone prove the minimum delay. Its full-speed run passes; its high-speed run
+fails on the first payload: the fixture supplied a 64-byte buffer for a
+512-byte USB packet. FunctionFS reported overflow and production download
+reported -EREMOTEIO at PAYLOAD. The failed attempt remains in the evidence.
+
+Final tested source ``28fd7e8a947c22a8e9646066233d0e6d357cd9d6`` reads the
+negotiated endpoint descriptor and uses the actual 64/512-byte first-packet
+size. No production transfer rule was weakened. Both speeds now pass all
+seven cases: success, malformed READY, malformed FILES OK, withheld READY
+(timeout), removal at READY, removal at payload admission and fresh success.
+Each success independently checks four FILES commands, all 32769/32/32 bytes
+and exact QUIT. Failures cannot advance progress or send QUIT. Five cases
+check a 100-ms no-extra-OUT window; all seven require final callback drain.
+The payload-removal test synchronizes on admission, not a claim that every
+scheduler interleaving cancelled an already-submitted OUT URB.
+
+The two final download runs each check ten shared sleeps, all at least 5 ms.
+Measured ranges are 7894332..8625262 ns (full) and 7987025..8344305 ns (high).
+These are VM scheduling observations, not performance targets. Exact transfer
+and reply lengths remain checked by production code. Successful download
+reports stage WAIT_RUNTIME, image 2, acknowledged 32; it never reports Ready.
+No real firmware file, hash/profile selection, RAM/XO preparation, cold identity
+or runtime re-enumeration is exercised by this explicit synthetic payload model.
+
+On the same final source, existing runtime 17-case and boot 14-case USB suites
+pass at both speeds. Download/runtime/boot supervisors reject 28/32/22 log
+corruptions and five invalid build manifests each. The artifact set now includes
+usb-io.o and usb-boot-test.o. The all-module HCI/core/USB compile/link passes,
+including ws73-usb-io.ko and namespace dependencies; the test-only driver is
+disabled there. No host modules are loaded. USB VM configurations verify SMP,
+KASAN, UBSAN, PROVE_LOCKING and DEBUG_ATOMIC_SLEEP with NET/KUNIT disabled.
+
+All attempts and their manifest SHA-256 values:
+
+* ``virtual-usb-build-20261017T110133.928661Z`` (PASS),
+  ``5c0e83366407124457a05b77587d41388e1a5d21319152977dbe894ac2e9ab48``.
+* ``virtual-usb-20261017T110200.842070Z`` (download full PASS),
+  ``7611490ae0a3cbde937617ceeb8cf00e84cd276832589e7812414b577f43b415``.
+* ``virtual-usb-build-20261017T110247.847233Z`` (PASS),
+  ``f5dd2d4c31b7192984d3577c8a36409e5085e885edb0b0dfbea45b5737c6fdcd``.
+* ``virtual-usb-20261017T110309.401309Z`` (download full PASS),
+  ``bb83248bddc35d07d22dbba2b45acc88434d6a3442cd67a466cd4481a9c9f12b``.
+* ``virtual-usb-20261017T110317.555374Z`` (download high FAIL),
+  ``4e1e7788830eb68d0a1dd7dff51caf8c3ea9cba590f944d8421a2346eb2d5cc4``.
+* ``virtual-usb-build-20261017T110503.505695Z`` (PASS),
+  ``a9820c7b2197a14a8f50b0208bc81123abb1b1f0b03f30eedf771c61c1146a2a``.
+* ``virtual-usb-20261017T110527.915325Z`` (download full PASS),
+  ``9b8baf3ab4edfab4e1bfda3cbece6e28d5d3d9dc3ba8b17bb5cefe768d786509``.
+* ``virtual-usb-20261017T110535.876238Z`` (download high PASS),
+  ``e488fa88ed2e7bd7076b1a423ac0d3b3f5cd64374bdddaa8f6006e35e6e43f64``.
+* ``virtual-usb-20261017T110543.579620Z`` (runtime full PASS),
+  ``19ee29de07ec58fad069f6958dd91b395b9e591269a49240f377cae6d28c8d6b``.
+* ``virtual-usb-20261017T110553.856556Z`` (runtime high PASS),
+  ``808d53821cb749d9f93dba1ce73f2d76cdef2870555f0059a7d8524b940b30cb``.
+* ``virtual-usb-20261017T110603.987480Z`` (boot full PASS),
+  ``8c9eb01b4c9ce9f9a1ff1d3edf6882c3b1af50cc7ebadd77416ed9d842642035``.
+* ``virtual-usb-20261017T110615.658179Z`` (boot high PASS),
+  ``d1249f659eecf61875b7cae9670bfa955bb7006fc9444072b60661002126f6d6``.
+* ``virtual-usb-negative-20261017T110638.524279Z`` (download  PASS),
+  ``6b2283a1a9426e233e10b822dc27f312711f09e525a6fe41887eeceb77418317``.
+* ``virtual-usb-negative-20261017T110638.530507Z`` (runtime  PASS),
+  ``e84350182c5e57a3a3cf6f1c979d58b4fedb4522239df924c7aaa0028b1a40e0``.
+* ``virtual-usb-negative-20261017T110638.523658Z`` (boot  PASS),
+  ``46cbe36ebebd691ac2f62d25a376cf6ade5b2af0f76b3fa50af6eab16ba545d1``.
+* ``hci-build-module-20261017T110640.322019Z`` (PASS),
+  ``8597c8d1ebb84e032d02388cf3d3e1d77646737cfb4da769a364bb82f532dd53``.
+
+Unchanged codec, HCI-model and abstract loader tests retain their earlier source
+identities and were not rerun as new qualification. The synthetic USB driver
+is strict-checkpatch clean; the three USB builds have no compiler warnings.
+Physical cold U/E, board/trim, parent loading/startup, actual BLE control USB,
+full HCI/peer/AP, Wi-Fi, PM/recovery and upstream review remain open. No physical
+operation or external submission occurred. Documentation commits do not replace
+the exact compiled/tested source identities above.

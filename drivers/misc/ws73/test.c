@@ -96,6 +96,10 @@ struct ws73_boot_mock {
 	bool cancel_on_call;
 	unsigned int step;
 	const u8 *payload;
+	bool ready_echo;
+	const u8 *ready_override;
+	size_t ready_length;
+	unsigned int ready_step;
 };
 
 /* Independent golden transcript: three chunks, then two single-chunk files. */
@@ -202,6 +206,14 @@ static int ws73_mock_receive(void *context, u8 *data, size_t capacity, unsigned 
 		KUNIT_FAIL(mock->test, "unexpected receive, including nonexistent QUIT ACK");
 		return -EIO;
 	}
+	if (mock->ready_override && step == mock->ready_step) {
+		if (mock->ready_length <= capacity)
+			memcpy(data, mock->ready_override, mock->ready_length);
+		return mock->ready_length;
+	}
+	if (mock->ready_echo && step % 4 == 1)
+		return scnprintf(data, capacity, "READY:FILE01:%s",
+				 ws73_boot_script[step - 1].command) + 1;
 	reply = ws73_boot_script[step].reply;
 	len = strlen(reply);
 	if (capacity < len + 1)
@@ -247,6 +259,77 @@ static void ws73_boot_sequence_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, progress.stage, WS73_BOOT_WAIT_RUNTIME);
 	KUNIT_EXPECT_EQ(test, progress.image, 2);
 	KUNIT_EXPECT_EQ(test, progress.acknowledged, 5);
+}
+
+static void ws73_boot_ready_echo_test(struct kunit *test)
+{
+	static const u8 reply[] = "READY:FILE01:FILES 1 0x400000 0x8000 0x0 ";
+	const u8 *payload = kunit_kzalloc(test, 65537, GFP_KERNEL);
+	u8 *padded = kunit_kzalloc(test, 512, GFP_KERNEL);
+	struct ws73_boot_progress progress;
+	unsigned int len;
+
+	KUNIT_ASSERT_NOT_NULL(test, payload);
+	KUNIT_ASSERT_NOT_NULL(test, padded);
+	memcpy(padded, reply, sizeof(reply));
+	/* Every truncation, the full echo, and every valid zero padding length. */
+	for (len = 0; len <= 513; len++) {
+		struct ws73_boot_mock mock = {
+			.test = test, .deadline = 10000, .payload = payload,
+			.ready_echo = true, .ready_override = padded,
+			.ready_length = len, .ready_step = 1,
+		};
+		bool valid = len == 5 || (len >= sizeof(reply) - 1 && len <= 512);
+		int expected = valid ? 0 : len < 5 || len > 512 ? -EMSGSIZE : -EPROTO;
+
+		KUNIT_EXPECT_EQ(test, ws73_mock_run(&mock, &progress), expected);
+		KUNIT_EXPECT_EQ(test, mock.calls, valid ? ARRAY_SIZE(ws73_boot_script) : 2);
+		KUNIT_EXPECT_EQ(test, mock.sleeps, valid ? 5 : 0);
+		KUNIT_EXPECT_EQ(test, progress.stage,
+				valid ? WS73_BOOT_WAIT_RUNTIME : WS73_BOOT_READY);
+	}
+}
+
+static void ws73_boot_ready_echo_faults_test(struct kunit *test)
+{
+	static const u8 reply[] = "READY:FILE01:FILES 1 0x400000 0x8000 0x0 ";
+	const u8 *payload = kunit_kzalloc(test, 65537, GFP_KERNEL);
+	u8 *mutant = kunit_kzalloc(test, 512, GFP_KERNEL);
+	struct ws73_boot_progress progress;
+	unsigned int byte;
+
+	KUNIT_ASSERT_NOT_NULL(test, payload);
+	KUNIT_ASSERT_NOT_NULL(test, mutant);
+	/* Token, tag, file count, address, size, flag, final space and padding. */
+	for (byte = 0; byte < 512; byte++) {
+		struct ws73_boot_mock mock = {
+			.test = test, .deadline = 10000, .payload = payload,
+			.ready_override = mutant, .ready_length = 512, .ready_step = 1,
+		};
+
+		memset(mutant, 0, 512);
+		memcpy(mutant, reply, sizeof(reply));
+		mutant[byte] ^= 1;
+		KUNIT_EXPECT_EQ(test, ws73_mock_run(&mock, &progress), -EPROTO);
+		KUNIT_EXPECT_EQ(test, mock.calls, 2);
+		KUNIT_EXPECT_EQ(test, mock.sleeps, 0);
+		KUNIT_EXPECT_EQ(test, progress.stage, WS73_BOOT_READY);
+		KUNIT_EXPECT_EQ(test, progress.acknowledged, 0);
+	}
+	/* A valid first-block reply cannot authorize the next block's payload. */
+	{
+		struct ws73_boot_mock mock = {
+			.test = test, .deadline = 10000, .payload = payload,
+			.ready_echo = true, .ready_override = reply,
+			.ready_length = sizeof(reply), .ready_step = 5,
+		};
+
+		KUNIT_EXPECT_EQ(test, ws73_mock_run(&mock, &progress), -EPROTO);
+		KUNIT_EXPECT_EQ(test, mock.calls, 6);
+		KUNIT_EXPECT_EQ(test, mock.sleeps, 1);
+		KUNIT_EXPECT_EQ(test, progress.stage, WS73_BOOT_READY);
+		KUNIT_EXPECT_EQ(test, progress.acknowledged, 32768);
+	}
 }
 
 static void ws73_boot_faults_test(struct kunit *test)
@@ -551,6 +634,8 @@ static struct kunit_case ws73_cases[] = {
 	KUNIT_CASE(ws73_profiles_test),
 	KUNIT_CASE(ws73_file_test),
 	KUNIT_CASE(ws73_boot_sequence_test),
+	KUNIT_CASE(ws73_boot_ready_echo_test),
+	KUNIT_CASE(ws73_boot_ready_echo_faults_test),
 	KUNIT_CASE(ws73_boot_faults_test),
 	KUNIT_CASE(ws73_boot_admission_test),
 	KUNIT_CASE(ws73_chip_word_test),

@@ -279,6 +279,7 @@ def main():
                 "btws73-proto": expected,
                 "ws73-fw-boot": {
                     "ws73_profiles_test", "ws73_file_test", "ws73_boot_sequence_test",
+                    "ws73_boot_ready_echo_test", "ws73_boot_ready_echo_faults_test",
                     "ws73_boot_faults_test", "ws73_boot_admission_test",
                     "ws73_chip_word_test", "ws73_chip_query_test",
                     "ws73_chip_query_faults_test", "ws73_boot_version_test",

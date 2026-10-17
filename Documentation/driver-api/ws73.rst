@@ -16,11 +16,44 @@ register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
 Synthetic HCI event fixtures are parser inputs, never generated completions
 for an HCI device. No hardware or SparkLink qualification is inherited.
 
+Runtime USB wire helpers now encode a single HCC record and queue-control
+descriptors and validate bounded receive aggregates for BLE (queue 7) and
+platform messages (queue 9). They are exercised with synthetic inputs;
+the boot-only USB parent does not send these frames to hardware yet.
+
 .. toctree::
    :maxdepth: 1
 
    ws73-qualification-20261017
    ws73-roadmap
+
+Runtime USB framing baseline
+----------------------------
+
+``drivers/misc/ws73/usb-wire.c`` follows the pinned SDK110
+``hcc_usb_host_ops.c`` functions ``hcc_usb_xfer_write_data``,
+``hcc_usb_xfer_write_desc`` and ``hcc_usb_tx_control_data``:
+
+* Single data frames have type 0, a total-length field and a per-device
+  sequence value, all little endian. A zero descriptor occupies the first
+  64-byte slot; one already 8-byte-aligned HCC record follows, padded to at
+  least 64 bytes. The first implementation caps the record at 4096 bytes.
+* Control transfers have type 3, length field zero, sequence, and descriptor
+  operation at offset 12. The actual USB transfer is 36 bytes. Queue switch
+  (operation 1) carries a little-endian queue at offset 16; aggregation reset
+  (operation 0) has no payload. Both operations must complete before using
+  a newly selected queue. The sequence is not a reply transaction ID.
+* Receive type 2 has a 92-byte prefix with at most 24 contiguous nonzero
+  record lengths. Each record is bounded to 4096 bytes, must match the full
+  outer queue value, and is checked before any view is published. BLE lengths
+  exclude HCC; platform lengths include it. Unknown queues/services, holes,
+  trailing bytes, truncated records and inconsistent platform lengths fail.
+* Input views remain borrowed and immutable; service consumers still validate
+  platform reply identity or H4 streams. Encoding never conveys device credit,
+  HCI command success or Wi-Fi acknowledgement. No new service is advertised.
+
+The existing BLE aggregate decoder remains unchanged in this increment, so
+its original regression cases can still compare behavior independently.
 
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.

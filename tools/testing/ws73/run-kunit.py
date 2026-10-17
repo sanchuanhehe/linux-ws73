@@ -122,7 +122,8 @@ def main():
         manifest["artifacts"] = {}
         required = {".config", "arch/x86/boot/bzImage", "vmlinux", "test.log",
                     "drivers/misc/ws73/hcc.o", "drivers/misc/ws73/firmware.o",
-                    "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o"}
+                    "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o",
+                    "drivers/misc/ws73/usb-wire.o", "drivers/misc/ws73/usb-wire-test.o"}
         if not args.core_only:
             required.update({"drivers/bluetooth/btws73_proto.o",
                              "drivers/bluetooth/btws73_test.o",
@@ -154,6 +155,11 @@ def main():
                     "ws73_boot_faults_test", "ws73_boot_admission_test",
                     "ws73_chip_word_test", "ws73_chip_query_test",
                     "ws73_chip_query_faults_test",
+                },
+                "ws73-usb-wire": {
+                    "ws73_usb_control_test", "ws73_usb_single_test",
+                    "ws73_usb_single_limits_test", "ws73_usb_aggregate_test",
+                    "ws73_usb_aggregate_errors_test",
                 },
             }
             if args.core_only:

@@ -472,4 +472,13 @@ config BT_INTEL_PCIE
 
 	  Say Y here to compiler support for Intel Bluetooth PCIe device into
 	  the kernel or say M to compile it as module (btintel_pcie)
+config BT_WS73_KUNIT_TEST
+	tristate "WS73 BLE wire codec tests" if !KUNIT_ALL_TESTS
+	depends on KUNIT
+	default KUNIT_ALL_TESTS
+	help
+	  Test the WS73 BLE HCC and H4 wire validation routines. This does
+	  not register a USB or HCI driver and needs no physical hardware.
+	  The codec is an initial development step, not working WS73 support.
+
 endmenu

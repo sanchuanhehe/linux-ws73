@@ -339,6 +339,7 @@ def validate_loader(kernel, log, speed="full"):
  assert log.count('WS73_TEST_KMSG ')==30
  assert log.count('WS73_LOADER_READM ')==10 and log.count('WS73_LOADER_ID ')==9
  assert log.count('WS73_LOADER_WRITEM ')==34 and log.count('WS73_LOADER_FILES ')==22 and log.count('WS73_LOADER_PAYLOAD ')==22
+ assert log.count('WS73_LOADER_ECHO ')==12 and log.count('WS73_LOADER_REPLY ')==22
  assert log.count('WS73_LOADER_QUIT ')==3
  assert kernel.count('synthetic loader result=')==10 and kernel.count('synthetic download callbacks drained')==10
  waits=re.findall(r'synthetic READY wait ns=(\d+)',kernel)

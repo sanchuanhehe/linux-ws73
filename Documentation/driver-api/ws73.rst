@@ -44,6 +44,8 @@ compatibility, version or boot/runtime identity agreement.
 
    ws73-qualification-20261017
    ws73-roadmap
+   ws73-wifi-interface
+   ws73-interface-questions
 
 Native auxiliary BLE consumer (publication still gated)
 -------------------------------------------------------
@@ -478,6 +480,17 @@ in both inspected USB light configurations. ``hcc_usb_write_reg`` dispatches
 boot writes to ``write_device_reg`` (decimal value and trailing space). The
 firmware command table puts XO trim before the three files; the trim originates
 from build configuration or INI, not from a universal device default.
+
+An independent static check of both original code files found identical
+78-byte XO routines at U 0x405b58 and E 0x405ae6. They initialize local bytes
+to 8/60, read 0x40019408 and replace those bytes only if the word is nonzero.
+Both then pass pointers to the bytes through a helper before writing their
+transformed value to 0x4001a404. The helper reaches code at 0x1073c8 outside
+both downloaded code intervals; its symbol and calibration precedence remain
+unestablished. An accepted host trim write therefore does not prove the final
+applied trim, and zero has firmware fallback semantics. This finding does not
+supply board defaults or qualify RF. See :doc:`ws73-interface-questions` for
+the specific missing board and device-interface contracts.
 
 The numeric RAM register addresses are cross-referenced to the pinned
 ``libws73-usb/src/ws73_usb_firmware.c`` preload sequence. This SDK checkout

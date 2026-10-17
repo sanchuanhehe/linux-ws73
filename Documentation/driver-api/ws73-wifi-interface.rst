@@ -323,3 +323,32 @@ This component currently builds only in the KUnit module. It does not establish
 original-firmware response compatibility, register a mac80211/auxiliary consumer,
 route HCC records or implement a command/register whitelist. Those integration
 and physical qualification gates remain open.
+
+
+Device-side evidence search and next required material
+------------------------------------------------------
+
+A separate static search byte-compared original U/E code files with the pinned
+SDK commit. That checkout contains no tracked ELF/map/sym/lst files. The two
+raw code payloads are respectively 143892 and 137580 bytes at 0x400000 after
+the digest header. Inspected initialization near an HCC diagnostic string
+contains calls outside those intervals. This search did not identify the
+Wi-Fi synchronous reply producer; it does not prove that such a producer is
+absent from all firmware or identify every out-of-range target as ROM.
+Linear raw disassembly can also include data, so no general call-graph or
+protocol conclusion is derived from it.
+
+The concrete new board finding is an identical 78-byte XO routine in both
+files, described in :doc:`ws73`. Its post-host-value helper prevents inferring
+final applied trim from the host word alone. The private static record
+``wifi-device-producer-audit-20261017/manifest.json`` has SHA-256
+``3d86fa6bbbd327f02abaf63c3899d9c888d297af2f14a4fd60be164434d0a1cd``.
+It binds full file hashes, inspected routine ranges, disassembler identity,
+six pinned source files and the symbol inventory. No firmware/disassembly is
+published with this document, and no code or hardware was executed.
+
+:doc:`ws73-interface-questions` is a prepared, unsent question set specifying
+needed board definitions, reply producer/layout, TX correlation, RX/security
+metadata and acknowledged RF control, together with acceptable evidence for
+each. This makes the external dependencies concrete without registering an
+unverified Wi-Fi consumer or changing the approved mac80211 architecture.

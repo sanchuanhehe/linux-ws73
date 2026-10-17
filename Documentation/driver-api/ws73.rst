@@ -17,6 +17,13 @@ register hci_dev or auxiliary consumers, or provide functional BLE/Wi-Fi.
 Synthetic HCI event fixtures are parser inputs, never generated completions
 for an HCI device. No hardware or SparkLink qualification is inherited.
 
+A failed boot observation now enters the same parent terminal/fault-work path
+as a runtime failure: admission closes, outstanding transfers are cancelled,
+and disconnect joins both initialization and fault work. No retry is scheduled.
+The hardware-free USB tools exercise the fixed READM on synthetic two-endpoint
+devices, including legitimate zero, invalid lengths, timeout and removal.
+They cannot establish cold-chip register accessibility on real U/E hardware.
+
 Runtime USB wire helpers now encode a single HCC record and queue-control
 descriptors and validate bounded receive aggregates for BLE (queue 7) and
 platform messages (queue 9), plus function notifications (queue 10) on RX
@@ -665,8 +672,9 @@ HCI validation and H4 transmit framing stay local to drivers/bluetooth.
 HCC receive and chip identity helpers now live in drivers/misc/ws73 and
 are exported in the WS73 namespace. There is no registration API, auxiliary
 child or unused SLE interface yet. The USB owner currently provides bounded
-boot observation and request teardown; firmware and runtime HCC remain to
-be integrated. Only actual Wi-Fi/BLE consumer needs justify extraction
+boot observations, runtime HCC identity/version and notification reception,
+and request teardown. Firmware loading and native consumers remain to be
+integrated. Only actual Wi-Fi/BLE consumer needs justify extraction
 into a shared directory. The selected shared-layer location is
 ``drivers/misc/ws73/``: USB ownership, chip identity, firmware, HCC routing
 and device lifecycle belong there; BLE and Wi-Fi adapters remain in their
@@ -681,8 +689,9 @@ DMA-safe buffers and serial URBs in a per-device worker. Submission and
 disconnect admission share a spinlock. Disconnect sets a terminal flag,
 kills anchored URBs and joins initialization before releasing the parent;
 each transfer joins its completion before freeing its request storage.
-The worker does not retry failed reads or register functions. Full runtime
-queue, callback and function drain contracts still need implementation.
+The worker does not retry failed reads or register functions. Runtime USB
+queue sequencing and RX/IRQ callback drain are implemented; consumer data
+queues, stop/drain interfaces and function registration remain pending.
 Protocol HCI credits remain separate from
 USB queue slots. A BLE close must not reset an active Wi-Fi consumer.
 

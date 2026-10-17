@@ -1047,3 +1047,68 @@ the distinct source commits above; subsequent documentation is not a newly
 compiled source. Cold-start U/E evidence, trusted board/trim inputs, parent
 loader integration, native consumers, peer/AP resources and upstream review
 remain open. The goal and existing tracking issues remain active.
+
+Boot READM through actual virtual USB transfers
+---------------------------------------------
+
+Source ``b58af7e5e2e21e86105c95193af9fb530788610c`` routes boot query failure
+through the parent's existing terminal/fault-work path, closing submission
+admission and joining cancellation on teardown. It adds a boot phase to the
+hardware-free USB fixture without opening any real-device loader gate.
+Final tested source ``d55302fd49414879a02522f5291085c18773ac13`` passes the boot
+phase at both full and high speed: 14 cases, 14 exact 19-byte fixed READM OUT
+transfers, 12 IN replies and 14 disconnect/drain boundaries per run.
+
+Cases include U/USB zero and 0x0c, E/USB 0x0a, S/SDIO 0x04 and E/UART 0x28;
+the latter two are observations, not transport support. Replies of 0, 1, 3,
+5 and 512 bytes fail with -EMSGSIZE, rather than becoming zero-valued U
+identities. A withheld reply reaches -ETIMEDOUT. Removal during the reply wait
+terminates initialization; subsequent U/E instances make fresh queries. Thirteen
+cases observe no extra OUT during a 100-ms window before removal. This bounded
+window alone is not proof against arbitrary future retries; the driver has no
+retry path. Cold-read validity still requires physical evidence.
+
+The first full-speed attempt failed on the first quiet-window check. FunctionFS
+O_NONBLOCK only bounds locking/enable waits; its queued synchronous IO still
+waits for completion. The 45-second supervisor deadline killed and joined that
+VM and retained FAIL. The fixture now uses an explicit non-restarting SIGALRM
+handler and a periodic 100-ms timer to interrupt the read. FunctionFS dequeues
+and joins its request before returning EINTR. Repeating the timer also handles
+a signal arriving before the read begins. The timer is stopped after the read.
+No host FunctionFS device or physical hardware was accessed.
+
+The same final source passes the existing runtime fixture at both speeds,
+17 cases each, because boot and runtime share descriptor/setup code. KASAN,
+UBSAN, lockdep and DEBUG_ATOMIC_SLEEP are enabled in these VMs. The freshly
+run supervisors reject 22 boot log corruptions and 32 runtime log corruptions,
+plus five invalid build manifests for each phase. The single-line parent
+change is strict-checkpatch clean. Earlier 69-KUnit evidence is retained at
+its earlier source; this increment does not claim a new KUnit run.
+
+Evidence manifests, including the failed attempt (SHA-256):
+
+* ``virtual-usb-build-20261017T090921.137268Z`` (initial build PASS),
+  ``e06b0ceb0fd81cf30e580c94d132a6deff204aa2bc7ae4c8a253019623d09d5a``.
+* ``virtual-usb-20261017T090944.643230Z`` (boot full-speed FAIL, blocked fixture read),
+  ``0a870c54ac9242005b2a5a75e1fbc714265f4f5cf48d262c7145dca6f39f5906``.
+* ``virtual-usb-build-20261017T091100.982430Z`` (fixed fixture build PASS),
+  ``cd8009e7cfc4b09e1d28d1efbf74fb7f4dfc1031198430f36d44c6bb98ebe7bb``.
+* ``virtual-usb-20261017T091125.300681Z`` (boot full-speed PASS),
+  ``ae93c747e5f0a0d16c4423a6f471835943b148045f41aaccc11eb8d47bfd427a``.
+* ``virtual-usb-20261017T091145.828518Z`` (boot high-speed PASS),
+  ``b5e1cd0fe7d0535eb9e8b56049fc841487f3d653654a3ef15c45858bf142a4a5``.
+* ``virtual-usb-negative-20261017T091146.903761Z`` (boot supervisor PASS),
+  ``c6064decce49e9d97aa91d7a9acb387ffb42706f19c2f34c442231d6eb09587a``.
+* ``virtual-usb-20261017T091204.198437Z`` (runtime full-speed PASS),
+  ``79a31083da70928bf7559a6c0cb27731642c42ebea0a50be5d2a2653663dcf56``.
+* ``virtual-usb-20261017T091226.421499Z`` (runtime high-speed PASS),
+  ``b98f81ee1b6ea6d4aac85cfbf8b677a2fc1c63d578e792ba68584e05eaa06579``.
+* ``virtual-usb-negative-20261017T091227.507498Z`` (runtime supervisor PASS),
+  ``c1e1852129087b4ce543d5d68ae2bc90e2250eb1f2d9b3b253964056f4f8b9f4``.
+
+The fixed command and actual reply lengths now have synthetic USB integration
+evidence in addition to injected-IO tests. This does not prove real cold U/E
+register accessibility, register provenance, board/trim validity, firmware
+loading, 32-KiB boot TX, READY delay, armed startup/class-control, HCI or Wi-Fi.
+No new physical qualification or external submission occurred. The later
+documentation commit is not the compiled/tested source identity.

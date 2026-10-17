@@ -1,0 +1,75 @@
+WS73 USB stop-work producer lifetime
+===================================
+
+  python3 tools/testing/ws73/formal/run-tlc.py --jar /path/to/tla2tools.jar
+
+Requires Java and TLC 2.19 revision 5a47802. Uses one worker, 512 MiB Java heap,
+a 60-second deadline per exploration and the shared WS73 build lock. TLC's
+single-machine state store creates a local RMI socket; a socket-denying sandbox
+cannot run it. No distributed workers, physical USB, firmware or kernel are
+executed. Check the shared CPU budget first. Inputs must be clean/committed.
+
+The current model checks TypeOK and NoUseAfterFree: after freeing the USB
+owner there can be no pending/running stop work or active fault producer.
+The old-order configuration must expose the concrete delayed BLE backend
+counterexample, not merely fail for any reason. Every command, model/config,
+production source listed below, tool version/hash, raw output, reachable state
+dump and supervisor control result is saved under ../.dev/ws73-upstream/records.
+Timeout, abnormal exit, warning, incomplete statistics, missing terminal states,
+wrong invariant and truncated/missing/duplicate result messages cannot pass.
+
+Source mapping (review again if these functions or their callers change):
+
+* Begin: ws73_usb_submit_rx / ws73_usb_io_transfer serialize admission with
+  ws->lock. A backend activation represents one admitted ws73_ble_send call
+  holding ble->operation through its backend return. The child may be active
+  before the initializer returns from auxiliary_device_add.
+* Giveback: __usb_hcd_giveback_urb in drivers/usb/core/hcd.c removes the URB
+  from its anchor before invoking the callback, with suspend_wakeups held.
+  Submitted, active, claimed and enqueued receiver states all prevent join.
+* ClaimFault: ws73_usb_fail sets error/first under ws->lock; QueueStop models
+  the later schedule_work after platform/startup/BLE aborts without that lock.
+  Arbitrary delay between these steps includes preemption, not a sleep under
+  the parent spinlock. Only the first fault queues stop.
+* Return: completion, initialization or backend returns. Backend return is
+  inside ws73_ble_send's operation-mutex critical section. Done includes the
+  following unlock; removal must join it before clearing backend/context.
+* RunStop/EndStop: ws73_usb_stop joins the anchor plus RX/interrupt URBs.
+* Close through Free: ws73_usb_unbind closes admission, aborts requests, joins
+  anchor/RX/interrupt, cancels initialization, removes the BLE child, finally
+  cancels stop and frees owner buffers/object. ws73_ble_link_remove calls
+  ws73_ble_remove, which faults the endpoint, clears backend/context while
+  holding operation, deletes/unbinds the auxiliary consumer and uninitializes.
+* JoinAnchor: current drivers/usb/core/urb.c usb_kill_anchored_urbs checks
+  usb_anchor_check_wakeup, including suspend_wakeups. It ALREADY guarantees
+  completer callbacks have finished. Treating an empty list as sufficient
+  would misrepresent this kernel. Explicit per-URB joins remain in the model
+  and driver, but this model does not claim omitting them causes a callback UAF.
+
+With DrainBackendFirst=FALSE the historical final cancel occurs before child
+removal. A backend can claim first fault while admission is open, pause,
+resume after that cancellation, queue stop, return, and allow removal/free
+with stop still queued. TRUE moves cancellation after all producers join.
+This is a source-derived schedule and model counterexample, not a claimed
+reproduction of UAF in an executing kernel. The C fix changes the actual
+ws73_usb_unbind ordering. The runner checks that ordering as a drift guard;
+text matching does not prove equivalence between C and TLA+.
+
+Scope and assumptions
+---------------------
+One owner, two receiver producers, one initialization and one backend call;
+each receiver has at most one submission/giveback and there is at most one
+first fault. The state graph is finite and exhaustive for this abstraction,
+with no state constraints or simulation mode. No liveness/fairness property
+is claimed. Terminal stutter permits completion while keeping deadlock checking
+enabled in nonterminal states. The state dump must include actual free states,
+preventing a safety pass obtained solely by making teardown unreachable.
+
+Caller object lifetime, lock exclusion, USB join, workqueue cancellation and
+auxiliary removal contracts are assumed from the mapped code. Control waits,
+URB status/length, resubmission, request stack lifetime, HCI callbacks and
+auxiliary reference release are abstracted; aborts do not make arbitrary
+callbacks atomic. This is NOT a C concurrency/refinement proof, LKMM analysis,
+complete lifecycle model, USB core proof, firmware/epoch qualification or real
+hardware result. TLC uses fingerprints; its reported collision estimate is
+retained. Broader multi-instance, recovery and PM properties remain open.

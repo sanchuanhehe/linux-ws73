@@ -181,7 +181,7 @@ def main():
                     raise RuntimeError('unexpected TLC stderr')
                 result = validate((folder / 'stdout.log').read_text(), run['returncode'], mode == 'old-order')
                 if mode == 'current':
-                    dump = (folder / 'reachable').read_text()
+                    dump = (folder / 'reachable.dump').read_text()
                     states = re.split(r'^State \d+:.*\n', dump, flags=re.M)[1:]
                     if len(states) != result['distinct'] or not any('/\\ pc = "dead"' in s for s in states):
                         raise RuntimeError('missing complete reachable state dump or terminal witness')

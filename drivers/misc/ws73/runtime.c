@@ -6,67 +6,67 @@
 
 #include "runtime.h"
 
-struct ws73_identity_io {
-	struct ws73_identity_request *request;
+struct ws73_platform_io {
+	struct ws73_platform_request *request;
 	const struct ws73_usb_tx_io *transport;
 };
 
-static u64 ws73_identity_now(void *context)
+static u64 ws73_platform_now(void *context)
 {
-	struct ws73_identity_io *io = context;
+	struct ws73_platform_io *io = context;
 
 	return io->transport->now_ms(io->transport->context);
 }
 
-static bool ws73_identity_cancelled(void *context)
+static bool ws73_platform_cancelled(void *context)
 {
-	struct ws73_identity_io *io = context;
+	struct ws73_platform_io *io = context;
 	unsigned long flags;
 	bool failed;
 
 	spin_lock_irqsave(&io->request->lock, flags);
-	failed = io->request->state == WS73_IDENTITY_FAILED;
+	failed = io->request->state == WS73_PLATFORM_FAILED;
 	spin_unlock_irqrestore(&io->request->lock, flags);
 	return failed || io->transport->cancelled(io->transport->context);
 }
 
-static int ws73_identity_send(void *context, const u8 *data, size_t length,
+static int ws73_platform_send(void *context, const u8 *data, size_t length,
 			      unsigned int timeout)
 {
-	struct ws73_identity_io *io = context;
+	struct ws73_platform_io *io = context;
 
 	return io->transport->send(io->transport->context, data, length, timeout);
 }
 
-void ws73_identity_init(struct ws73_identity_request *request)
+void ws73_platform_init(struct ws73_platform_request *request)
 {
 	spin_lock_init(&request->lock);
 	init_completion(&request->done);
-	request->state = WS73_IDENTITY_UNUSED;
+	request->state = WS73_PLATFORM_UNUSED;
 	request->error = 0;
 }
-EXPORT_SYMBOL_NS_GPL(ws73_identity_init, "WS73");
+EXPORT_SYMBOL_NS_GPL(ws73_platform_init, "WS73");
 
-static void ws73_identity_fail_locked(struct ws73_identity_request *request, int error)
+static void ws73_platform_fail_locked(struct ws73_platform_request *request, int error)
 {
-	if (request->state == WS73_IDENTITY_FAILED)
+	if (request->state == WS73_PLATFORM_FAILED)
 		return;
 	request->error = error < 0 ? error : -ESHUTDOWN;
-	request->state = WS73_IDENTITY_FAILED;
+	request->state = WS73_PLATFORM_FAILED;
 	complete_all(&request->done);
 }
 
-void ws73_identity_abort(struct ws73_identity_request *request, int error)
+void ws73_platform_abort(struct ws73_platform_request *request, int error)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&request->lock, flags);
-	ws73_identity_fail_locked(request, error);
+	ws73_platform_fail_locked(request, error);
 	spin_unlock_irqrestore(&request->lock, flags);
 }
-EXPORT_SYMBOL_NS_GPL(ws73_identity_abort, "WS73");
+EXPORT_SYMBOL_NS_GPL(ws73_platform_abort, "WS73");
 
-int ws73_identity_receive(struct ws73_identity_request *request,
+int ws73_platform_receive(struct ws73_platform_request *request,
 			  const u8 *record, size_t length, u64 now_ms)
 {
 	struct btws73_chip_identity identity;
@@ -81,39 +81,39 @@ int ws73_identity_receive(struct ws73_identity_request *request,
 		return -ENOENT;
 	ret = btws73_chip_reply_decode(record, length, &identity);
 	spin_lock_irqsave(&request->lock, flags);
-	if (request->state == WS73_IDENTITY_FAILED) {
+	if (request->state == WS73_PLATFORM_FAILED) {
 		ret = request->error;
-	} else if (request->state == WS73_IDENTITY_REPLIED) {
+	} else if (request->state == WS73_PLATFORM_REPLIED) {
 		/* More than one matching reply before consumption is ambiguous. */
 		ret = -EPROTO;
-		ws73_identity_fail_locked(request, ret);
-	} else if (request->state != WS73_IDENTITY_WAITING) {
+		ws73_platform_fail_locked(request, ret);
+	} else if (request->state != WS73_PLATFORM_WAITING) {
 		ret = -EALREADY;
 	} else if (now_ms >= request->deadline) {
 		ret = -ETIMEDOUT;
-		ws73_identity_fail_locked(request, ret);
+		ws73_platform_fail_locked(request, ret);
 	} else if (ret) {
-		ws73_identity_fail_locked(request, ret);
+		ws73_platform_fail_locked(request, ret);
 	} else {
 		request->identity = identity;
-		request->state = WS73_IDENTITY_REPLIED;
+		request->state = WS73_PLATFORM_REPLIED;
 		complete_all(&request->done);
 	}
 	spin_unlock_irqrestore(&request->lock, flags);
 	return ret;
 }
-EXPORT_SYMBOL_NS_GPL(ws73_identity_receive, "WS73");
+EXPORT_SYMBOL_NS_GPL(ws73_platform_receive, "WS73");
 
-int ws73_identity_query(struct ws73_identity_request *request,
+int ws73_platform_get_chip(struct ws73_platform_request *request,
 			struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
 			u64 deadline_ms, struct btws73_chip_identity *identity)
 {
-	struct ws73_identity_io context = { request, io };
+	struct ws73_platform_io context = { request, io };
 	const struct ws73_usb_tx_io guarded_io = {
 		.context = &context,
-		.now_ms = ws73_identity_now,
-		.cancelled = ws73_identity_cancelled,
-		.send = ws73_identity_send,
+		.now_ms = ws73_platform_now,
+		.cancelled = ws73_platform_cancelled,
+		.send = ws73_platform_send,
 	};
 	unsigned long flags;
 	u8 command[32];
@@ -124,13 +124,13 @@ int ws73_identity_query(struct ws73_identity_request *request,
 	    !io->send || !identity)
 		return -EINVAL;
 	spin_lock_irqsave(&request->lock, flags);
-	if (request->state != WS73_IDENTITY_UNUSED) {
-		ret = request->state == WS73_IDENTITY_FAILED ? request->error : -EALREADY;
+	if (request->state != WS73_PLATFORM_UNUSED) {
+		ret = request->state == WS73_PLATFORM_FAILED ? request->error : -EALREADY;
 		spin_unlock_irqrestore(&request->lock, flags);
 		return ret;
 	}
 	request->deadline = deadline_ms;
-	request->state = WS73_IDENTITY_WAITING;
+	request->state = WS73_PLATFORM_WAITING;
 	spin_unlock_irqrestore(&request->lock, flags);
 
 	btws73_chip_query_encode(command, sizeof(command));
@@ -157,21 +157,21 @@ int ws73_identity_query(struct ws73_identity_request *request,
 		goto failed;
 	}
 	spin_lock_irqsave(&request->lock, flags);
-	if (request->state == WS73_IDENTITY_REPLIED) {
+	if (request->state == WS73_PLATFORM_REPLIED) {
 		*identity = request->identity;
-		request->state = WS73_IDENTITY_DONE;
+		request->state = WS73_PLATFORM_DONE;
 		ret = 0;
 	} else {
-		ret = request->state == WS73_IDENTITY_FAILED ? request->error : -EPROTO;
+		ret = request->state == WS73_PLATFORM_FAILED ? request->error : -EPROTO;
 	}
 	spin_unlock_irqrestore(&request->lock, flags);
 	return ret;
 failed:
-	ws73_identity_abort(request, ret);
+	ws73_platform_abort(request, ret);
 	/* Preserve the first terminal error, including a concurrent disconnect. */
 	spin_lock_irqsave(&request->lock, flags);
 	ret = request->error;
 	spin_unlock_irqrestore(&request->lock, flags);
 	return ret;
 }
-EXPORT_SYMBOL_NS_GPL(ws73_identity_query, "WS73");
+EXPORT_SYMBOL_NS_GPL(ws73_platform_get_chip, "WS73");

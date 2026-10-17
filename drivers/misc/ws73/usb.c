@@ -19,7 +19,7 @@ struct ws73_usb {
 	struct work_struct initialize;
 	struct work_struct stop;
 	struct ws73_usb_tx tx;
-	struct ws73_identity_request identity;
+	struct ws73_platform_request identity;
 	struct urb *rx_urb;
 	u8 *rx_buffer;
 	spinlock_t lock; /* Serialize submission admission with disconnect. */
@@ -50,7 +50,7 @@ static void ws73_usb_fail(struct ws73_usb *ws, int error)
 		first = true;
 	}
 	spin_unlock_irqrestore(&ws->lock, flags);
-	ws73_identity_abort(&ws->identity, error);
+	ws73_platform_abort(&ws->identity, error);
 	if (first)
 		schedule_work(&ws->stop);
 }
@@ -185,7 +185,7 @@ static void ws73_usb_rx_complete(struct urb *urb)
 	}
 	if (!ret && rx.queue == 9) {
 		for (i = 0; i < rx.count; i++) {
-			ret = ws73_identity_receive(&ws->identity, rx.record[i].data,
+			ret = ws73_platform_receive(&ws->identity, rx.record[i].data,
 						    rx.record[i].len, ws73_usb_now(ws));
 			if (ret && ret != -ENOENT && ret != -EALREADY) {
 				ws73_usb_fail(ws, ret);
@@ -232,7 +232,7 @@ static void ws73_usb_initialize(struct work_struct *work)
 	if (ws->runtime) {
 		ret = ws73_usb_submit_rx(ws);
 		if (!ret)
-			ret = ws73_identity_query(&ws->identity, &ws->tx, &runtime_io,
+			ret = ws73_platform_get_chip(&ws->identity, &ws->tx, &runtime_io,
 						  ws73_usb_now(ws) + 4000, &identity);
 		if (ret) {
 			ws73_usb_fail(ws, ret);
@@ -301,7 +301,7 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	INIT_WORK(&ws->initialize, ws73_usb_initialize);
 	INIT_WORK(&ws->stop, ws73_usb_stop);
 	ws73_usb_tx_init(&ws->tx);
-	ws73_identity_init(&ws->identity);
+	ws73_platform_init(&ws->identity);
 	if (runtime) {
 		ws->rx_urb = usb_alloc_urb(0, GFP_KERNEL);
 		ws->rx_buffer = kmalloc(BTWS73_RX_MAX_SIZE, GFP_KERNEL);
@@ -329,7 +329,7 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	spin_lock_irqsave(&ws->lock, flags);
 	WRITE_ONCE(ws->disconnected, true);
 	spin_unlock_irqrestore(&ws->lock, flags);
-	ws73_identity_abort(&ws->identity, -ENODEV);
+	ws73_platform_abort(&ws->identity, -ENODEV);
 	usb_kill_anchored_urbs(&ws->submitted);
 	usb_kill_urb(ws->rx_urb);
 	cancel_work_sync(&ws->initialize);

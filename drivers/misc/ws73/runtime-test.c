@@ -6,7 +6,7 @@
 #include "runtime.h"
 
 struct ws73_runtime_mock {
-	struct ws73_identity_request request;
+	struct ws73_platform_request request;
 	struct ws73_usb_tx tx;
 	struct ws73_usb_tx_io io;
 	struct completion sent;
@@ -35,7 +35,7 @@ static int ws73_runtime_send(void *context, const u8 *data, size_t length,
 
 	mock->calls++;
 	if (mock->mode == 6) {
-		ws73_identity_abort(&mock->request, -ENODEV);
+		ws73_platform_abort(&mock->request, -ENODEV);
 		return length;
 	}
 	if (get_unaligned_le32(data))
@@ -50,14 +50,14 @@ static int ws73_runtime_send(void *context, const u8 *data, size_t length,
 		mock->now = mock->request.deadline;
 	if (mock->mode == 5) {
 		put_unaligned_le16(7, mock->reply + 4);
-		mock->received = ws73_identity_receive(&mock->request, mock->reply, 32, mock->now);
+		mock->received = ws73_platform_receive(&mock->request, mock->reply, 32, mock->now);
 		put_unaligned_le16(10, mock->reply + 4);
 		if (mock->received != -ENOENT)
 			return -EPROTO;
 	}
-	mock->received = ws73_identity_receive(&mock->request, mock->reply, 32, mock->now);
+	mock->received = ws73_platform_receive(&mock->request, mock->reply, 32, mock->now);
 	if (mock->mode == 2)
-		ws73_identity_receive(&mock->request, mock->reply, 32, mock->now);
+		ws73_platform_receive(&mock->request, mock->reply, 32, mock->now);
 	if (mock->mode == 3)
 		return -EPIPE; /* A reply cannot conceal a local TX error. */
 	return length;
@@ -69,7 +69,7 @@ static struct ws73_runtime_mock *ws73_runtime_fixture(struct kunit *test, unsign
 
 	if (!mock)
 		return NULL;
-	ws73_identity_init(&mock->request);
+	ws73_platform_init(&mock->request);
 	ws73_usb_tx_init(&mock->tx);
 	init_completion(&mock->sent);
 	init_waitqueue_head(&mock->stop_wait);
@@ -96,16 +96,16 @@ static void ws73_runtime_query_test(struct kunit *test)
 	struct btws73_chip_identity chip = { 0xa5, 0xa5 };
 
 	KUNIT_ASSERT_NOT_NULL(test, mock);
-	KUNIT_EXPECT_EQ(test, ws73_identity_receive(&mock->request, mock->reply, 32, 0),
+	KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, mock->reply, 32, 0),
 			-EALREADY);
-	KUNIT_ASSERT_EQ(test, ws73_identity_query(&mock->request, &mock->tx,
+	KUNIT_ASSERT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
 			&mock->io, 100, &chip), 0);
 	KUNIT_EXPECT_EQ(test, chip.package, 2);
 	KUNIT_EXPECT_EQ(test, chip.bus, 0);
 	KUNIT_EXPECT_EQ(test, mock->calls, 3);
-	KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, &mock->tx,
+	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
 			&mock->io, 100, &chip), -EALREADY);
-	KUNIT_EXPECT_EQ(test, ws73_identity_receive(&mock->request, mock->reply, 32, 0),
+	KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, mock->reply, 32, 0),
 			-EALREADY);
 	KUNIT_EXPECT_EQ(test, mock->calls, 3);
 }
@@ -122,7 +122,7 @@ static void ws73_runtime_failures_test(struct kunit *test)
 		mock = ws73_runtime_fixture(test, mode);
 		KUNIT_ASSERT_NOT_NULL(test, mock);
 		chip = before;
-		KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, &mock->tx,
+		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
 				&mock->io, mode == 1 ? 1 : 100, &chip), expected[mode]);
 		calls = mock->calls;
 		KUNIT_EXPECT_EQ(test, calls, mode == 6 ? 1 : 3);
@@ -132,9 +132,9 @@ static void ws73_runtime_failures_test(struct kunit *test)
 		/* Even clearing the fake clock/fault cannot admit a late reply. */
 		mock->now = 0;
 		mock->mode = 0;
-		KUNIT_EXPECT_EQ(test, ws73_identity_receive(&mock->request, mock->reply, 32, 0),
+		KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, mock->reply, 32, 0),
 				expected[mode]);
-		KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, &mock->tx,
+		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
 				&mock->io, 100, &chip), expected[mode]);
 		KUNIT_EXPECT_EQ(test, mock->calls, calls);
 		KUNIT_EXPECT_MEMEQ(test, &chip, &before, sizeof(chip));
@@ -165,7 +165,7 @@ static void ws73_runtime_reply_errors_test(struct kunit *test)
 			put_unaligned_le32(3, mock->reply + 12);
 			expected = -EMSGSIZE;
 		}
-		KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, &mock->tx,
+		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
 				&mock->io, 100, &chip), expected);
 		KUNIT_EXPECT_MEMEQ(test, &chip, &before, sizeof(chip));
 	}
@@ -177,19 +177,19 @@ static void ws73_runtime_admission_test(struct kunit *test)
 	struct btws73_chip_identity chip = { 0xa5, 0xa5 };
 
 	KUNIT_ASSERT_NOT_NULL(test, mock);
-	KUNIT_EXPECT_EQ(test, ws73_identity_query(NULL, &mock->tx, &mock->io, 100, &chip),
+	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(NULL, &mock->tx, &mock->io, 100, &chip),
 			-EINVAL);
-	KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, NULL, &mock->io, 100, &chip),
+	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, NULL, &mock->io, 100, &chip),
 			-EINVAL);
-	KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, &mock->tx, NULL, 100, &chip),
+	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx, NULL, 100, &chip),
 			-EINVAL);
-	KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, &mock->tx, &mock->io, 100, NULL),
+	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, NULL),
 			-EINVAL);
-	KUNIT_EXPECT_EQ(test, ws73_identity_receive(NULL, mock->reply, 32, 0), -EINVAL);
-	KUNIT_EXPECT_EQ(test, ws73_identity_receive(&mock->request, NULL, 32, 0), -EINVAL);
-	ws73_identity_abort(&mock->request, -ENODEV);
-	ws73_identity_abort(&mock->request, -ETIMEDOUT);
-	KUNIT_EXPECT_EQ(test, ws73_identity_query(&mock->request, &mock->tx, &mock->io, 100, &chip),
+	KUNIT_EXPECT_EQ(test, ws73_platform_receive(NULL, mock->reply, 32, 0), -EINVAL);
+	KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, NULL, 32, 0), -EINVAL);
+	ws73_platform_abort(&mock->request, -ENODEV);
+	ws73_platform_abort(&mock->request, -ETIMEDOUT);
+	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, &chip),
 			-ENODEV);
 	KUNIT_EXPECT_EQ(test, mock->calls, 0);
 	KUNIT_EXPECT_EQ(test, chip.package, 0xa5);
@@ -200,7 +200,7 @@ static int ws73_runtime_rx_thread(void *context)
 	struct ws73_runtime_mock *mock = context;
 
 	if (wait_for_completion_timeout(&mock->sent, HZ))
-		mock->received = ws73_identity_receive(&mock->request, mock->reply, 32, 0);
+		mock->received = ws73_platform_receive(&mock->request, mock->reply, 32, 0);
 	/* Keep the task alive until the test's managed teardown joins it. */
 	wait_event_interruptible(mock->stop_wait, kthread_should_stop());
 	return 0;
@@ -221,7 +221,7 @@ static void ws73_runtime_independent_rx_test(struct kunit *test)
 	task = kthread_run(ws73_runtime_rx_thread, mock, "ws73-test-rx");
 	KUNIT_ASSERT_FALSE(test, IS_ERR(task));
 	KUNIT_ASSERT_EQ(test, kunit_add_action_or_reset(test, ws73_runtime_stop_thread, task), 0);
-	KUNIT_ASSERT_EQ(test, ws73_identity_query(&mock->request, &mock->tx,
+	KUNIT_ASSERT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
 			&mock->io, 1000, &chip), 0);
 	KUNIT_EXPECT_EQ(test, chip.package, 2);
 	KUNIT_EXPECT_EQ(test, mock->calls, 3);

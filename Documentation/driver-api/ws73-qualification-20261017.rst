@@ -370,3 +370,65 @@ Artifact SHA-256 values for the physical observation::
 24-case KUnit manifest SHA-256::
 
    9c31a1d8c519f5f6d55f00e6e065b181e8b54f16db083bdae71e1be20f43aa53
+
+Runtime USB wire and bounded sender increment
+---------------------------------------------
+
+Signed implementation commits ``ecc305265e3b`` and ``196d9f407ee6`` add
+runtime single-record/control encoding, complete aggregate validation for
+queues 7/9, and per-instance synchronous transmit sequencing. The USB parent
+still performs only boot observation; no runtime frame is sent to hardware.
+
+The full 32-case x86-64 KASAN/UBSAN VM run at
+``records/20261017T063017.538974Z`` passed on clean compiled source
+``196d9f407ee6bcf74e7909d4eca7805744c79e71``. Its manifest SHA-256 is::
+
+   0411d1b7d78937dfd2967bb7e23c23d1f985dc51ba1da6c7e0b51313325ce5ed
+
+The eight new cases exercise production envelope parsers/encoders and the
+sender: full control/data byte fixtures, all shorter capacities, all input
+lengths through the 4096-byte record bound, all 16-bit platform lengths,
+unaligned maximum aggregates, every truncation, high queue bits, inconsistent
+final records and unchanged outputs on errors. Sender tests cover initial
+switch/reset/data, same-queue reuse, switching, two independent instances,
+sequence wrap, and short/oversized/error/timeout/cancel at every transfer.
+Failed sessions reject subsequent sends even after an external fault clears.
+Invalid records cause no transport call. These tests do not establish
+concurrent URB teardown, device credit, platform transaction matching,
+firmware initialization or Bluetooth operation.
+
+Two earlier wire-only attempts used ``1087f0387402`` plus the archived dirty
+patch SHA-256 ``f45fe063f6e490687cd54e7ec2611591c53a8d4cab86615e9093cdd9445ccecc``:
+
+* ``20261017T062658.512512Z``: FAIL; compilation succeeded but QEMU could not
+  bind its private QMP socket inside the sandbox. No KTAP cases ran. The
+  supervisor rejected the missing results rather than declaring success.
+* ``20261017T062727.575889Z``: PASS, 29 cases, after running the same source
+  in the authorized VM environment. This dirty-source qualification is
+  recorded separately from the later clean 32-case result.
+
+All attempts retain source patches, configurations, compiled objects, VM
+logs, results and manifests under the independent private records directory.
+Both code increments passed diff whitespace checking and checkpatch with
+zero errors; each has the generic new-file MAINTAINERS reminder. A complete
+maintainer entry remains part of the actual-consumer submission series.
+
+Integration follow-up from SDK110: bulk data whose size is a multiple of
+endpoint maximum packet size needs the SDK's ZLP semantics in the actual
+USB adapter. BLE open/close uses class/interface USB control request 0,
+value/index 0, four-byte message ID 25/26; it is separate from the queue-9
+platform HCC request path. Neither is wired to a physical runtime instance
+in this increment. Actual enable replies/status, tokenless reply quarantine,
+continuous RX and auxiliary/HCI consumer lifetimes remain implementation
+work, not passed gates. Cold-start U/E validity and hardware resources remain
+as recorded in the previous boot-observation section.
+
+The separate core-only run ``records/20261017T063058.444541Z`` passed all
+16 shared cases on the same clean compiled source, with NET disabled and
+Bluetooth/USB-driver configuration absent. Its manifest SHA-256 is::
+
+   ca5d0c3b9e3ce21f0a7b663dc5c52d5dea3619bb7f4028d00d16798a597142d6
+
+The full and core-only runs use separate saved artifacts despite sharing the
+fixed incremental build directory. This confirms the current helpers build
+without Bluetooth; it does not qualify future BLE/Wi-Fi module combinations.

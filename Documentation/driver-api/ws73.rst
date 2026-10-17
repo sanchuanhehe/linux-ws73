@@ -57,8 +57,8 @@ The owner must establish verified U/E USB identity, firmware epoch/version,
 board/address inputs and startup handshakes, then disable/drain the initial BLE
 session before publishing. These are constructor preconditions, not facts that
 an arbitrary caller can prove by passing a boolean. The current USB observer
-**does not call this constructor**. Only the explicit synthetic KUnit backends
-publish endpoints so far; they do not supply hardware qualification.
+**does not call the publication operation**. Only explicit synthetic KUnit
+backends publish endpoints so far; they do not supply hardware qualification.
 
 The owner must abort IO and join RX/fault producers before removal. Removal
 closes admission, joins active backend calls, clears backend pointers and
@@ -107,6 +107,38 @@ namespace, avoiding duplicate definitions when both the consumer and codec
 KUnit tests are enabled. BT_WS73 depends on WS73_USB, constraining built-in/
 module combinations. The shared core selects auxiliary bus but not Bluetooth
 or mac80211. Build and VM commands are in ``tools/testing/ws73/README``.
+
+Runtime BLE backend and gated publication
+----------------------------------------
+
+``ble-link.c`` connects auxiliary enable/disable to the actual BLE action engine
+and command/ACL records to the shared USB TX sequencer. Each call uses an absolute
+2000-ms deadline with saturating arithmetic; success still requires exact local
+transfer length and, for actions, a matching device reply. An action failure
+faults BLE locally. A TX sequencing/transport failure also calls the physical
+owner's fault handler because the shared TX object is terminal.
+
+The USB parent owns this adapter, routes validated queue-7 records to it and
+routes post-startup BLE notifications to its action engine. RX removes only the
+four-byte HCC header and padding; H4 validation/reassembly remains in Bluetooth.
+The receive/fault routing lock pins the child during callbacks. No sleeping
+operation is performed under that lock. Shared fault closes the adapter; removal
+aborts waiters, drains USB and initialization producers, detaches child routing,
+then removes the endpoint and joins its backend calls before freeing the parent.
+
+Publication checks startup DONE and acknowledged BLE DISABLED state, with no
+retry after an adapter fault. The owner must separately establish identity,
+firmware/board/address validity and drain old device data. These state checks
+cannot prove a cold epoch or a hardware drain. A two-phase auxiliary allocation
+installs routing before device registration can synchronously probe a consumer.
+If that probe faults the adapter, publication removes the registered child and
+returns the retained error. Registration does not imply HCI initialization.
+
+The physical observer still never invokes publication, startup arm/run or the
+loader. The adapter's action/data operations execute in injected-I/O KUnit,
+including a synchronous auxiliary probe; real control URBs and an end-to-end
+USB-to-native-HCI session remain unexecuted. No firmware gate, default address,
+board override or user ABI was added.
 
 Runtime USB framing baseline
 ----------------------------
@@ -300,9 +332,9 @@ before invoking an action, and independently check boot/address/HCI setup before
 publishing readiness. Tokenless replies cannot authenticate an old epoch or an
 old same-kind reply delayed across multiple successful action cycles. Ordered
 one-reply-per-command device behavior remains a qualification assumption, not
-something the synthetic repeated-action tests prove. Auxiliary/HCI registration
-and its caller lifetime/drain remain pending; no action caller is currently
-registered in the USB parent.
+something the synthetic repeated-action tests prove. The auxiliary/HCI consumer
+and runtime adapter now implement caller lifetime/drain; physical publication
+is still gated and no action caller is registered by USB initialization.
 
 Customization encoding
 ----------------------
@@ -763,8 +795,8 @@ kills anchored URBs and joins initialization before releasing the parent;
 each transfer joins its completion before freeing its request storage.
 The worker does not retry failed reads or register functions. Runtime USB
 queue sequencing and RX/IRQ callback drain are implemented. The new BLE
-endpoint and HCI queue/stop contracts still need connection to the qualified
-USB startup path. The native consumer has explicit synthetic positive data-path
+endpoint and HCI queue/stop contracts now have a runtime backend, but publication
+still needs the qualified USB startup path. The native consumer has explicit synthetic positive data-path
 checks; these are not USB integration or hardware qualification.
 Protocol HCI credits remain separate from
 USB queue slots. A BLE close must not reset an active Wi-Fi consumer.

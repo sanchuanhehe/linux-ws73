@@ -25,7 +25,9 @@ pointer and timestamped artifacts live under ../.dev/ws73-upstream.
 
 The runner requires the build's clean source commit to match the current
 worktree, including tools and documentation. Rebuild after committing changes.
-It checks the exact required artifact set and hashes before starting QEMU.
+It checks the exact required artifact set and hashes before starting QEMU,
+including the BLE endpoint and runtime-link objects. The fixture leaves
+publication gated; having those objects does not mean a BLE child was exercised.
 ACPI and PCI are required for this Q35 guest to power off: ACPI's default
 PCI_Config region handler depends on PCI. Guest shutdown must terminate QEMU
 successfully; a fixture PASS line followed by a process timeout is a failure.

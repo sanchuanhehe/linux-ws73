@@ -1310,3 +1310,80 @@ Wi-Fi and upstream gates remain open. The Wi-Fi TX-status source audit in
 ws73.rst was advanced independently during this build; it provides no runtime
 firmware qualification. No physical device operation or external submission
 occurred. Documentation commits do not replace the exact tested source above.
+
+Runtime BLE backend, publication ordering and USB teardown
+---------------------------------------------------------
+
+Source ``6acd0f8a27a6026000149901df9bd96e7c7a4c73`` connects the actual auxiliary
+backend operations to BLE action transactions and the bounded shared USB TX
+sequencer. The USB owner now routes validated queue-7 records, post-startup
+action replies and shared faults through the adapter. Disconnect aborts the
+adapter, joins USB/init producers, then detaches and removes the child before
+freeing the parent. Physical observation still never calls publication.
+
+Publication requires startup DONE and acknowledged BLE DISABLED; identity,
+firmware/board/address validity and old-data drain remain separate owner
+preconditions. Routing is installed before auxiliary_device_add can probe.
+Final functional source ``c7e74a4b614a785420a533c4a5d1084b5b6c0152`` also checks
+for synchronous probe faults after add and rolls back the child with the
+retained error. Successful registration is not HCI or firmware readiness.
+
+Seven new injected-I/O tests use the actual startup, customization, action,
+USB TX, aggregate decoder and shared endpoint code. They cover unarmed and
+still-enabled publication rejection; startup/acknowledged disable/publication,
+start/send/receive/stop; delayed final references after removal; action short
+transfer remaining BLE-local; TX short transfer notifying the physical owner;
+synchronous probe RX before registration returns; abort inside that probe and
+publication rollback; and U64_MAX deadline rejection without a control send.
+A synthetic auxiliary consumer is used here, not the native HCI driver.
+
+The first run passes 75 of 76 cases and fails the new action-short-transfer
+case: its expected errno was incorrectly copied from the bulk TX contract.
+The existing action engine returns -EMSGSIZE; the test expected -EREMOTEIO.
+The assertion was corrected to the existing contract, without weakening checks
+or changing production error behavior. This failed attempt remains recorded.
+The final regular configuration passes 79 cases (existing 72 plus seven link
+cases). A separate native HCI/codec VM passes its 26 existing cases after the
+auxiliary allocation/registration refactor. These are separate configurations,
+not an end-to-end native HCI-through-USB qualification.
+
+At the same final source, the hardware-free USB build passes with NET disabled.
+Runtime full/high-speed fixtures pass 17 cases each; boot full/high-speed pass
+14 each. They exercise observation and teardown with no published BLE child,
+not class-control/startup or BLE traffic. The fresh negative supervisors reject
+32 runtime and 22 boot log corruptions, plus five artifact corruptions per phase.
+The required artifact sets now include ble.o and ble-link.o. The public all-module
+build passes too, including the new WS73 namespace exports. No host module was
+loaded. The changed C/header files are strict-checkpatch clean.
+
+Evidence manifests, including the failed attempt (SHA-256):
+
+* ``20261017T102843.804386Z`` (FAIL, action errno assertion),
+  ``9d315135116fff1228f495f20c5ef1e5001ab422a25012bef26dd1d5d75d94c2``.
+* ``20261017T103240.003553Z`` (79 KUnit PASS),
+  ``3d1ca498c96cac06d74c8922c58c0ed86b8d67db87227163e52315d120424262``.
+* ``20261017T103316.478857Z`` (26 HCI/codec KUnit PASS),
+  ``db9bb43523d1bc4a57b3734f93b4a7488271fbb5ce0ff0279cf17b8bf6ccdfd5``.
+* ``virtual-usb-build-20261017T103631.848315Z`` (USB build PASS, NET disabled),
+  ``55010ea7f64a87c5b02cda69204f3b049251af90249060bfef75abd367d734a4``.
+* ``virtual-usb-20261017T103707.855174Z`` (runtime full-speed PASS),
+  ``b95656468473626a864ea6fb5354ac08cb51ea4ef44fd0f2a24ca7590b64d8e7``.
+* ``virtual-usb-20261017T103718.516891Z`` (runtime high-speed PASS),
+  ``14a0824b4fc53ec14d54c8e03733ccc951e97e5621fa150b3c01b11c72cd02a8``.
+* ``virtual-usb-20261017T103728.605798Z`` (boot full-speed PASS),
+  ``b2de04702e7cf2e4316637134503714740c13a0910d58eb7db1805a73ada7dbf``.
+* ``virtual-usb-20261017T103740.537886Z`` (boot high-speed PASS),
+  ``86324ca057243752c17724c5a0c9dcfafc42aec9c9303cdc821b791bcc5318e6``.
+* ``virtual-usb-negative-20261017T103810.547135Z`` (runtime supervisor PASS),
+  ``2ca7c5123edd5d2d5d1f880cbe44739f5543bba37faf96ccb547d206783ff5cf``.
+* ``virtual-usb-negative-20261017T103810.543217Z`` (boot supervisor PASS),
+  ``f75cba7fbcec07692ba59d53e74eb2b52e458ecf1742f209554d879ee1ee11c4``.
+* ``hci-build-module-20261017T103800.415851Z`` (all-module compile/link PASS),
+  ``4fbb7504de292b4c49bcdd9bb776c044d5bdc6d949d3251c329774a79e0e3578``.
+
+The KUnit/USB VMs retain SMP, KASAN, UBSAN, lockdep and DEBUG_ATOMIC_SLEEP;
+HCI-only also retains FAILSLAB. No physical operation, firmware download or
+external submission occurred. Cold U/E, trusted board/trim and epoch, hardware
+data drain, parent loader/startup integration and publication, real USB class
+requests, full HCI initialization, BLE peer/AP, Wi-Fi and upstream review remain
+open. Documentation-only commits do not replace the tested source identities.

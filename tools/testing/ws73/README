@@ -14,7 +14,11 @@ Never install these kernels/modules or run driver experiments on the host.
   python3 tools/testing/ws73/build-hci.py builtin
 
 The default KUnit mode runs protocol, firmware, startup and shared endpoint
-checks without binding the native HCI consumer. Core-only disables NET and
+checks without binding the native HCI consumer. Runtime-link tests drive actual
+startup/action and USB TX engines with explicit synthetic replies, exercise
+gated publication and synchronous auxiliary probing, and separate local action
+faults from shared transport faults. They do not execute real control URBs.
+Core-only disables NET and
 Bluetooth. HCI-only binds the production auxiliary/HCI consumer to synthetic backends.
 It verifies failed enable, terminal rebind, two setup queries, packet ownership
 and packet/byte queue bounds. It also checks ACL fragment copying at every

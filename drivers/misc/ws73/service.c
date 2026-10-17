@@ -21,11 +21,11 @@ int ws73_notification_decode(const u8 *record, size_t length,
 	if (record[0] != 0x50 || record[1] != 10)
 		return -EPROTO;
 	payload = get_unaligned_le16(record + 2);
-	if (payload < 8 || payload > length)
+	if (payload < 4 || payload > length - 4)
 		return -EMSGSIZE;
 	tag = get_unaligned_le16(record + 4);
 	size = get_unaligned_le16(record + 6);
-	if (size > payload - 8)
+	if (size > payload - 4)
 		return -EMSGSIZE;
 	if (tag != 2 && tag != 4)
 		return -EOPNOTSUPP;

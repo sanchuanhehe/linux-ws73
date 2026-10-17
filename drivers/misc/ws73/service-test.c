@@ -10,7 +10,7 @@ static void ws73_notification_fixture(u8 *record, u16 tag, u32 value)
 	memset(record, 0, 16);
 	record[0] = 0x50;
 	record[1] = 10;
-	put_unaligned_le16(12, record + 2);
+	put_unaligned_le16(8, record + 2);
 	put_unaligned_le16(tag, record + 4);
 	put_unaligned_le16(4, record + 6);
 	put_unaligned_le32(value, record + 8);
@@ -18,7 +18,7 @@ static void ws73_notification_fixture(u8 *record, u16 tag, u32 value)
 
 static void ws73_notification_valid_test(struct kunit *test)
 {
-	static const u8 wire[] = { 0x50, 10, 12, 0, 4, 0, 4, 0, 0, 0, 0, 0 };
+	static const u8 wire[] = { 0x50, 10, 8, 0, 4, 0, 4, 0, 0, 0, 0, 0 };
 	enum ws73_notification event;
 	u8 storage[17], *record = storage + 1;
 	unsigned int i;
@@ -32,7 +32,7 @@ static void ws73_notification_valid_test(struct kunit *test)
 		memset(record + 12, 0xa5, 4); /* Transport padding is not a new message. */
 		KUNIT_ASSERT_EQ(test, ws73_notification_decode(record, 16, &event), 0);
 		KUNIT_EXPECT_EQ(test, event, i);
-		put_unaligned_le16(16, record + 2);
+		put_unaligned_le16(12, record + 2);
 		KUNIT_ASSERT_EQ(test, ws73_notification_decode(record, 16, &event), 0);
 		KUNIT_EXPECT_EQ(test, event, i);
 	}
@@ -55,11 +55,11 @@ static void ws73_notification_invalid_test(struct kunit *test)
 		event = 99;
 		put_unaligned_le16(i, record + 2);
 		ret = ws73_notification_decode(record, sizeof(record), &event);
-		KUNIT_EXPECT_EQ(test, ret, i >= 12 && i <= 16 ? 0 : -EMSGSIZE);
+		KUNIT_EXPECT_EQ(test, ret, i >= 8 && i <= 12 ? 0 : -EMSGSIZE);
 		if (ret)
 			KUNIT_EXPECT_EQ(test, event, 99);
 	}
-	put_unaligned_le16(12, record + 2);
+	put_unaligned_le16(8, record + 2);
 	for (i = 0; i <= U16_MAX; i++) {
 		event = 99;
 		put_unaligned_le16(i, record + 6);

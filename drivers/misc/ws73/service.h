@@ -13,8 +13,8 @@ enum ws73_notification {
 
 /*
  * Decode SDK110 service 5, subtype 0 (byte 0 = 0x50), queue 10 notifications.
- * The HCC
- * length includes its header; the tag length excludes HCC and tag headers.
+ * The RX HCC length excludes its header; the tag length excludes both
+ * HCC and tag headers. Do not apply the SDK Host TX allocation-size quirk.
  * Input may include transport padding. No borrowed storage escapes.
  * Unsupported tags/SLE actions return -EOPNOTSUPP; malformed known messages
  * return another errno. Output is unchanged on any error. A notification

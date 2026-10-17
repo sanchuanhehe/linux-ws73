@@ -279,6 +279,43 @@ adding a caller must join it before releasing the parent; the current parent
 has no customization caller. Synthetic tests cover actual production transport
 sequencing and an independent RX thread, not a physical customization exchange.
 
+Startup handshake coordinator
+-----------------------------
+
+``startup.c`` sequences the actual customization and BLE action engines:
+BSP_READY, customization TX/acknowledgement, BLE open TX/action, then BOOT_FINISH.
+It holds independent BSP and BOOT completions. A one-shot arm operation captures
+notifications before RX starts; the sleepable run follows identity/firmware and
+board qualification. BOOT received after arm but before its wait is retained.
+Unarmed notifications cannot satisfy a later session. Repeated BSP/BOOT are
+idempotent status observations, unlike duplicate transaction acknowledgements.
+An IRQ panic or high-priority loss overrides BSP in the same interrupt word.
+
+The arm operation fixes an absolute deadline capped to 12000 ms; stages cannot
+extend it. BSP waiting is additionally bounded to 6000 ms and BOOT waiting to
+2000 ms; the two transaction engines retain their own 2000-ms limits. All clocks
+share one monotonic millisecond domain. This is a bounded host policy, not a
+measured device startup guarantee. The SDK board PM code waits 1000 ms then
+5000 ms for BSP; its adjacent ``// 20000`` comment is not the executed value.
+The status helper sleeps 10 ms and compares a millisecond timestamp against 2000.
+
+The coordinator never holds its state spinlock across a transaction or callback.
+Abort wakes both status waiters and aborts both transaction engines outside that
+lock. Missing status, cancellation, transfer failure or contradiction prevents
+later stages and retains a terminal failure. There is no automatic disable,
+reset or retry after an uncertain startup. DONE means only these four handshakes
+completed; address setup, HCI command completion and native consumer registration
+are separate requirements. Tokenless notifications cannot establish firmware
+epoch or board validity.
+
+The USB parent owns this coordinator, routes validated notifications and aborts
+it during shared failure/removal. Current observation-only initialization does
+not arm or run it. The integrated production-engine tests use injected transport
+and explicit synthetic notification delivery, including a separate RX thread.
+They do not exercise USB control URBs or justify calling the physical startup
+path before the firmware/identity/board gates are met. Future callers must be
+stopped and joined before parent release.
+
 BLE initialization audit (SDK110)
 --------------------------------
 

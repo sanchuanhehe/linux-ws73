@@ -11,8 +11,7 @@
 #include <linux/workqueue.h>
 
 #include "boot.h"
-#include "ble-control.h"
-#include "customize-request.h"
+#include "startup.h"
 #include "runtime.h"
 
 struct ws73_usb {
@@ -23,9 +22,8 @@ struct ws73_usb {
 	struct work_struct stop;
 	struct ws73_usb_tx tx;
 	struct ws73_platform_request identity;
-	struct ws73_ble_control ble;
+	struct ws73_startup startup;
 	struct ws73_ble_control_io ble_io;
-	struct ws73_customize_request customization;
 	struct urb *rx_urb;
 	struct urb *interrupt_urb;
 	u8 *rx_buffer;
@@ -62,8 +60,7 @@ static void ws73_usb_fail(struct ws73_usb *ws, int error)
 	}
 	spin_unlock_irqrestore(&ws->lock, flags);
 	ws73_platform_abort(&ws->identity, error);
-	ws73_ble_control_abort(&ws->ble, error);
-	ws73_customize_abort(&ws->customization, error);
+	ws73_startup_abort(&ws->startup, error);
 	if (first)
 		schedule_work(&ws->stop);
 }
@@ -219,6 +216,9 @@ static void ws73_usb_interrupt_complete(struct urb *urb)
 		ret = -ENOBUFS;
 		goto fail;
 	}
+	ret = ws73_startup_interrupt(&ws->startup, &notification, ktime_to_ms(ktime_get()));
+	if (ret && ret != -ENOENT)
+		dev_dbg_ratelimited(&ws->interface->dev, "startup BSP rejected: %d\n", ret);
 	if ((notification.events & WS73_INTERRUPT_BSP_READY) && !ws->bsp_seen) {
 		ws->bsp_seen = true;
 		dev_info(&ws->interface->dev,
@@ -267,17 +267,12 @@ static void ws73_usb_rx_complete(struct urb *urb)
 		for (i = 0; i < rx.count; i++) {
 			u8 bit = BIT(rx.notification[i]);
 
-			ret = ws73_customize_receive(&ws->customization, rx.notification[i],
-						     ktime_to_ms(ktime_get()));
-			if (ret && ret != -ENOENT)
-				dev_dbg_ratelimited(&ws->interface->dev,
-						    "customization reply rejected: %d\n", ret);
-			ret = ws73_ble_control_receive(&ws->ble, rx.notification[i],
+			ret = ws73_startup_receive(&ws->startup, rx.notification[i],
 						       ws73_usb_now(ws));
 			if (ret && ret != -ENOENT) {
 				/* An action failure belongs to BLE, not an active sibling. */
 				dev_dbg_ratelimited(&ws->interface->dev,
-						    "BLE action reply rejected: %d\n", ret);
+						    "startup reply rejected: %d\n", ret);
 				continue;
 			}
 			if (ws->notifications_seen & bit)
@@ -421,8 +416,7 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	INIT_WORK(&ws->stop, ws73_usb_stop);
 	ws73_usb_tx_init(&ws->tx);
 	ws73_platform_init(&ws->identity);
-	ws73_ble_control_init(&ws->ble);
-	ws73_customize_request_init(&ws->customization);
+	ws73_startup_init(&ws->startup);
 	ws->ble_io = (struct ws73_ble_control_io) {
 		.context = ws,
 		.now_ms = ws73_usb_now,
@@ -466,8 +460,7 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	WRITE_ONCE(ws->disconnected, true);
 	spin_unlock_irqrestore(&ws->lock, flags);
 	ws73_platform_abort(&ws->identity, -ENODEV);
-	ws73_ble_control_abort(&ws->ble, -ENODEV);
-	ws73_customize_abort(&ws->customization, -ENODEV);
+	ws73_startup_abort(&ws->startup, -ENODEV);
 	usb_kill_anchored_urbs(&ws->submitted);
 	usb_kill_urb(ws->rx_urb);
 	usb_kill_urb(ws->interrupt_urb);

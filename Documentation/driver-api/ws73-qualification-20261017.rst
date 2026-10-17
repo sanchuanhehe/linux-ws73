@@ -432,3 +432,84 @@ Bluetooth/USB-driver configuration absent. Its manifest SHA-256 is::
 The full and core-only runs use separate saved artifacts despite sharing the
 fixed incremental build directory. This confirms the current helpers build
 without Bluetooth; it does not qualify future BLE/Wi-Fi module combinations.
+
+Runtime identity and synthetic USB integration
+---------------------------------------------
+
+Signed production commit ``4dae17439a45`` adds a one-shot GET_CHIP_TYPE waiter
+with independent RX completion, terminal abort and no request reuse. The USB
+parent consumes it on a validated five-endpoint runtime interface. The boot
+READM gate remains unchanged. No firmware download or function registration
+is enabled; a runtime observation is not a verified firmware epoch or version.
+
+Clean compiled source ``4dae17439a45`` passed 37 KUnit cases in the independent
+x86-64 KASAN/UBSAN VM, record ``20261017T064546.582441Z``. The five new cases
+cover replies before local TX completion, unrelated IDs, repeated/late replies,
+error/malformed replies, TX failure after a reply, pre-admission removal,
+abort during queue control, one-shot admission and a separate kernel RX thread.
+The manifest SHA-256 is::
+
+   048e0f6d3ea87f973fb9c0471e890b5951fab7c77bb71e1469ae851c5d41fd5e
+
+A separate hardware-free VM kernel from the same clean source was built with
+NET/Bluetooth/KUnit disabled, and WS73_USB, dummy_hcd, FunctionFS, KASAN,
+UBSAN, PROVE_LOCKING, DEBUG_MUTEXES, DEBUG_SPINLOCK and DEBUG_ATOMIC_SLEEP
+enabled. Its build record is ``virtual-usb-build-20261017T064921.437287Z``;
+manifest SHA-256::
+
+   f6dc989c23e5486ed025df8a34b41aa77af689e3179d3a17f045f59504118e2e
+
+The newly written guest PID 1 constructs a synthetic five-endpoint USB device
+inside that VM, checks all bytes of switch/reset/query OUT transfers and
+supplies synthetic platform replies. It binds/unbinds five fresh instances:
+package E/USB reply, package U/USB reply, device error status, truncated
+aggregate, and disconnect while awaiting the identity reply. These package
+values are fixtures, not observations of U/E hardware or firmware execution.
+There are no physical USB devices, host controller passthrough, network or
+disks in the VM command. Only the guest's dummy UDC is permitted by the fixture.
+
+Both final runs passed all five cases, each observing 15 exact OUT transfers,
+four IN replies and five disconnects. The full-speed 128-byte data transfer
+terminates a 512-byte receive request through the ZLP path; high-speed uses
+the same bytes with its different maximum packet size. Runtime state and USB
+sequence restart for each new instance. Kernel and fixture reports use separate
+serial ports; the fixture records the actual /dev/kmsg events before declaring
+each case complete, avoiding printk delivery-order assumptions.
+
+* Full-speed: ``virtual-usb-20261017T065533.532982Z``, manifest SHA-256
+  ``b39a7dd76d6b191cbc3f94a0e6c514a9d9bc0128a50ec59780c141e3d536e334``.
+* High-speed: ``virtual-usb-20261017T065626.165023Z``, manifest SHA-256
+  ``9ddaac292285802e6515357a0407c51b0bdbdf3358a0956fc5e01d0c420994cf``.
+
+All earlier attempts are retained:
+
+* ``virtual-usb-20261017T065208.162062Z`` failed fixture setup: configfs did
+  not resolve the relative function symlink. Switching to an absolute guest
+  configfs path fixed the fixture; no driver change was made.
+* ``virtual-usb-20261017T065230.384949Z`` failed the removal expectation.
+  USB core delivered -ESHUTDOWN before disconnect's -ENODEV. Preserving that
+  first terminal error is intentional; the fixture now accepts those two
+  removal orderings, without accepting unrelated errors.
+* ``virtual-usb-20261017T065400.844408Z`` passed with shared-console reporting,
+  but printk and fixture output could interleave. The final two-port runs
+  replace it as the preferred trace evidence, without deleting it.
+
+The final supervisor was checked against an actual passing report plus 15
+negative controls: missing/duplicate overall result, missing case, short/extra
+TX, missing/wrong RX, missing disconnect, KASAN/UBSAN/lockdep report, wrong
+identity/removal errno, missing captured kernel record and wrong USB speed.
+The result is ``virtual-usb-supervisor-negative-v2.json``; it qualifies the
+text verifier's rejection behavior, not additional transport behavior.
+
+The private ``.dev/ws73-upstream/virtual-usb-tools/`` harness and each record
+preserve helper C, runner/build scripts, compiler commands, libc/loader hashes,
+initramfs, exact kernel/configuration, tool hashes and both raw logs. Promotion
+of this prototype harness into a portable in-tree test entry point is pending;
+these are local reproducible records, not a claim of published CI coverage.
+
+No sanitizer, lockdep or atomic-sleep report occurred in the qualified runs.
+Allocation failure, module unload, all callback races, interrupt notifications,
+register endpoints, arbitrary control transaction reuse, version/boot identity
+agreement, firmware loading, auxiliary/HCI consumers and peer traffic remain
+unqualified. This increment operated no physical WS73 device and does not
+change the previous OBSERVATION_PASS_NOT_COLD hardware result.

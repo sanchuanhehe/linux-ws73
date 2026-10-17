@@ -99,7 +99,8 @@ cannot distinguish a stale device-generated reply from a fresh reply with the
 same ID. This implementation does not use such an observation to register a
 function or bypass the boot/cold-start and firmware-version gates. Boot and
 runtime objects do not share requests, callbacks or identity cache. Unknown
-services are dropped; malformed supported aggregates terminate the observation.
+outer types/queues are dropped; malformed or unsupported records in supported
+aggregates terminate the observation.
 BLE frames have no consumer yet and are not presented as HCI events.
 
 The first batch checks source/firmware identities, implements bounded BLE

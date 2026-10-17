@@ -126,7 +126,8 @@ def main():
                     "drivers/misc/ws73/usb-wire.o", "drivers/misc/ws73/usb-wire-test.o",
                     "drivers/misc/ws73/usb-tx.o", "drivers/misc/ws73/usb-tx-test.o",
                     "drivers/misc/ws73/runtime.o", "drivers/misc/ws73/runtime-test.o",
-                    "drivers/misc/ws73/service.o", "drivers/misc/ws73/service-test.o"}
+                    "drivers/misc/ws73/service.o", "drivers/misc/ws73/service-test.o",
+                    "drivers/misc/ws73/ble-control.o", "drivers/misc/ws73/ble-control-test.o"}
         if not args.core_only:
             required.update({"drivers/bluetooth/btws73_proto.o",
                              "drivers/bluetooth/btws73_test.o",
@@ -167,6 +168,11 @@ def main():
                 "ws73-usb-tx": {
                     "ws73_usb_tx_sequence_test", "ws73_usb_tx_faults_test",
                     "ws73_usb_tx_admission_test",
+                },
+                "ws73-ble-control": {
+                    "ws73_ble_lifecycle_test", "ws73_ble_tx_failure_test",
+                    "ws73_ble_reply_failure_test", "ws73_ble_admission_test",
+                    "ws73_ble_independent_rx_test",
                 },
                 "ws73-service": {
                     "ws73_interrupt_wire_test", "ws73_interrupt_invalid_test",

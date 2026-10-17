@@ -10,6 +10,7 @@
 #include <linux/workqueue.h>
 
 #include "boot.h"
+#include "ble-control.h"
 #include "runtime.h"
 
 struct ws73_usb {
@@ -20,6 +21,7 @@ struct ws73_usb {
 	struct work_struct stop;
 	struct ws73_usb_tx tx;
 	struct ws73_platform_request identity;
+	struct ws73_ble_control ble;
 	struct urb *rx_urb;
 	struct urb *interrupt_urb;
 	u8 *rx_buffer;
@@ -56,6 +58,7 @@ static void ws73_usb_fail(struct ws73_usb *ws, int error)
 	}
 	spin_unlock_irqrestore(&ws->lock, flags);
 	ws73_platform_abort(&ws->identity, error);
+	ws73_ble_control_abort(&ws->ble, error);
 	if (first)
 		schedule_work(&ws->stop);
 }
@@ -242,6 +245,14 @@ static void ws73_usb_rx_complete(struct urb *urb)
 		for (i = 0; i < rx.count; i++) {
 			u8 bit = BIT(rx.notification[i]);
 
+			ret = ws73_ble_control_receive(&ws->ble, rx.notification[i],
+						       ws73_usb_now(ws));
+			if (ret && ret != -ENOENT) {
+				/* An action failure belongs to BLE, not an active sibling. */
+				dev_dbg_ratelimited(&ws->interface->dev,
+						    "BLE action reply rejected: %d\n", ret);
+				continue;
+			}
 			if (ws->notifications_seen & bit)
 				continue;
 			ws->notifications_seen |= bit;
@@ -374,6 +385,7 @@ static int ws73_usb_probe(struct usb_interface *interface, const struct usb_devi
 	INIT_WORK(&ws->stop, ws73_usb_stop);
 	ws73_usb_tx_init(&ws->tx);
 	ws73_platform_init(&ws->identity);
+	ws73_ble_control_init(&ws->ble);
 	if (runtime) {
 		ws->rx_urb = usb_alloc_urb(0, GFP_KERNEL);
 		ws->interrupt_urb = usb_alloc_urb(0, GFP_KERNEL);
@@ -411,6 +423,7 @@ static void ws73_usb_disconnect(struct usb_interface *interface)
 	WRITE_ONCE(ws->disconnected, true);
 	spin_unlock_irqrestore(&ws->lock, flags);
 	ws73_platform_abort(&ws->identity, -ENODEV);
+	ws73_ble_control_abort(&ws->ble, -ENODEV);
 	usb_kill_anchored_urbs(&ws->submitted);
 	usb_kill_urb(ws->rx_urb);
 	usb_kill_urb(ws->interrupt_urb);

@@ -82,7 +82,8 @@ def main():
         if args.core_only:
             config_text = "\n".join(
                 line for line in config_text.splitlines()
-                if not line.startswith(("CONFIG_NET=", "CONFIG_BT=", "CONFIG_BT_WS73_"))
+                if not line.startswith(("CONFIG_NET=", "CONFIG_BT=", "CONFIG_BT_WS73_",
+                                        "CONFIG_USB", "CONFIG_WS73_USB="))
             ) + "\n# CONFIG_NET is not set\n# CONFIG_BT is not set\n"
         config.write_text(config_text)
         manifest = {
@@ -124,7 +125,8 @@ def main():
                     "drivers/misc/ws73/boot.o", "drivers/misc/ws73/test.o"}
         if not args.core_only:
             required.update({"drivers/bluetooth/btws73_proto.o",
-                             "drivers/bluetooth/btws73_test.o"})
+                             "drivers/bluetooth/btws73_test.o",
+                             "drivers/misc/ws73/usb.o"})
         for name in sorted(required):
             path = build / name
             if path.is_file():
@@ -150,6 +152,8 @@ def main():
                 "ws73-fw-boot": {
                     "ws73_profiles_test", "ws73_file_test", "ws73_boot_sequence_test",
                     "ws73_boot_faults_test", "ws73_boot_admission_test",
+                    "ws73_chip_word_test", "ws73_chip_query_test",
+                    "ws73_chip_query_faults_test",
                 },
             }
             if args.core_only:

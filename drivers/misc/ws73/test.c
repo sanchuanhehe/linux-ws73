@@ -4,6 +4,7 @@
 #include <linux/err.h>
 #include <linux/hex.h>
 #include <linux/module.h>
+#include <linux/unaligned.h>
 
 #include "boot.h"
 
@@ -317,12 +318,184 @@ static void ws73_boot_admission_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_boot_download(&io, image, 1, NULL), -EINVAL);
 }
 
+static void ws73_chip_word_test(struct kunit *test)
+{
+	static const struct btws73_chip_identity expected[16] = {
+		{ 0, 0 }, { 1, 1 }, { 2, 0 }, { 0, 0 },
+		{ 0, 0 }, { 1, 1 }, { 2, 0 }, { 0, 0 },
+		{ 0, 0 }, { 1, 1 }, { 2, 2 }, { 0, 0 },
+		{ 0, 0 }, { 1, 1 }, { 2, 0 }, { 0, 0 },
+	};
+	struct btws73_chip_identity chip;
+	unsigned int value, bit;
+
+	KUNIT_EXPECT_EQ(test, ws73_chip_word_decode(0, NULL), -EINVAL);
+	for (value = 0; value <= U16_MAX; value++) {
+		KUNIT_ASSERT_EQ(test, ws73_chip_word_decode(value, &chip), 0);
+		KUNIT_EXPECT_MEMEQ(test, &chip, &expected[(value >> 2) & 15], sizeof(chip));
+	}
+	for (value = 0; value < 16; value++) {
+		for (bit = 16; bit < 32; bit++) {
+			KUNIT_ASSERT_EQ(test, ws73_chip_word_decode((value << 2) | BIT(bit),
+								    &chip), 0);
+			KUNIT_EXPECT_MEMEQ(test, &chip, &expected[value], sizeof(chip));
+		}
+		KUNIT_ASSERT_EQ(test, ws73_chip_word_decode((value << 2) | ~0x3cU, &chip), 0);
+		KUNIT_EXPECT_MEMEQ(test, &chip, &expected[value], sizeof(chip));
+	}
+}
+
+struct ws73_chip_mock {
+	struct kunit *test;
+	u32 word;
+	u64 now;
+	unsigned int calls;
+	unsigned int fail_at;
+	int result;
+	bool stop;
+	bool expire;
+	bool cancel;
+};
+
+static u64 ws73_chip_now(void *context)
+{
+	struct ws73_chip_mock *mock = context;
+
+	return mock->now;
+}
+
+static bool ws73_chip_cancelled(void *context)
+{
+	struct ws73_chip_mock *mock = context;
+
+	return mock->stop;
+}
+
+static int ws73_chip_result(struct ws73_chip_mock *mock, unsigned int timeout, int normal)
+{
+	KUNIT_EXPECT_GT(mock->test, timeout, 0);
+	KUNIT_EXPECT_LE(mock->test, timeout, 100 - mock->now);
+	if (++mock->calls != mock->fail_at)
+		return normal;
+	if (mock->expire)
+		mock->now = 100;
+	if (mock->cancel)
+		mock->stop = true;
+	return mock->result;
+}
+
+static int ws73_chip_send(void *context, const u8 *data, size_t len, unsigned int timeout)
+{
+	static const u8 expected[] = "READM 0x40019000 4 ";
+	struct ws73_chip_mock *mock = context;
+
+	KUNIT_EXPECT_EQ(mock->test, mock->calls, 0);
+	KUNIT_EXPECT_EQ(mock->test, len, sizeof(expected) - 1);
+	if (len == sizeof(expected) - 1)
+		KUNIT_EXPECT_MEMEQ(mock->test, data, expected, len);
+	return ws73_chip_result(mock, timeout, sizeof(expected) - 1);
+}
+
+static int ws73_chip_receive(void *context, u8 *data, size_t capacity, unsigned int timeout)
+{
+	struct ws73_chip_mock *mock = context;
+
+	KUNIT_EXPECT_EQ(mock->test, mock->calls, 1);
+	KUNIT_EXPECT_EQ(mock->test, capacity, 512);
+	if (capacity >= 4)
+		put_unaligned_le32(mock->word, data);
+	return ws73_chip_result(mock, timeout, 4);
+}
+
+static void ws73_chip_query_test(struct kunit *test)
+{
+	struct ws73_chip_mock mock = { .test = test };
+	struct ws73_boot_io io = {
+		.context = &mock, .now_ms = ws73_chip_now, .cancelled = ws73_chip_cancelled,
+		.send = ws73_chip_send, .receive = ws73_chip_receive,
+	};
+	struct ws73_chip_observation observed, before;
+	unsigned int i;
+
+	memset(&before, 0xa5, sizeof(before));
+	/* All short and oversized replies, including a four-byte zero success. */
+	for (i = 0; i <= 513; i++) {
+		mock.calls = 0;
+		mock.fail_at = 2;
+		mock.result = i;
+		observed = before;
+		KUNIT_EXPECT_EQ(test, ws73_boot_read_chip(&io, 100, &observed),
+				i == 4 ? 0 : -EMSGSIZE);
+		KUNIT_EXPECT_EQ(test, mock.calls, 2);
+		if (i != 4) {
+			KUNIT_EXPECT_MEMEQ(test, &observed, &before, sizeof(before));
+		} else {
+			KUNIT_EXPECT_EQ(test, observed.raw, 0);
+			KUNIT_EXPECT_EQ(test, observed.chip.package, 0);
+			KUNIT_EXPECT_EQ(test, observed.chip.bus, 0);
+		}
+	}
+	/* Preserve the raw little-endian word, including irrelevant upper bits. */
+	mock = (struct ws73_chip_mock) { .test = test, .word = 0x1234000a };
+	KUNIT_ASSERT_EQ(test, ws73_boot_read_chip(&io, 100, &observed), 0);
+	KUNIT_EXPECT_EQ(test, observed.raw, 0x1234000a);
+	KUNIT_EXPECT_EQ(test, observed.chip.package, 2);
+	KUNIT_EXPECT_EQ(test, observed.chip.bus, 0);
+}
+
+static void ws73_chip_query_faults_test(struct kunit *test)
+{
+	struct ws73_chip_mock mock;
+	struct ws73_boot_io io = {
+		.context = &mock, .now_ms = ws73_chip_now, .cancelled = ws73_chip_cancelled,
+		.send = ws73_chip_send, .receive = ws73_chip_receive,
+	};
+	struct ws73_chip_observation before, observed;
+	unsigned int step, fault;
+
+	memset(&before, 0xa5, sizeof(before));
+	for (step = 1; step <= 2; step++) {
+		for (fault = 0; fault < 4; fault++) {
+			mock = (struct ws73_chip_mock) { .test = test, .fail_at = step,
+				.result = step == 1 ? 19 : 4 };
+			if (!fault)
+				mock.result = -EPIPE;
+			else if (fault == 1)
+				mock.result--;
+			else if (fault == 2)
+				mock.expire = true;
+			else
+				mock.cancel = true;
+			observed = before;
+			KUNIT_EXPECT_EQ(test, ws73_boot_read_chip(&io, 100, &observed),
+					!fault ? -EPIPE : fault == 1 ?
+					(step == 1 ? -EREMOTEIO : -EMSGSIZE) :
+					fault == 2 ? -ETIMEDOUT : -ENODEV);
+			KUNIT_EXPECT_EQ(test, mock.calls, step);
+			KUNIT_EXPECT_MEMEQ(test, &observed, &before, sizeof(before));
+		}
+	}
+	mock = (struct ws73_chip_mock) { .test = test };
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_chip(&io, 0, &observed), -ETIMEDOUT);
+	mock.stop = true;
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_chip(&io, 100, &observed), -ENODEV);
+	mock.stop = false;
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_chip(NULL, 100, &observed), -EINVAL);
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_chip(&io, 100, NULL), -EINVAL);
+	io.receive = NULL;
+	KUNIT_EXPECT_EQ(test, ws73_boot_read_chip(&io, 100, &observed), -EINVAL);
+	KUNIT_EXPECT_EQ(test, mock.calls, 0);
+}
+
 static struct kunit_case ws73_cases[] = {
 	KUNIT_CASE(ws73_profiles_test),
 	KUNIT_CASE(ws73_file_test),
 	KUNIT_CASE(ws73_boot_sequence_test),
 	KUNIT_CASE(ws73_boot_faults_test),
 	KUNIT_CASE(ws73_boot_admission_test),
+	KUNIT_CASE(ws73_chip_word_test),
+	KUNIT_CASE(ws73_chip_query_test),
+	KUNIT_CASE(ws73_chip_query_faults_test),
 	{}
 };
 

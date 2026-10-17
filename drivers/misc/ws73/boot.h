@@ -36,6 +36,25 @@ struct ws73_boot_io {
 	void (*wait_ready)(void *context); /* Sleep at least 5 ms, per SDK. */
 };
 
+struct ws73_chip_observation {
+	u32 raw;
+	struct btws73_chip_identity chip;
+};
+
+/* Firmware's strap mapping, not proof that a boot register read was valid. */
+int ws73_chip_word_decode(u32 value, struct btws73_chip_identity *chip);
+
+/*
+ * Fixed READM only; no address or write interface. Caller must establish a
+ * boot transport and serialize it. Exact transfer status/length and an
+ * absolute deadline are required. Success publishes an observation, not
+ * authorization to select firmware: cold-start read validity remains a gate.
+ * Zero is a legitimate U/USB encoding. On failure *observation is unchanged
+ * and the session must be discarded, not retried against a late response.
+ */
+int ws73_boot_read_chip(const struct ws73_boot_io *io, u64 deadline_ms,
+			struct ws73_chip_observation *observation);
+
 /*
  * Caller must have verified identity, validated ALL immutable images and
  * completed board/calibration preparation. This only executes FILES/QUIT;

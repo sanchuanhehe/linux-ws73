@@ -3,6 +3,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/string.h>
+#include <linux/unaligned.h>
 
 #include "boot.h"
 
@@ -58,6 +59,63 @@ static int ws73_boot_expect(const struct ws73_boot_io *io, const char *expected,
 	ret = ws73_boot_remaining(io, deadline);
 	return ret < 0 ? ret : 0;
 }
+
+int ws73_chip_word_decode(u32 value, struct btws73_chip_identity *chip)
+{
+	struct btws73_chip_identity decoded = {};
+
+	if (!chip)
+		return -EINVAL;
+	/* SDK110 U/E firmware use this same mapping of 0x40019000. */
+	switch (value & 0x0c) {
+	case 0x04:
+		decoded.package = 1;
+		decoded.bus = 1;
+		break;
+	case 0x08:
+		decoded.package = 2;
+		decoded.bus = (value & 0x30) == 0x20 ? 2 : 0;
+		break;
+	default:
+		break;
+	}
+	*chip = decoded;
+	return 0;
+}
+EXPORT_SYMBOL_NS_GPL(ws73_chip_word_decode, "WS73");
+
+int ws73_boot_read_chip(const struct ws73_boot_io *io, u64 deadline_ms,
+			struct ws73_chip_observation *observation)
+{
+	static const u8 command[] = "READM 0x40019000 4 ";
+	struct ws73_chip_observation parsed = {};
+	u8 reply[512];
+	int ret, timeout;
+
+	if (!io || !observation || !io->now_ms || !io->cancelled ||
+	    !io->send || !io->receive)
+		return -EINVAL;
+	ret = ws73_boot_send(io, command, sizeof(command) - 1, deadline_ms);
+	if (ret)
+		return ret;
+	timeout = ws73_boot_remaining(io, deadline_ms);
+	if (timeout < 0)
+		return timeout;
+	/* Larger capacity detects oversized/error replies instead of clipping. */
+	ret = io->receive(io->context, reply, sizeof(reply), timeout);
+	if (ret < 0)
+		return ret;
+	if (ret != sizeof(u32))
+		return -EMSGSIZE;
+	ret = ws73_boot_remaining(io, deadline_ms);
+	if (ret < 0)
+		return ret;
+	parsed.raw = get_unaligned_le32(reply);
+	ws73_chip_word_decode(parsed.raw, &parsed.chip);
+	*observation = parsed;
+	return 0;
+}
+EXPORT_SYMBOL_NS_GPL(ws73_boot_read_chip, "WS73");
 
 int ws73_boot_download(const struct ws73_boot_io *io,
 		       const struct ws73_fw_view image[WS73_FW_COUNT],

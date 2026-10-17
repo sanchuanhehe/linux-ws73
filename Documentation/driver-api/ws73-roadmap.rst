@@ -177,15 +177,16 @@ user-confirmed power cycles on the same allocated U also produced successful
 19-byte OUT and four-byte ``00000000`` IN, decoded U/USB, before preparation
 writes. These are this project's same-sample cold-read observations, without
 independent power instrumentation. The latest original-file trial verified
-all eleven preparation ACKs, seven original-file blocks and QUIT. The same
-physical device subsequently exposed runtime descriptors; a separate query VM
-received an HCC reply but rejected its length. Runtime identity/version and
-continuous in-VM reenumeration are still unverified. See
-:doc:`ws73-qualification-20261017` for each attempt and
-its consumed confirmation. Other-project U/E software-reset reports remain
-references only. E cold starts, additional samples, runtime identity agreement
-after this project's own downloads and full physical lifecycle qualification
-remain open.
+all eleven preparation ACKs, seven original-file blocks and QUIT. After fixing
+the platform allocation/returned-length distinction, a controlled QMP handoff
+to the same checked runtime device produced complete U/USB identity and version
+replies (firmware 0x010a6e3c, ROM 0x00010101). An independent binary transcript
+proves this limited path; the original supervisor remains FAIL because the
+text stream lost thirteen events. Natural in-VM reenumeration is unverified.
+See :doc:`ws73-qualification-20261017` for each attempt and its consumed
+confirmation. Other-project U/E software-reset reports remain references only.
+E cold starts, additional samples, board applicability, actual BLE/Wi-Fi and
+full physical lifecycle qualification remain open.
 
 Validation and resources
 ------------------------

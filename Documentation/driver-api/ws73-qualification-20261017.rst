@@ -3119,3 +3119,104 @@ Records and manifest SHA-256 (under the private evidence root):
   ``4c2f8c5a4582a44db50e91716f40df77fde721b3c7ea37e0f5813eff59930646``.
 * ``ram-trial-20261017T171833.202747Z``,
   ``2a3624c37a51fe8453fe20c9978dce33ce50de9c188c7e4e76c21d6b1127e78c``.
+
+Platform allocation and complete physical runtime observations (2026-10-18 SGT)
+-----------------------------------------------------------------------------
+
+Signed change 6abc104ac5beed960b5b71a5a3680f1b26da2cbd separates platform
+allocation length from the embedded returned-data length. The SDK110 Host
+callback copies the returned length at data+4, with data beginning at +8;
+it does not require the allocation to equal the populated fields. Independent
+inspection of four existing, hash-bound other-project captures (one E, three
+U) found 188-byte replies, 96-byte HCC records, allocation 88 and returned
+length two. They are protocol references, not this project's hardware tests.
+The production codec now requires allocation 10..record_length-8 for chip,
+16..record_length-8 for version, with exact returned lengths two/eight and
+unchanged status, ID and outer bounds. Unused bytes are not interpreted or
+published; no SDK code or captured allocation padding was imported.
+
+Clean-source validation at 6abc104ac5be passed 92 KUnit cases under KASAN/UBSAN.
+The added test checks every u16 allocation length, truncated input, nonzero
+padding and unchanged output on error. CBMC passed the bounded i386/x86-64
+converter contracts and five mutation counterexamples; this remains a pure
+converter proof, not a concurrent transport proof. An initial dirty-source
+KUnit run is retained separately and excluded from clean qualification.
+The first USB fixture build failed -Werror=sign-compare before starting a VM;
+test-only d4844eaa58bce852d2b7f792692c09990fa0369d corrected the two write
+comparisons. Full/high-speed runtime matrices then passed all seventeen cases
+each, including an independent 188-byte chip/version fixture with nonzero
+allocation padding. Supervisor checks rejected 32 log and five artifact
+corruptions. No physical support is inferred from those fixtures.
+
+The user's "complete capture" power-cycle confirmation was bound to boot
+host device 122 and consumed by ram-trial-20261017T173157.445964Z at d4844eaa58bc.
+Before writes, fixed READM again returned U/USB. All three original inputs
+passed validation; eleven preparation writes and seven payload blocks sent
+172580 bytes, followed by QUIT. This trial explicitly used QMP detach and
+reattach after checking the same physical runtime identity/descriptors. Boot
+and runtime had separate owners (guest devices 2 and 3, ports 1-1 and 1-2).
+This is a controlled handoff, not natural reenumeration or recovery.
+
+The real driver then completed both runtime requests. Full binary replies
+were 188 bytes each, with 96-byte HCC records and 88-byte platform allocations.
+Chip returned package 0 / bus 0, agreeing with the pre-load U/USB reading;
+version returned firmware 0x010a6e3c and ROM 0x00010101. The independent audit
+verifies the complete two query bodies, both returned data fields and all
+boot/runtime transaction ordering through the archived strict validator.
+All 128 binary bulk events pair and drain; four binary statistics reports
+show queued=0/dropped=0. Three owners drained, QEMU exited zero and the checked
+device was unowned. The clocksource watchdog CPU-read timeout remains logged
+and unexplained.
+
+The original supervisor result remains FAIL: text usbmon contains only 115
+bulk events and first reports an undrained URB. Independent comparison finds
+thirteen contiguous missing text events from the Wi-Fi-calibration completion
+through QUIT, not just one missing completion. Every retained text event is
+an ordered, matching subset of the binary stream. No missing event was
+invented and neither the archived log nor original manifest was rewritten.
+The separate analysis is labelled SCOPED_BINARY_HARDWARE_ANALYSIS_PASS with
+ORIGINAL_TEXT_GATE_FAIL; it establishes the transaction scope above only.
+Large TX payloads remain prefix/hash/actual-length checked, not full wire
+byte comparisons. Firmware authentication, general board applicability,
+BLE/HCI or Wi-Fi RF behavior and E qualification are not established.
+
+Test-only feebabc81807 bounds each binary drain to sixteen events (including
+skipped control events), allowing text/kernel readers to run between batches.
+It encodes captured bytes before one printf rather than issuing a printf per
+byte. The kernel text recorder has a separate finite event queue; delayed
+reading is a plausible loss mechanism, not a proved cause of this capture.
+The original strict text/binary correspondence gate is retained. A mock ioctl
+harness checks batch bounds, 512-byte exact output, skipped traffic, EINTR,
+EAGAIN, EIO and dropped-event failure with GCC and Clang; Clang ASAN/UBSAN also
+passed. GCC sanitizer linking lacked system runtime libraries; the first
+sandboxed Clang run failed LeakSanitizer's ptrace restriction. Those attempts
+are not passes. The final user-space sanitizer run outside that restriction
+passed without suppressions. The refreshed build and empty VM preflight
+passed; no new physical run has qualified the recorder change.
+
+Records and manifest SHA-256 (private evidence root; raw padding stays private):
+
+* ``platform-allocation-audit-20261017``,
+  ``891de46112e11a88f2262c38470b217213bf318bb2afb6b7ace2d2f19a6f2450``.
+* ``20261017T172720.313072Z``,
+  ``44cbd16ba218084936dfbfa67b56670946cfc3ab7d351bc1dd50633d1d9933d6``.
+* ``cbmc-hcc-20261017T172756.105106Z``,
+  ``f6d6060f3a19035a553fa33d9bffb94f85e414088b201ad41925ffd40cb6f7ea``.
+* ``virtual-usb-20261017T172941.997790Z``,
+  ``41dc60481e7f59293015a6f8384f4e2f916384ed6bc877f2abe7bb17a6531e9f``.
+* ``virtual-usb-20261017T173019.914957Z``,
+  ``b49f0b8e014dbad3396b119d8038b168158d3c459261a94875d6f57c4d972af6``.
+* ``virtual-usb-negative-20261017T173020.952339Z``,
+  ``f67a70d6a5efee7bf8eed6e4d167fbf1953edf48b4e8fea30b0b98f5f2a3344f``.
+* ``power-cycle-confirmation-20261017T172934.246860Z``,
+  ``afb3f22f9b53bc3075b3bc6938f190cc4a36b3caa37c6b80bfddd2ba89db9997``.
+* ``ram-trial-20261017T173157.445964Z``,
+  ``2c22911ade350bed9cebdb36bf773e7c433aafd7d67836971efdec22df6a759a``.
+* ``ram-trial-runtime-analysis-20261017``,
+  ``bffa10f9cdaedaee81a7a43d6eac7ade18a91bdde5533f58679b0924e3a75690``.
+* ``usbmon-fairness-20261017T173838.612666Z``,
+  ``37081b4688b7e6e81450eb103aa73bccd5e611870ba52432f00fd3f0721d3b7c``.
+* ``hardware-build-20261017T173852.997819Z``,
+  ``79df1465d543ba0504b421008fa2af35df05f2ac044160ccfa0b18f917f4d2a2``.
+* ``ram-trial-20261017T173923.371584Z``,
+  ``ef342d3b12022fd91209f5229aee087253fecbc0ab65d80326345c0f23dea612``.

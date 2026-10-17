@@ -245,7 +245,12 @@ BLE frames to the native HCI consumer yet.
 GET_VERSION is SDK110 platform request 13 with one input byte equal to 1,
 padded to a 32-byte HCC record. Reply 7 contains status u32, returned length
 u32 (=8), firmware u32 and ROM u32, all little endian. The platform payload
-length is 16; the HCC length includes the header and must cover all 24 bytes.
+length covers an allocation of at least 16 bytes and is bounded by the HCC
+record minus its eight-byte header. The embedded returned length must still
+be exactly eight. SDK110 physical replies use a 96-byte record and an 88-byte
+platform allocation for both chip and version; unused allocation bytes need
+not be zero and are not interpreted. HCC bounds, status and reply ID remain
+mandatory checks.
 Both raw version words are preserved. ``plat_misc.c`` defines firmware bytes
 as a/b/c/d from most to least significant and ROM fields as v16/r8/c8; its
 printed ROM "1.0.0" is a constant, not the reported word. Neither that string
@@ -782,7 +787,9 @@ GET_CHIP_TYPE uses OAM service 1, subtype 9, queue 9, request ID 16 and reply
 ID 10. The request is a 32-byte padded HCC record carrying one zero byte.
 The reply contains status u32, returned length u32, then package and bus u8;
 U/S/E are 0/1/2 and USB/SDIO/UART are 0/1/2. The new record codec validates
-these fields, bounds and status before publishing an identity. Parsing S
+these fields, bounds and status before publishing an identity. The platform
+allocation length is at least ten and no greater than the HCC record minus
+eight, while the embedded returned length must equal two. Parsing S
 or non-USB wire values does not enable support for those devices.
 
 This query is found in the SDK's runtime platform message path, not proven

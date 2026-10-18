@@ -84,6 +84,21 @@ These are fixed-budget mutation checks of production functions in the VM, not
 coverage-guided fuzzing, concurrent lifecycle stress, formal proof or hardware
 qualification. State reset in this single-threaded test does not prove RX drain.
 
+The BLE control suite additionally runs 16,384 deterministic operation steps
+with the same four seeds. It calls the production action/receive/abort paths
+through the existing injected transport. An operation-level oracle tracks only
+unknown/on/off status and the first terminal error; it never assigns production
+intermediate states. Sequences mix acknowledged enable/disable, duplicate,
+wrong and late replies, short TX, cancellation, unsolicited notifications and
+fresh isolated instances. Every step checks the public result, first error,
+stable state and exact number of transport calls. Failed instances cannot send
+or become enabled by later actions/notifications; an idempotent or unarmed
+request cannot send. All five operation outcome counters must be positive and
+sum to 4096 per seed. Default/core/combined-HCI runs require these markers;
+HCI-only runs reject unexpected markers. This is single-threaded injected
+sequence coverage, not a proof of tokenless wire-epoch identity, real callback
+scheduling, physical enable/disable or safe live-device reset.
+
 build-hci.py compiles/links the WS73 core, USB and HCI driver either built-in
 or as modules, in the separate fixed build-hci directory. It builds bzImage
 before modules so modpost has the matching kernel symbols; unresolved symbols

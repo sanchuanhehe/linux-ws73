@@ -42,7 +42,7 @@ def sanitizer_summary(raw, config, kcsan=False):
             "scope": "sampled detection only; no race-freedom proof"}
 
 
-def mutation_summary(raw, usb=True, h4=True):
+def mutation_summary(raw, usb=True, h4=True, control=False):
     """Require the bounded campaigns' actual counters, not just case names."""
     seeds = {"0073e110", "00387373", "deadbeef", "10203040"}
     specs = {
@@ -51,6 +51,9 @@ def mutation_summary(raw, usb=True, h4=True):
         "h4": (h4, "H4 seed=", r"H4 seed=([0-9a-f]{8}) steps=(\d+) complete=(\d+) "
                r"partial=(\d+) errors=(\d+) sticky=(\d+) resets=(\d+)",
                ("steps", "complete", "partial", "errors", "sticky", "resets")),
+        "ble_control": (control, "BLE sequence seed=", r"BLE sequence seed=([0-9a-f]{8}) steps=(\d+) "
+                        r"success=(\d+) rejected=(\d+) notifications=(\d+) aborts=(\d+) resets=(\d+)",
+                        ("steps", "success", "rejected", "notifications", "aborts", "resets")),
     }
     result = {}
     for name, (required, marker, pattern, fields) in specs.items():
@@ -313,7 +316,7 @@ def main():
                 "ws73-ble-control": {
                     "ws73_ble_lifecycle_test", "ws73_ble_tx_failure_test",
                     "ws73_ble_reply_failure_test", "ws73_ble_admission_test",
-                    "ws73_ble_independent_rx_test",
+                    "ws73_ble_independent_rx_test", "ws73_ble_state_sequence_test",
                 },
                 "ws73-service": {
                     "ws73_interrupt_wire_test", "ws73_interrupt_invalid_test",
@@ -390,7 +393,7 @@ def main():
                     manifest["instrumentation"][name] = symbols.splitlines()
             manifest["mutation_counts"] = mutation_summary(
                 raw,
-                usb=not args.hci_only, h4=not args.core_only)
+                usb=not args.hci_only, h4=not args.core_only, control=not args.hci_only)
         except (OSError, ValueError, subprocess.CalledProcessError) as error:
             manifest["validation_error"] = str(error)
             passed = False

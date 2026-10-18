@@ -232,12 +232,113 @@ static void ws73_ble_independent_rx_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_ENABLED);
 }
 
+/* Operation-level oracle: known on/off state and the first terminal error.
+ * No intermediate production state is assigned by this campaign. Each fresh
+ * instance is isolated after synchronous calls return, with no RX producers.
+ */
+static void ws73_ble_state_sequence_test(struct kunit *test)
+{
+	static const u32 seeds[] = { 0x0073e110, 0x00387373, 0xdeadbeef, 0x10203040 };
+	static const unsigned int modes[] = { 0, 0, 0, 2, 3, 4, 5, 9, 10, 0 };
+	static const int errors[] = {
+		0, 0, 0, -EPROTO, -EPROTO, -ETIMEDOUT, -ENODEV,
+		-ENODEV, -ETIMEDOUT, -EMSGSIZE,
+	};
+	unsigned int seed;
+
+	for (seed = 0; seed < ARRAY_SIZE(seeds); seed++) {
+		struct ws73_ble_mock mock;
+		unsigned int success = 0, rejected = 0, notifications = 0;
+		unsigned int aborts = 0, resets = 0, step;
+		bool known = false, enabled = false;
+		u32 random = seeds[seed];
+		int failure = 0;
+
+		ws73_ble_mock_init(&mock);
+		for (step = 0; step < 4096; step++) {
+			unsigned int action, calls = mock.calls;
+			bool target;
+			int expected, ret;
+
+			random ^= random << 13;
+			random ^= random >> 17;
+			random ^= random << 5;
+			action = random % 16;
+			target = !!(random & BIT(16));
+			if (action < ARRAY_SIZE(modes)) {
+				mock.mode = modes[action];
+				mock.tx_result = action == 9 ? 3 : 4;
+				if (failure) {
+					expected = failure;
+				} else if (!known && !target) {
+					expected = -EAGAIN;
+				} else if (known && enabled == target) {
+					expected = -EALREADY;
+				} else {
+					calls++;
+					expected = errors[action];
+					failure = expected;
+					if (!expected) {
+						known = true;
+						enabled = target;
+					}
+				}
+				ret = ws73_ble_control_set(&mock.control, &mock.io, target, 100);
+				KUNIT_ASSERT_EQ(test, ret, expected);
+				if (ret)
+					rejected++;
+				else
+					success++;
+			} else if (action < 12) {
+				enum ws73_notification event = target ? WS73_NOTIFY_BLE_OPEN :
+							      WS73_NOTIFY_BLE_CLOSE;
+
+				/* Unarmed and post-consumption notifications differ. */
+				expected = failure ?: (known ? -EPROTO : -ENOENT);
+				if (expected == -EPROTO)
+					failure = expected;
+				ret = ws73_ble_control_receive(&mock.control, event, mock.now);
+				KUNIT_ASSERT_EQ(test, ret, expected);
+				notifications++;
+			} else if (action < 14) {
+				int error = target ? -ENODEV : -ECANCELED;
+
+				ws73_ble_control_abort(&mock.control, error);
+				if (!failure)
+					failure = error;
+				aborts++;
+			} else {
+				/* A new isolated instance, never recovery of a live one. */
+				ws73_ble_mock_init(&mock);
+				known = false;
+				enabled = false;
+				failure = 0;
+				calls = 0;
+				resets++;
+			}
+			KUNIT_ASSERT_EQ(test, mock.calls, calls);
+			KUNIT_ASSERT_EQ(test, mock.control.error, failure);
+			KUNIT_ASSERT_EQ(test, mock.control.state,
+					failure ? WS73_BLE_FAILED : !known ? WS73_BLE_UNKNOWN :
+					enabled ? WS73_BLE_ENABLED : WS73_BLE_DISABLED);
+		}
+		KUNIT_EXPECT_GT(test, success, 0);
+		KUNIT_EXPECT_GT(test, rejected, 0);
+		KUNIT_EXPECT_GT(test, notifications, 0);
+		KUNIT_EXPECT_GT(test, aborts, 0);
+		KUNIT_EXPECT_GT(test, resets, 0);
+		kunit_info(test, "BLE sequence seed=%08x steps=4096 success=%u rejected=%u notifications=%u aborts=%u resets=%u\n",
+			   seeds[seed], success, rejected, notifications, aborts, resets);
+	}
+}
+
 static struct kunit_case ws73_ble_control_cases[] = {
 	KUNIT_CASE(ws73_ble_lifecycle_test),
 	KUNIT_CASE(ws73_ble_tx_failure_test),
 	KUNIT_CASE(ws73_ble_reply_failure_test),
 	KUNIT_CASE(ws73_ble_admission_test),
 	KUNIT_CASE(ws73_ble_independent_rx_test),
+	KUNIT_CASE(ws73_ble_state_sequence_test),
 	{}
 };
 

@@ -110,6 +110,11 @@ def validate_hci(kernel, log, speed="full"):
   assert part.count('WS73_HCI_MGMT_INDEX index=0 configured')==int(good)
   assert part.count('WS73_HCI_MGMT_INFO actual=289 address=112233445566 version=6 manufacturer=ffff LE_only verified')==int(good)
   assert part.count('WS73_HCI_AUTO_OFF_ACK')==int(good)
+  assert part.count('WS73_HCI_MGMT_REMOVED')==int(good)
+  assert part.count('WS73_HCI_MGMT_REMOVED index=0 actual=6 verified')==int(good)
+  assert part.count('WS73_HCI_MGMT_DRAINED window_ms=100 verified')==int(good)
+  if good:
+   assert part.index('device callbacks drained')<part.index('WS73_HCI_MGMT_REMOVED')<part.index('WS73_HCI_MGMT_DRAINED')
   assert part.count('WS73_HCI_WITHHOLD_RESET')==int(not good)
   assert part.count('WS73_STARTUP_NO_EXTRA_OUT window_ms=100')==int(good)
   assert sum('USB disconnect' in r for r in records)==1
@@ -130,7 +135,7 @@ def validate_hci(kernel, log, speed="full"):
   if errors:assert part.index('WS73_TEST_REMOVE')<part.index('interrupt observation failed:')
   assert len(records)==10+len(errors)
  assert log.count('WS73_HCI_MGMT_INFO')==2 and log.count('WS73_HCI_AUTO_OFF_ACK')==2
- return {'cases':3,'native_initializations':2,'reset_cancellation':1,'hci_commands':27,'hci_replies':26,'hci_fragments':78,'bulk_out':57,'bulk_in':101,'class_actions':11,'mgmt_info':2,'auto_off_ack':2,'drains':3}
+ return {'cases':3,'native_initializations':2,'reset_cancellation':1,'hci_commands':27,'hci_replies':26,'hci_fragments':78,'bulk_out':57,'bulk_in':101,'class_actions':11,'mgmt_info':2,'mgmt_removed':2,'mgmt_drained':2,'auto_off_ack':2,'drains':3}
 
 def validate_startup(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL|SKIP',kernel+'\n'+log)

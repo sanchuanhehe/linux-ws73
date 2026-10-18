@@ -615,6 +615,27 @@ static void hci_management_info(int fd)
  }
  die("missing management controller info");
 }
+/* A configured controller must announce removal before its socket is closed. */
+static void hci_management_removed(int fd)
+{
+ unsigned char data[512];
+ for (unsigned int tries = 0; tries < 20; tries++) {
+  struct pollfd p = { .fd = fd, .events = POLLIN };
+  if (poll(&p, 1, 250) < 0) die("management removal poll");
+  if (!p.revents) continue;
+  ssize_t n = recv(fd, data, sizeof(data), MSG_TRUNC);
+  if (n < 6 || n > (ssize_t)sizeof(data) || get16(data + 4) != n - 6 || get16(data + 2))
+   die("management removal record");
+  if (get16(data) == 6 && n == 10) continue; /* Queued New Settings. */
+  if (get16(data) != 5 || n != 6) die("unexpected management removal event");
+  puts("WS73_HCI_MGMT_REMOVED index=0 actual=6 verified");
+  /* No second removal or stale completion may leak into the next instance. */
+  if (poll(&p, 1, 100) != 0) die("management event after removal");
+  puts("WS73_HCI_MGMT_DRAINED window_ms=100 verified");
+  return;
+ }
+ die("missing management removal");
+}
 static void hci_event_fragment(int in, const unsigned char *data, unsigned int size)
 {
  unsigned char wire[180] = {0};
@@ -749,6 +770,7 @@ static void startup_trials(int control, int *eps, int log, const char *udc)
   }
   if (!disconnected) wait_kernel(log, "USB disconnect");
   wait_kernel(log, "device callbacks drained");
+  if (WS73_TEST_HCI && trial != 1) hci_management_removed(management);
   if (management >= 0) close(management);
   if (WS73_TEST_HCI && !access("/sys/class/bluetooth/hci0", F_OK)) die("HCI survived USB disconnect");
   printf("WS73_%s_CASE %u PASS\n", WS73_TEST_HCI ? "HCI" : "STARTUP", trial);

@@ -152,7 +152,14 @@ is pending, followed by a fresh successful instance. These tests supplement
 physical boot observations; they do not qualify physical HCI, BlueZ scanning,
 connections, L2CAP, security, ACL traffic or a real peer.
 
-The startup and HCI supervisors reject respectively 29 and 34 log mutations,
+After each configured-controller disconnect, keep its management socket open
+until one correctly sized Index Removed for index zero is received. Allow
+queued New Settings, reject other records, and check a further 100 ms without
+events before closing the socket. Missing, duplicate, short, wrong-index and
+premature removal fail supervision. Reset-in-flight cancellation never reached
+a configured index, so it does not require the configured-removal event.
+
+The startup and HCI supervisors reject respectively 29 and 41 log mutations,
 each with five artifact mutations. All-module compilation also includes the
 startup/HCI test consumer and its USB-owner dependency. Bluetooth is enabled
 in the virtual fixture configuration; it has no NIC or physical USB connection.

@@ -4392,3 +4392,53 @@ for a hardware trial. Device/time clarification is pending; no new E BLE
 hardware result is claimed and no hub, controller or other-thread device was
 operated. Existing cold-selection, board/address, peer/RF, mixed-model and
 natural-recovery gates remain open.
+
+
+BLE control operation sequences (2026-10-18 SGT)
+----------------------------------------------
+
+Development ``be944aee4f81`` extends the existing BLE control KUnit fixture
+with four fixed-seed campaigns of 4096 operations each. The production
+set/receive/abort functions are called through the existing injected transport;
+no production intermediate state is assigned. The oracle tracks unknown/on/off
+status and the first terminal error. It checks every return, stable state,
+first-error preservation and exact transport call count across acknowledged
+actions, duplicate/wrong/late replies, short TX, cancellation, unsolicited
+notifications, aborts and fresh isolated instances.
+
+Across the four seeds there are 422 successful actions, 9732 rejected actions,
+2028 notifications, 2076 aborts and 2126 fresh-instance operations. Each seed
+must exercise all five categories, with their counters summing to 4096.
+The existing supervisor requires the case and counters in default/core/combined
+runs and rejects them in HCI-only runs. Eleven negative log controls were
+rejected, including missing/duplicate/unknown seeds, truncation, malformed or
+negative counters, zero coverage, wrong totals and unexpected campaign data.
+
+The initial dirty implementation passed all 97 default KASAN/UBSAN/lockdep
+cases, including the mock-client suites. Its precise patch is archived; this
+was before the final test formatting/local event-variable cleanup. The clean
+signed commit passed all 101 combined protocol/native-HCI cases; mock-client
+suites are disabled in that configuration as previously documented. Counts
+must not be added as independent cases. No sanitizer/lockdep diagnostic was
+reported. Strict checkpatch on the final modified C file reports no findings.
+
+Default run ``20261018T052958.571017Z`` manifest SHA-256:
+``563318dcdcb14f3eac4d68b8d7c1f67d8ee59f869c17725c9d267ca48a9f36e4``.
+Combined run ``20261018T053112.656160Z`` manifest SHA-256:
+``3758309d7eeea2013897644c4e4da10d24513e4710b71e45d177ee856c689ea2``.
+The aggregate ``ble-control-sequences-20261018/manifest.json`` SHA-256 is
+``eb187185b9bdf56f44a55c192a91f57a032592d3ed65d1679b4b06f37616d25d``.
+
+These are bounded single-threaded state-sequence tests, not coverage-guided
+fuzzing, proof of arbitrary schedules, tokenless wire-epoch identity, real
+BLE enable/disable or safe live-device reset. No new production defect was
+established, so production control logic is unchanged. Earlier KCSAN reports
+remain unresolved and no hardware qualification is inherited from these VMs.
+
+The E non-HCI build was refreshed from the same signed commit (manifest
+``711b8be022fb45c8e9b8637c3c8c494c9769be81f4409ae098b70b851b19f0fe``).
+Its empty preflight ``20261018T053454.784667Z`` passed (manifest
+``2145179bf1c0a51d6d760c8f31975600f27a98dd3ad09176b0a63b142df4d08a``).
+The VM exited without physical attachment. The selected E remained in the
+previous runtime enumeration during this work; device/time clarification is
+still pending and no new power report was consumed for a hardware trial.

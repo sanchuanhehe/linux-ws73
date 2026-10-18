@@ -114,7 +114,13 @@ no general register-writing or ROM-dumping interface is requested.
   required for management and ordinary data. Provide per-MPDU completion
   correlation, ACK/failure, retries and final-rate reporting. The inspected
   eight-byte dmac_tx_status declaration and queue-scheduling message do not
-  establish a general data completion contract.
+  establish a general data completion contract. The Host copies a 32-byte
+  TX-control prefix and excludes its pointer-bearing expanded suffix. Confirm
+  required initialization and device interpretation of the VAP/user/RA fields,
+  ACK policy, need_rsp, four-bit management marker and algorithm marker bytes;
+  none may be assumed to supply ordinary-data completion correlation merely
+  from its declaration. Clarify TX-PN bypass versus cipher-engine bypass and
+  raw protected-frame behavior, with PN/IV handling in both success/failure.
 * Confirm device-produced RX metadata: actual frame/header lengths, channel,
   RSSI/rate, FCS retention/status, aggregation, cipher/result, IV/MIC retention
   and replay/PN ownership. The candidate 32-byte control block includes a

@@ -378,3 +378,68 @@ not strip any crypto overhead, set mac80211 RX flags, validate FCS/PN, or follow
 the embedded device address. Its five VM cases supplement the 17 FRW cases;
 test vectors demonstrate buffer boundaries, not original-firmware packet ABI
 or working Wi-Fi. The component still builds only in the Wi-Fi KUnit module.
+
+
+Transmitted TX control prefix and Host-only suffix
+-------------------------------------------------
+
+The existing ABI probe now also compiles the pinned packed ``mac_tx_ctl``
+declaration and ``mac_tx_expand_cb_stru``. Five scalar aliases are extracted
+from their pinned declarations; the pointed-to MAC frame is opaque while
+retaining the target pointer ABI. All five targets pass exact sentinel-byte
+comparisons and offset/size assertions. The private
+``wifi-abi-20261018T053957.115920Z/manifest.json`` has SHA-256
+``474e2a34c84327d7bb65f25a179b2ddaa3cf7f7427f530d99face46335dd744e``.
+It binds ten pinned SDK source/header files, compiler tools, objects and raw
+sections. No compiled object is executed and no sentinel is sent to a device.
+
+The comment describing a 19-byte bare-system control block does not describe
+the inspected Host copy. ``oal_netbuf_common_rom.h`` defines OAL_MAX_CB_LEN as
+32 and OAL_MAX_MAC_HDR_LEN as 36. ``frw_hmac_send_data`` copies exactly those
+32 control bytes from netbuf->cb, after making the 36-byte MAC-header reservation.
+The expanded suffix starts at offset 32 on all probed targets. It contains
+frame_header, seqnum, frame_type and flags; it is Host-only in this copy path.
+The complete packed structure is 40 bytes on 32-bit targets and 44 bytes on
+64-bit targets. Copying sizeof(mac_tx_ctl) would incorrectly include the suffix.
+
+.. list-table:: Candidate little-endian transmitted TX control prefix
+   :header-rows: 1
+
+   * - Byte range
+     - Declared content
+   * - 0..2
+     - Frame type/subtype, seven-bit MPDU count and one-bit netbuf count
+   * - 3..5
+     - LE16 payload length; six-bit header length, AMSDU and first-MSDU flags
+   * - 6..9
+     - TID/AC/multicast; retry count and four-bit management marker;
+       user/roam/PS flags; VAP/ACK policy/retry/response flags
+   * - 10..14
+     - EAPOL/M2U/AMSDU/Ethernet/four-address flags, algorithm packet/tag bytes,
+       alignment/TCP/broadcast/WUR/fake-buffer flags and MSDU count
+   * - 15..18
+     - 24-bit latency timestamp and eight-bit latency index
+   * - 19..22
+     - Partial AID/BSS color/TXOP, hardware VAP/RA LUT/LSIG/sleep-frame fields,
+       retry/duration/timestamp/TX-PN bypass and custom-frame flags
+   * - 23..26
+     - Cipher key type, cipher protocol, key ID and reserved byte
+   * - 27..31
+     - FTM protocol/bandwidth/calibration/chain, RSSI/TPC/probe flags,
+       TPC code and receive-test TID type
+
+Little-endian targets agree on these 32 sentinel bytes; big-endian PowerPC64
+changes integer order and bitfield placement. The future Linux encoder must
+write bytes explicitly, not cast an skb control block or use a native C
+bitfield layout. The sentinel intentionally sets reserved bits to exercise
+layout, so it must never be treated as a valid descriptor/default profile.
+
+The pinned ``hmac_tx_fill_cb_info`` copies TX-PN bypass and other bypass fields
+from PPDU features, alongside cipher fields and hardware VAP/RA selection.
+This shows those fields participate in descriptor construction; it does not
+prove that setting TX-PN bypass disables encryption or establishes a protected
+raw-frame/software-CCMP path. Likewise, the declared retry/management/algorithm
+fields do not establish an ordinary-data completion identifier or actual
+retry/rate reporting. Those semantic and device-consumer contracts remain
+required before wiring mac80211 TX, crypto, rate or ACK behavior. The probe
+adds no Wi-Fi adapter, physical commands, firmware compatibility or STA claim.

@@ -3805,3 +3805,55 @@ Private records and manifest SHA-256:
   ``39303e700ed427a422fe31d1fe083f24081a33ac190f76a2318fef38048f9762``.
 * The same postcheck's ``host-window-manifest.json``,
   ``cc8170bddc7e2b82adbc2e3865eef2d6179ba727a0076ccde564d1943a7d67c1``.
+
+Internal shared-core and BLE review extraction (2026-10-18 SGT)
+--------------------------------------------------------------
+
+An independent local ``ws73-review-core-ble`` worktree/branch now contains
+snapshot commit ``074eed78f2cb`` on the original Linux base
+``70dd4ee72eb2``. Its 70 selected files are byte-identical to development HEAD
+``ca097044f211``: shared core, USB, actual BLE consumer, associated kernel
+tests and the hardware-free USB reproduction fixture. Wi-Fi development files
+and accumulated project-history documents are excluded. The development and
+SparkLink histories were not rewritten. This single 12907-line snapshot is an
+internal inspection artifact, not an individually buildable RFC patch series.
+
+The snapshot compiled with Clang W=1 and four jobs in a separate fixed output,
+with CONFIG_BT_LE/BT_WS73/WS73_CORE/WS73_USB enabled and CONFIG_WIRELESS disabled.
+Its full-speed KASAN/UBSAN/lockdep VM run passed the three native-HCI cases:
+two initializations, one Reset-in-flight cancellation, 27 commands/26 synthetic
+replies, two management readouts/removals/event-free windows and three drains.
+The supervisor rejected 41 log and five artifact mutations. No physical USB
+was attached. Earlier physical U evidence remains bound to its development
+source; this extraction does not inherit physical qualification or prove all
+future split commits build independently.
+
+The strict whole-snapshot checkpatch result is FAIL: 213 errors, 939 warnings
+and 76 checks. Categorization assigns all 213 errors, 931 warnings and 32 checks
+to userspace test tooling; kernel/include files have zero errors, six warnings
+and 44 checks; two warnings concern patch metadata/MAINTAINERS. Findings are
+retained for correction rather than hidden by excluding tooling from the
+report. Ordinary-parent publication, board/address inputs and hardware gates
+are also still unresolved, so a successful extraction build is not RFC readiness.
+
+Private draft artifacts include an architecture cover letter, proposed split
+boundaries, source diff and mail-format snapshot, source/artifact hashes and
+baseline maintainer candidates. They explicitly identify the ordinary USB
+binding as observation-only, the limited U result, absent E/peer/STA evidence,
+and the need for a current target tree, human maintainer responsibility and
+user authorization before any external send. Filename-based maintainer output
+for drivers/misc alone omits USB-list review; the baseline USB SUBSYSTEM entry
+is retained separately. No external mail, PR or RFC was sent, and the local
+review branch was not published as a support series.
+
+Private record ``core-ble-review-snapshot-20261018/manifest.json`` SHA-256:
+``be1bfa101dadd97d5a3e6c4394a312374cbc6c6cbc5a34ac36fe71e2cf81887a``.
+Its isolated validation records are under the review worktree's sibling
+``.dev/ws73-upstream/records``:
+
+* ``virtual-usb-build-20261018T033819.972784Z``,
+  ``d042f767e062b223a4dee604edbba2dbe28b9157a596ff9d2a494bd12cc6cde5``.
+* ``virtual-usb-20261018T034112.806937Z``,
+  ``be9e5e5effb1ab7701d131a80762220dde70fe8770b1fa1f078eb1855bc07a28``.
+* ``virtual-usb-negative-20261018T034130.650349Z``,
+  ``af166296f61aca5bdd80063963c3216d1a187fefa5ddf21fbe7b4ee81c47f409``.

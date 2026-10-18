@@ -21,7 +21,9 @@ union ws73_platform_result {
 };
 
 struct ws73_platform_request {
+	/* Serializes the sleepable query transaction. */
 	struct mutex command_lock;
+	/* Protects request state shared with RX and abort callbacks. */
 	spinlock_t lock;
 	struct completion done;
 	enum ws73_platform_state state;
@@ -48,10 +50,10 @@ void ws73_platform_abort(struct ws73_platform_request *request, int error);
  * Success reports wire values, not a boot/runtime compatibility check.
  */
 int ws73_platform_get_chip(struct ws73_platform_request *request,
-			struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
-			u64 deadline_ms, struct btws73_chip_identity *identity);
+			   struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
+			   u64 deadline_ms, struct btws73_chip_identity *identity);
 int ws73_platform_get_version(struct ws73_platform_request *request,
-			     struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
-			     u64 deadline_ms, struct ws73_version *version);
+			      struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
+			      u64 deadline_ms, struct ws73_version *version);
 
 #endif

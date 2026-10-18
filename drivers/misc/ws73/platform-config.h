@@ -13,7 +13,7 @@ struct ws73_platform_config {
 
 /* No defaults or board validation. Output unchanged on error; no overlap. */
 int ws73_platform_config_encode(u8 *out, size_t capacity,
-			       const struct ws73_platform_config *config);
+				const struct ws73_platform_config *config);
 /* Sleepable, bounded by deadline. Success is local TX, not a device ACK. */
 int ws73_platform_configure(struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
 			    const struct ws73_platform_config *config, u64 deadline);

@@ -163,10 +163,11 @@ static void ws73_notification_aggregate_test(struct kunit *test)
 		KUNIT_EXPECT_MEMEQ(test, &rx, &before, sizeof(rx));
 	}
 	/* RX admission does not enable unchecked queue-10 TX. */
-	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, sizeof(out), 0,
-			data + 92, 16), -EMSGSIZE);
-	KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, sizeof(out), 0,
-			WS73_USB_SWITCH_QUEUE, 10), 36);
+	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, sizeof(out), 0, data + 92, 16),
+			-EMSGSIZE);
+	KUNIT_EXPECT_EQ(test,
+			ws73_usb_control_encode(out, sizeof(out), 0, WS73_USB_SWITCH_QUEUE, 10),
+			36);
 }
 
 static void ws73_interrupt_wire_test(struct kunit *test)
@@ -228,6 +229,7 @@ static struct kunit_suite ws73_service_suite = {
 	.name = "ws73-service",
 	.test_cases = ws73_service_cases,
 };
+
 kunit_test_suite(ws73_service_suite);
 
 MODULE_LICENSE("GPL");

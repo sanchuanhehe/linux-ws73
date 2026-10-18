@@ -18,7 +18,9 @@ enum ws73_ble_control_state {
 };
 
 struct ws73_ble_control {
+	/* Serializes the sleepable action transaction. */
 	struct mutex command_lock;
+	/* Protects request state shared with RX and abort callbacks. */
 	spinlock_t lock;
 	struct completion done;
 	enum ws73_ble_control_state state;

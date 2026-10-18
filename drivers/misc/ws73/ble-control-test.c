@@ -101,8 +101,8 @@ static void ws73_ble_lifecycle_test(struct kunit *test)
 		bool enabled = !(i & 1);
 		u8 expected[] = { enabled ? 25 : 26, 0, 0, 0 };
 
-		KUNIT_ASSERT_EQ(test,
-			ws73_ble_control_set(&mock.control, &mock.io, enabled, 100), 0);
+		KUNIT_ASSERT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, enabled, 100),
+				0);
 		KUNIT_EXPECT_MEMEQ(test, mock.command, expected, 4);
 		KUNIT_EXPECT_EQ(test, mock.calls, i + 1);
 		KUNIT_EXPECT_EQ(test, mock.timeout, 100);
@@ -151,14 +151,14 @@ static void ws73_ble_reply_failure_test(struct kunit *test)
 	for (i = 0; i < ARRAY_SIZE(modes); i++) {
 		ws73_ble_mock_init(&mock);
 		mock.mode = modes[i];
-		KUNIT_EXPECT_EQ(test,
-			ws73_ble_control_set(&mock.control, &mock.io, true, 1), errors[i]);
+		KUNIT_EXPECT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, true, 1),
+				errors[i]);
 		KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_FAILED);
 		KUNIT_EXPECT_EQ(test,
-			ws73_ble_control_receive(&mock.control, WS73_NOTIFY_BLE_OPEN, 0),
-			errors[i]);
-		KUNIT_EXPECT_EQ(test,
-			ws73_ble_control_set(&mock.control, &mock.io, true, 100), errors[i]);
+				ws73_ble_control_receive(&mock.control, WS73_NOTIFY_BLE_OPEN, 0),
+				errors[i]);
+		KUNIT_EXPECT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, true, 100),
+				errors[i]);
 		KUNIT_EXPECT_EQ(test, mock.calls, 1);
 	}
 	/* Failed close must not publish DISABLED or permit a reopen. */
@@ -208,8 +208,8 @@ static int ws73_ble_rx_thread(void *context)
 	struct ws73_ble_mock *mock = context;
 
 	if (wait_for_completion_timeout(&mock->sent, msecs_to_jiffies(1000)))
-		mock->receive_result = ws73_ble_control_receive(&mock->control,
-							       WS73_NOTIFY_BLE_OPEN, 0);
+		mock->receive_result =
+			ws73_ble_control_receive(&mock->control, WS73_NOTIFY_BLE_OPEN, 0);
 	wait_event_interruptible(mock->stopped, kthread_should_stop());
 	return 0;
 }
@@ -245,6 +245,7 @@ static struct kunit_suite ws73_ble_control_suite = {
 	.name = "ws73-ble-control",
 	.test_cases = ws73_ble_control_cases,
 };
+
 kunit_test_suite(ws73_ble_control_suite);
 
 MODULE_LICENSE("GPL");

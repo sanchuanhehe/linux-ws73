@@ -7,7 +7,7 @@
 #include "platform-config.h"
 
 int ws73_platform_config_encode(u8 *out, size_t capacity,
-			       const struct ws73_platform_config *config)
+				const struct ws73_platform_config *config)
 {
 	u32 value;
 

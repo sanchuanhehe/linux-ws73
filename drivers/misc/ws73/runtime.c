@@ -166,7 +166,7 @@ static int ws73_platform_query(struct ws73_platform_request *request,
 	}
 	/* Bound reply waiting even if a caller supplies a distant deadline. */
 	if (!wait_for_completion_timeout(&request->done,
-		msecs_to_jiffies(min_t(u64, deadline_ms - now, 2000)))) {
+					 msecs_to_jiffies(min_t(u64, deadline_ms - now, 2000)))) {
 		ret = -ETIMEDOUT;
 		goto failed;
 	}
@@ -216,8 +216,8 @@ int ws73_platform_get_chip(struct ws73_platform_request *request,
 EXPORT_SYMBOL_NS_GPL(ws73_platform_get_chip, "WS73");
 
 int ws73_platform_get_version(struct ws73_platform_request *request,
-			     struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
-			     u64 deadline_ms, struct ws73_version *version)
+			      struct ws73_usb_tx *tx, const struct ws73_usb_tx_io *io,
+			      u64 deadline_ms, struct ws73_version *version)
 {
 	union ws73_platform_result result;
 	int ret;

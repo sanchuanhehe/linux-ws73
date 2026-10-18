@@ -39,8 +39,8 @@ static int ws73_runtime_send(void *context, const u8 *data, size_t length,
 	if (mock->mode == 11) {
 		struct ws73_version version;
 
-		mock->busy_result = ws73_platform_get_version(&mock->request, &mock->tx,
-							     &mock->io, 100, &version);
+		mock->busy_result = ws73_platform_get_version(&mock->request, &mock->tx, &mock->io,
+							      100, &version);
 	}
 	if (mock->mode == 6) {
 		ws73_platform_abort(&mock->request, -ENODEV);
@@ -275,13 +275,17 @@ static void ws73_runtime_versions_test(struct kunit *test)
 	for (mode = 8; mode <= 13; mode++) {
 		mock = ws73_runtime_fixture(test, mode);
 		KUNIT_ASSERT_NOT_NULL(test, mock);
-		KUNIT_ASSERT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-				&mock->io, 100, &chip), 0);
+		KUNIT_ASSERT_EQ(test,
+				ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100,
+						       &chip),
+				0);
 		version = before;
 		expected = mode == 9 ? -EREMOTEIO : mode == 10 ? -ETIMEDOUT :
 			mode == 12 ? -EPROTO : 0;
-		KUNIT_EXPECT_EQ(test, ws73_platform_get_version(&mock->request, &mock->tx,
-				&mock->io, mode == 10 ? 1 : 100, &version), expected);
+		KUNIT_EXPECT_EQ(test,
+				ws73_platform_get_version(&mock->request, &mock->tx, &mock->io,
+							  mode == 10 ? 1 : 100, &version),
+				expected);
 		KUNIT_EXPECT_EQ(test, mock->calls, 4);
 		if (!expected) {
 			KUNIT_EXPECT_EQ(test, version.firmware, 0x010a6e7fU);
@@ -291,10 +295,14 @@ static void ws73_runtime_versions_test(struct kunit *test)
 		} else {
 			KUNIT_EXPECT_MEMEQ(test, &version, &before, sizeof(version));
 		}
-		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-				&mock->io, 100, &chip), expected ? expected : -EALREADY);
-		KUNIT_EXPECT_EQ(test, ws73_platform_get_version(&mock->request, &mock->tx,
-				&mock->io, 100, &version), expected ? expected : -EALREADY);
+		KUNIT_EXPECT_EQ(test,
+				ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100,
+						       &chip),
+				expected ? expected : -EALREADY);
+		KUNIT_EXPECT_EQ(test,
+				ws73_platform_get_version(&mock->request, &mock->tx, &mock->io, 100,
+							  &version),
+				expected ? expected : -EALREADY);
 		KUNIT_EXPECT_EQ(test, mock->calls, 4);
 	}
 }
@@ -307,13 +315,15 @@ static void ws73_runtime_query_test(struct kunit *test)
 	KUNIT_ASSERT_NOT_NULL(test, mock);
 	KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, mock->reply, 32, 0),
 			-EALREADY);
-	KUNIT_ASSERT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-			&mock->io, 100, &chip), 0);
+	KUNIT_ASSERT_EQ(test,
+			ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, &chip),
+			0);
 	KUNIT_EXPECT_EQ(test, chip.package, 2);
 	KUNIT_EXPECT_EQ(test, chip.bus, 0);
 	KUNIT_EXPECT_EQ(test, mock->calls, 3);
-	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-			&mock->io, 100, &chip), -EALREADY);
+	KUNIT_EXPECT_EQ(test,
+			ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, &chip),
+			-EALREADY);
 	KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, mock->reply, 32, 0),
 			-EALREADY);
 	KUNIT_EXPECT_EQ(test, mock->calls, 3);
@@ -331,8 +341,10 @@ static void ws73_runtime_failures_test(struct kunit *test)
 		mock = ws73_runtime_fixture(test, mode);
 		KUNIT_ASSERT_NOT_NULL(test, mock);
 		chip = before;
-		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-				&mock->io, mode == 1 ? 1 : 100, &chip), expected[mode]);
+		KUNIT_EXPECT_EQ(test,
+				ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io,
+						       mode == 1 ? 1 : 100, &chip),
+				expected[mode]);
 		calls = mock->calls;
 		KUNIT_EXPECT_EQ(test, calls, mode == 6 ? 1 : 3);
 		if (!expected[mode])
@@ -343,8 +355,10 @@ static void ws73_runtime_failures_test(struct kunit *test)
 		mock->mode = 0;
 		KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, mock->reply, 32, 0),
 				expected[mode]);
-		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-				&mock->io, 100, &chip), expected[mode]);
+		KUNIT_EXPECT_EQ(test,
+				ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100,
+						       &chip),
+				expected[mode]);
 		KUNIT_EXPECT_EQ(test, mock->calls, calls);
 		KUNIT_EXPECT_MEMEQ(test, &chip, &before, sizeof(chip));
 	}
@@ -374,8 +388,10 @@ static void ws73_runtime_reply_errors_test(struct kunit *test)
 			put_unaligned_le32(3, mock->reply + 12);
 			expected = -EMSGSIZE;
 		}
-		KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-				&mock->io, 100, &chip), expected);
+		KUNIT_EXPECT_EQ(test,
+				ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100,
+						       &chip),
+				expected);
 		KUNIT_EXPECT_MEMEQ(test, &chip, &before, sizeof(chip));
 	}
 }
@@ -392,13 +408,15 @@ static void ws73_runtime_admission_test(struct kunit *test)
 			-EINVAL);
 	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx, NULL, 100, &chip),
 			-EINVAL);
-	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, NULL),
+	KUNIT_EXPECT_EQ(test,
+			ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, NULL),
 			-EINVAL);
 	KUNIT_EXPECT_EQ(test, ws73_platform_receive(NULL, mock->reply, 32, 0), -EINVAL);
 	KUNIT_EXPECT_EQ(test, ws73_platform_receive(&mock->request, NULL, 32, 0), -EINVAL);
 	ws73_platform_abort(&mock->request, -ENODEV);
 	ws73_platform_abort(&mock->request, -ETIMEDOUT);
-	KUNIT_EXPECT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, &chip),
+	KUNIT_EXPECT_EQ(test,
+			ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 100, &chip),
 			-ENODEV);
 	KUNIT_EXPECT_EQ(test, mock->calls, 0);
 	KUNIT_EXPECT_EQ(test, chip.package, 0xa5);
@@ -430,8 +448,9 @@ static void ws73_runtime_independent_rx_test(struct kunit *test)
 	task = kthread_run(ws73_runtime_rx_thread, mock, "ws73-test-rx");
 	KUNIT_ASSERT_FALSE(test, IS_ERR(task));
 	KUNIT_ASSERT_EQ(test, kunit_add_action_or_reset(test, ws73_runtime_stop_thread, task), 0);
-	KUNIT_ASSERT_EQ(test, ws73_platform_get_chip(&mock->request, &mock->tx,
-			&mock->io, 1000, &chip), 0);
+	KUNIT_ASSERT_EQ(test,
+			ws73_platform_get_chip(&mock->request, &mock->tx, &mock->io, 1000, &chip),
+			0);
 	KUNIT_EXPECT_EQ(test, chip.package, 2);
 	KUNIT_EXPECT_EQ(test, mock->calls, 3);
 }

@@ -108,5 +108,6 @@ static struct kunit_suite ws73_platform_config_suite = {
 	.name = "ws73-platform-config",
 	.test_cases = ws73_platform_config_cases,
 };
+
 kunit_test_suite(ws73_platform_config_suite);
 MODULE_LICENSE("GPL");

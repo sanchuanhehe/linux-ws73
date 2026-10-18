@@ -54,6 +54,7 @@ int btws73_hci_validate(const u8 *data, size_t len, bool tx)
 
 	return payload == len - header ? 0 : -EMSGSIZE;
 }
+EXPORT_SYMBOL_NS_GPL(btws73_hci_validate, "BTWS73");
 
 int btws73_hcc_encode(u8 *out, size_t capacity, const u8 *h4, size_t len)
 {
@@ -76,11 +77,13 @@ int btws73_hcc_encode(u8 *out, size_t capacity, const u8 *h4, size_t len)
 	memcpy(out + BTWS73_HCC_HEADER_SIZE, h4, len);
 	return size;
 }
+EXPORT_SYMBOL_NS_GPL(btws73_hcc_encode, "BTWS73");
 
 void btws73_h4_reset(struct btws73_h4 *stream)
 {
 	memset(stream, 0, sizeof(*stream));
 }
+EXPORT_SYMBOL_NS_GPL(btws73_h4_reset, "BTWS73");
 
 int btws73_h4_feed(struct btws73_h4 *stream, const u8 *data, size_t len,
 		   size_t *consumed, const u8 **packet, size_t *packet_len)
@@ -142,10 +145,7 @@ fail:
 	*consumed = used;
 	return ret;
 }
-
-EXPORT_SYMBOL_NS_GPL(btws73_hci_validate, "BTWS73");
-EXPORT_SYMBOL_NS_GPL(btws73_hcc_encode, "BTWS73");
-EXPORT_SYMBOL_NS_GPL(btws73_h4_reset, "BTWS73");
 EXPORT_SYMBOL_NS_GPL(btws73_h4_feed, "BTWS73");
+
 MODULE_DESCRIPTION("WS73 BLE H4 codec");
 MODULE_LICENSE("GPL");

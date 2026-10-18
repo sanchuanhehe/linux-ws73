@@ -20,23 +20,26 @@ static void ws73_usb_control_test(struct kunit *test)
 
 	memset(out, 0xa5, sizeof(out));
 	for (i = 0; i < 36; i++) {
-		KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, i, 0x12345678,
-				WS73_USB_SWITCH_QUEUE, 9), -ENOSPC);
+		KUNIT_EXPECT_EQ(test,
+				ws73_usb_control_encode(out, i, 0x12345678,
+							WS73_USB_SWITCH_QUEUE, 9),
+			-ENOSPC);
 		KUNIT_EXPECT_PTR_EQ(test, memchr_inv(out, 0xa5, sizeof(out)), NULL);
 	}
-	KUNIT_ASSERT_EQ(test, ws73_usb_control_encode(out, 36, 0x12345678,
-			WS73_USB_SWITCH_QUEUE, 9), 36);
+	KUNIT_ASSERT_EQ(test,
+			ws73_usb_control_encode(out, 36, 0x12345678, WS73_USB_SWITCH_QUEUE, 9), 36);
 	KUNIT_EXPECT_MEMEQ(test, out, switch_wire, sizeof(switch_wire));
 	KUNIT_EXPECT_EQ(test, out[36], 0xa5);
-	KUNIT_ASSERT_EQ(test, ws73_usb_control_encode(out, 36, U32_MAX,
-			WS73_USB_RESET_AGGREGATION, 7), 36);
+	KUNIT_ASSERT_EQ(test,
+			ws73_usb_control_encode(out, 36, U32_MAX, WS73_USB_RESET_AGGREGATION, 7),
+			36);
 	KUNIT_EXPECT_MEMEQ(test, out, reset_wire, sizeof(reset_wire));
 	memset(out, 0xa5, sizeof(out));
 	for (i = 0; i <= U8_MAX; i++) {
 		if (i == 7 || i == 9 || i == 10)
 			continue;
-		KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, 36, 0,
-				WS73_USB_SWITCH_QUEUE, i), -EOPNOTSUPP);
+		KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, 36, 0, WS73_USB_SWITCH_QUEUE, i),
+				-EOPNOTSUPP);
 	}
 	KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, 36, 0, 2, 7), -EOPNOTSUPP);
 	KUNIT_EXPECT_EQ(test, ws73_usb_control_encode(out, 36, 0, -1, 7), -EOPNOTSUPP);
@@ -56,12 +59,12 @@ static void ws73_usb_single_test(struct kunit *test)
 
 	memset(out, 0xa5, sizeof(out));
 	for (i = 0; i < 128; i++) {
-		KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, i, 0,
-				record, sizeof(record)), -ENOSPC);
+		KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, i, 0, record, sizeof(record)),
+				-ENOSPC);
 		KUNIT_EXPECT_PTR_EQ(test, memchr_inv(out, 0xa5, sizeof(out)), NULL);
 	}
-	KUNIT_ASSERT_EQ(test, ws73_usb_single_encode(out, 128, 0x12345678,
-			record, sizeof(record)), 128);
+	KUNIT_ASSERT_EQ(test, ws73_usb_single_encode(out, 128, 0x12345678, record, sizeof(record)),
+			128);
 	KUNIT_EXPECT_MEMEQ(test, out, expected, sizeof(expected));
 	KUNIT_EXPECT_EQ(test, out[128], 0xa5);
 	KUNIT_ASSERT_EQ(test, btws73_chip_query_encode(platform, sizeof(platform)), 32);
@@ -87,24 +90,22 @@ static void ws73_usb_single_limits_test(struct kunit *test)
 		memset(out, 0xa5, WS73_USB_TX_MAX + 1);
 		expected = i < 8 || i > 4096 || (i & 7) ?
 			-EMSGSIZE : 64 + max(i, 64U);
-		KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX,
-				0, record, i), expected);
+		KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX, 0, record, i),
+				expected);
 		if (expected < 0)
-			KUNIT_EXPECT_PTR_EQ(test,
-				memchr_inv(out, 0xa5, WS73_USB_TX_MAX + 1), NULL);
+			KUNIT_EXPECT_PTR_EQ(test, memchr_inv(out, 0xa5, WS73_USB_TX_MAX + 1), NULL);
 		else
 			KUNIT_EXPECT_EQ(test, out[expected], 0xa5);
 	}
 	memset(out, 0xa5, WS73_USB_TX_MAX + 1);
 	record[1] = 8;
-	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX,
-			0, record, 8), -EOPNOTSUPP);
+	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX, 0, record, 8),
+			-EOPNOTSUPP);
 	record[1] = 7;
 	record[0] = 1;
-	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX,
-			0, record, 8), -EPROTO);
-	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX,
-			0, record, SIZE_MAX), -EMSGSIZE);
+	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX, 0, record, 8), -EPROTO);
+	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, WS73_USB_TX_MAX, 0, record, SIZE_MAX),
+			-EMSGSIZE);
 	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(NULL, 128, 0, record, 8), -EINVAL);
 	KUNIT_EXPECT_EQ(test, ws73_usb_single_encode(out, 128, 0, NULL, 8), -EINVAL);
 	KUNIT_EXPECT_PTR_EQ(test, memchr_inv(out, 0xa5, WS73_USB_TX_MAX + 1), NULL);
@@ -157,8 +158,11 @@ static void ws73_usb_aggregate_test(struct kunit *test)
 				KUNIT_EXPECT_PTR_EQ(test, rx.record[i].data, data + 92 + i * 4096);
 				KUNIT_EXPECT_EQ(test, rx.record[i].len, 4096);
 				if (queue == 9)
-					KUNIT_EXPECT_EQ(test, btws73_chip_reply_decode(
-						rx.record[i].data, rx.record[i].len, &chip), 0);
+					KUNIT_EXPECT_EQ(test,
+							btws73_chip_reply_decode(rx.record[i].data,
+										 rx.record[i].len,
+										 &chip),
+							0);
 			}
 		}
 	}
@@ -215,8 +219,8 @@ static void ws73_usb_aggregate_errors_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ws73_usb_aggregate_decode(data, length, &rx), -EMSGSIZE);
 	put_unaligned_le32(0x102, data);
 	KUNIT_EXPECT_EQ(test, ws73_usb_aggregate_decode(data, length, &rx), -EOPNOTSUPP);
-	KUNIT_EXPECT_EQ(test, ws73_usb_aggregate_decode(data, BTWS73_RX_MAX_SIZE + 1,
-			&rx), -EMSGSIZE);
+	KUNIT_EXPECT_EQ(test, ws73_usb_aggregate_decode(data, BTWS73_RX_MAX_SIZE + 1, &rx),
+			-EMSGSIZE);
 	KUNIT_EXPECT_EQ(test, ws73_usb_aggregate_decode(NULL, length, &rx), -EINVAL);
 	KUNIT_EXPECT_EQ(test, ws73_usb_aggregate_decode(data, length, NULL), -EINVAL);
 	KUNIT_EXPECT_MEMEQ(test, &rx, &before, sizeof(rx));

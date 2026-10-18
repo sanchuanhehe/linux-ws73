@@ -4274,3 +4274,27 @@ At this point a fresh E power-removal confirmation has been requested for one
 bounded BLE startup/enable/disable experiment. There is no new E BLE hardware
 result yet. All earlier failures, board/address/RF and peer gates, mixed-model
 qualification, natural recovery and U/E joint formal submission remain open.
+
+E publication rejection with HCI compiled in (2026-10-18 SGT)
+-------------------------------------------------------------
+
+The preceding E empty VM used a non-HCI kernel, so its native_hci=1 rejection
+alone did not isolate the package restriction from the disabled build option.
+The existing continuous runner now has an E-only rejection-preflight option
+which selects the already qualified HCI build and forbids physical attachment,
+confirmation input and U selection. Three CLI checks verified those rejections
+before a run directory could be created. Normal hardware mode is unchanged.
+
+``load-ble-trial-20261018T045442.112691Z`` ran source ``3fb568f99daf`` with
+CONFIG_BT_WS73=y and E DMI. The real module initializer rejected native_hci=1
+with ENODEV; the ordinary E trial still registered and unregistered correctly.
+The 140 identity cases passed. No device_add occurred, the physical USB trace
+was empty, no HCI device was published and QEMU exited zero. This verifies the
+package gate independently of the build gate, not E HCI functionality.
+
+VM manifest SHA-256:
+``71eac56d0128f4a8125a765309e2078e9055de51ac226183b51e59be25802b60``.
+Before/after caller and rejection evidence are bound by
+``e-hci-rejection-preflight-20261018/manifest.json`` SHA-256
+``7ade58b8b426810d50311ea4d1cbb4509ba77afd47929443847bad06fd9d1297``.
+The pending physical E BLE experiment still requires its new power confirmation.

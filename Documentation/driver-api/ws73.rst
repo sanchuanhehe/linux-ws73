@@ -545,7 +545,9 @@ with -ENODEV. Substituting another expectation cannot revive that session.
 This binds board inputs to the live observation without using the expectation
 to override HCC or qualifying cold-ROM reads. The RAM observation trial accepts
 an explicit U or E package bound to its VM tag and per-device firmware set;
-both passed empty-VM preparation, with E loading/runtime still unverified.
+both passed empty-VM preparation. One allocated E subsequently passed an
+explicit three-file load and runtime E/USB/version observation under a controlled
+QMP handoff; production board, BLE and natural-transition gates remain open.
 The dummy_hcd fixture supplies independent synthetic U and E board selections.
 
 
@@ -1076,7 +1078,8 @@ from one strict four-port allocation. Their archived manifests include that
 allocation and helper hash. BLE/HCI trials remain U-only. The RAM observation
 runner accepts U or E with a fresh per-device state confirmation, verifies the
 selected three-file VM image, and checks complete runtime identity/version
-replies. Its empty-VM tests do not qualify E loading or BLE. SDK110 inputs are checked and
+replies. One allocated E has a separate real controlled-handoff startup result;
+its BLE and mixed-device operation remain unverified. SDK110 inputs are checked and
 installed per selected board, with no combined or alternate-profile fallback.
 The local build lock resolves to the existing shared main-build.lock inode.
 

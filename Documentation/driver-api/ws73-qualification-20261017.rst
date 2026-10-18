@@ -4161,3 +4161,58 @@ success would not isolate reset as the sole cause of the preceding failure.
 Controlled QMP removal/reattachment remains artificial; natural transition,
 recovery and new E runtime/BLE qualification remain open. Another load requires
 fresh device-state confirmation; the first E confirmation remains consumed.
+
+First allocated E runtime identity/version observation (2026-10-18 SGT)
+-----------------------------------------------------------------------
+
+The user's short reply confirmed the pending request to remove/reinsert power
+on E 1-2.1.3 for the reset-disabled comparison. The confirmation records that
+reply verbatim and its specific question context, rather than inventing a new
+verbatim supply statement. The same device had already been explicitly
+confirmed as having no other supply. Fresh admission observed the exact
+allocated serial and boot layout at a new address; confirmation
+``e-reset-free-confirmation-20261018T043651.869329Z`` was consumed once.
+
+``ram-trial-20261018T043702.578518Z`` passed the bounded original-three-file load
+and controlled runtime observation, with compiled source ``2f55834c88d2`` and
+worktree ``1f12994627a4``. The fresh boot reads matched E/USB; 11 preparation
+writes and eight blocks carried 192632 payload bytes. After QUIT and explicit
+QMP boot removal, the same serial disappeared and returned as a 480-Mbps,
+five-endpoint device. Admission waited for its node access before attachment.
+A new runtime owner obtained complete GET_CHIP_TYPE and version replies:
+package 2, USB bus 0, firmware 0x010a6e3c and ROM 0x00010101. These values agree
+between raw wire parsing and the driver, without applying a U-version guess.
+
+All eight actual per-object QOM reads reported the four reset/detach controls
+false across boot and runtime objects. The lifecycle trace contains two opens
+and two closes for only the selected device's two addresses and no reset
+trace event. Three owners drained and QEMU exited zero; post-exit inspection
+found the same runtime descriptor and no visible owner or host driver binding.
+No BLE startup, HCI publication, radio request or peer traffic occurred.
+
+The original trial manifest SHA-256 is
+``f542652302e75a195ef28be534cc20883c2d8b063fbcb852e7928a2cb5c0335b``.
+Independent replay of archived inputs and parsers checked the full transcript,
+material hashes, QMP choices, returned identity and lifecycle trace. An initial
+offline replay import-path error is retained; the corrected replay explicitly
+loads the archived allocation helper. Analysis, host enumeration and current
+inspection are bound by ``e-runtime-pass-analysis-20261018/manifest.json``:
+``3e094f259f732548514a324c78618b980a28ee7009b7658921426819b69a406d``.
+
+The first system-QEMU E attempt remains FAIL. Version, autoscan and reset policy
+all differ between those transports, so this success does not prove a sole
+reset root cause. The result is one controlled startup observation on one new
+E sample, not natural recovery, cold-ROM automatic selection, general E board
+provisioning, BLE qualification, mixed-device operation or formal support.
+
+The existing U native-HCI runner now uses the same pinned private QEMU profile,
+per-object opt-out checks and bounded transition observation. Its empty VM
+``load-hci-trial-20261018T043555.655455Z`` passed with no device_add; manifest
+SHA-256 ``8b09d21ef0bc8c147e65d2cb5d9c8cc129ae324b59a25dd02147f00659c1dd91``.
+Five CLI rejection checks also passed before creating any VM/record, including
+E requests and missing fresh hardware confirmation. Preparation manifest
+``hci-reset-profile-preparation-20261018/manifest.json`` SHA-256:
+``6a795546f18b9cb6001615853181a422a3f3a379262003f10ffc71b57fa5e7e2``.
+Only RAM and this U native-HCI caller have adopted the new execution profile;
+other older callers still reject physical attachment. E BLE requires explicit
+package/tag/runtime admission and a separately verified continuous guest path.

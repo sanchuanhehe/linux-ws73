@@ -3950,3 +3950,59 @@ Private per-device records and manifest SHA-256:
 Allocation, caller changes, firmware inputs, tests and inspection limitations
 are bound by ``hardware-allocation-20261018/manifest.json`` SHA-256:
 ``71fbe064e0e578961ec839c05baf266bd409b08b3acf22288195fc7802ecbdc2``.
+
+Explicit board identity before boot inputs (2026-10-18 SGT)
+----------------------------------------------------------
+
+Commit ``26e5cf57ddc8`` requires the expected U/USB or E/USB identity alongside
+explicit board inputs in ws73_boot_start. It validates the expectation before
+USB traffic, copies it for the attempt, and compares both package and bus
+with the fresh HCC READM before firmware acquisition or preparation writes.
+A mismatch is terminal at the identity phase, even if the caller subsequently
+supplies a matching expectation. No automatic alternate-profile retry exists.
+The physical reference trial remains explicitly U-only. The dummy_hcd-only
+test driver takes an independent synthetic board selection from its fixture;
+that test metadata is not a physical USB identity mechanism.
+
+Two new KUnit cases cover seven live-identity mismatches (both U/E directions,
+alternate U encoding, SDIO and UART) and five unsupported/missing expected
+inputs. The first run caught an introduced ERR_PTR handling mistake: the
+new admission check tested NULL instead of IS_ERR. That 95/96 result remains
+FAIL. After correction all 96 cases passed with KASAN/UBSAN/lockdep. The tested
+dirty patch exactly matches the committed source diff. Kernel change
+checkpatch reports zero errors/warnings/checks.
+
+The existing full-speed USB loader VM passed ten cases, including independent
+U/E three-file loads, original-file integrity failures, wrong-bus rejection
+before input acquisition, disconnect and terminal reuse. Its 22 FILES/payload
+transactions and ten drains were checked; this is synthetic USB, not firmware
+execution on a new device. The supervisor rejected 45 log and nine artifact
+mutations. The physical-trial kernel/modules built successfully, and the
+existing explicit-port caller passed an empty-VM preflight. No physical USB
+was attached during this increment, and the E download gate remains closed.
+
+Five SDK110 Host files were checked byte-for-byte against pinned source
+``d5e68a58fe38``. They establish configured original-file paths/addresses,
+conditional RAM2/3/RAM4 preparation and the reference INI trim/temperature
+settings. The examined preparation routines have no U/E branch. This does
+not establish a particular E board's trim, runtime version or BLE compatibility;
+those remain required before extending the physical trial.
+
+Private record ``explicit-boot-identity-20261018/manifest.json`` SHA-256:
+``6634be983898ca4fffa93f04cfb8d84027fa015816671077809f777d312b7c61``.
+Validation records and manifest SHA-256:
+
+* Retained FAIL ``20261018T040536.021691Z``,
+  ``ff761b202721def317a6202721daae6ef31d4a28c0a3f33f518551123edb5d09``.
+* KUnit PASS ``20261018T040656.098498Z``,
+  ``fd6033f029c19e655a09076d21608f987ed5b05723b690b445a51945be9024b6``.
+* Virtual build ``virtual-usb-build-20261018T040738.629850Z``,
+  ``780fa2f86b67cfe581878106892997cffe9da3a3e7c9102a72c62d1eadf5e399``.
+* USB loader ``virtual-usb-20261018T040804.716863Z``,
+  ``589051ec2a1bae75070113b9dd507cfb8b16a7ea40c3d5286b60509c30dd3c49``.
+* Rejection controls ``virtual-usb-negative-20261018T040828.739467Z``,
+  ``b5236c8b55bbcd8c8b051d17ef8b4af030a4497311713bbb42a6e6afb11ab4a0``.
+* Trial build ``hardware-hci-build-20261018T040828.889117Z``,
+  ``3ae26884b4d49e5fe6fa1791a6652930220ea3828bb76bb863e392d2246475ae``.
+* Empty VM ``load-hci-trial-20261018T040915.538505Z``,
+  ``4011584a05fe01d83b69a9d462cc1ecb7b4117382a2a58a2fca053fc310e4ae5``.

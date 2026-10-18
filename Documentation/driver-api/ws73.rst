@@ -537,6 +537,17 @@ one U/USB or E/USB profile; S/SDIO and E/UART are rejected. All three original
 files must pass size, internal-header and complete-file hash checks before the
 first RAM/XO write. There is no combined input or alternate-model retry.
 
+The caller must also provide the expected U/USB or E/USB identity associated
+with those explicit board inputs. Unsupported or absent expectations fail
+before USB traffic. A successful fresh READM must match both package and bus
+before requesting files or issuing RAM/XO writes; mismatch fails at IDENTITY
+with -ENODEV. Substituting another expectation cannot revive that session.
+This binds board inputs to the live observation without using the expectation
+to override HCC or qualifying cold-ROM reads. The physical reference trial
+remains explicitly U-only; the existing dummy_hcd fixture supplies independent
+synthetic board selections to exercise both U and E.
+
+
 The firmware bundle stays local to the call and holds immutable references
 through preparation and every synchronous transfer. All return paths release
 it, including partial acquisition. ``request_firmware_direct`` uses the kernel

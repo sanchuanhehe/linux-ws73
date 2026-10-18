@@ -3692,3 +3692,47 @@ Private records and manifest SHA-256:
   ``45e377d78af2f880eed9191305669ff59bbd09c97d4a3b4221e547e25adbfd18``.
 * ``native-hci-postcheck-20261018``,
   ``14fcc8a2926a3225e86216b57e0f0a202fa5bab2a5aa0c2e477765c6570b6512``.
+
+Native management removal regression (2026-10-18 SGT)
+----------------------------------------------------
+
+Source ``b5e5fe852012`` closes a related coverage gap in the hardware-free USB
+fixture: previously it closed the management socket after USB drain without
+examining Index Removed. Each of its two initialized-controller cases now
+requires exactly one six-byte removal event for index zero after disconnect
+and owner drain. Queued New Settings are consumed within a bounded wait;
+other records fail. A further 100 ms event-free window precedes socket close.
+The Reset-in-flight case did not reach a configured index and retains its
+separate cancellation deadline instead of requiring this event.
+
+Full-speed and high-speed KASAN/UBSAN/lockdep VM runs each passed three cases,
+with two management removals and two event-free windows, 27 HCI commands,
+26 synthetic replies, two initializations/auto-off acknowledgements, one
+Reset cancellation and three owner drains. No sanitizer or locking diagnostic
+was reported. The supervisor rejected 41 log and five build-artifact mutations,
+including missing, duplicate, wrong-index, short, premature removal, omitted
+event-free-window evidence and a spurious configured removal in the pending
+Reset case. These exercise real native-stack events over synthetic USB, not
+physical-device behavior.
+
+A new hardware-HCI build and empty-VM preflight also passed from this clean
+source. No physical USB device was attached in this increment. The earlier
+physical HCI attempt remains FAIL with its 23 successful reply observations;
+its confirmation stays consumed. A fresh user power-removal confirmation is
+still required before another allocated-U load. No new RF, peer, address,
+E, recovery or submission qualification is claimed.
+
+Private records and manifest SHA-256:
+
+* ``virtual-usb-build-20261018T023509.386669Z``,
+  ``ffc5812a1da03c3b2af77e8b2ce6447ad0970ed83171ffc284fe2e6211a6a2cc``.
+* ``virtual-usb-20261018T023527.811941Z`` (full speed),
+  ``66877314a2438b059113b6de4b70bb73299501f4d559cf55bf428ad61a578281``.
+* ``virtual-usb-20261018T023544.218130Z`` (high speed),
+  ``6fbcb64b717491c83f3ae8fdcbc6ee5faa6408143b4d5d0d4b49a27f087946aa``.
+* ``virtual-usb-negative-20261018T023545.318068Z``,
+  ``c0423ae0e2d9dfc0ff325c9f93f77154214dfd1025ef940c68c96a6b469c6370``.
+* ``hardware-hci-build-20261018T023552.654107Z``,
+  ``68364f2ea05fd8a84e94eba3a5d277b0fe840a78511db2fb6652b85bcfb1ca79``.
+* ``load-hci-trial-20261018T023621.226788Z`` (empty VM only),
+  ``5f301b004ef127ecfe493cf39325de493519cd7bd590963aa308280b5b186f8a``.

@@ -4298,3 +4298,62 @@ Before/after caller and rejection evidence are bound by
 ``e-hci-rejection-preflight-20261018/manifest.json`` SHA-256
 ``7ade58b8b426810d50311ea4d1cbb4509ba77afd47929443847bad06fd9d1297``.
 The pending physical E BLE experiment still requires its new power confirmation.
+
+Split review builds and mock-client isolation (2026-10-18 SGT)
+-------------------------------------------------------------
+
+The original single-snapshot worktree remains frozen. A separate local
+``ws73-review-series`` worktree now contains four dependency stages and an
+explicit corrective fifth commit: protocol/firmware foundation, USB owner and
+auxiliary endpoint, native HCI consumer, reproduction tools, then mock-client
+test isolation. Each commit built independently with Clang W=1 and four jobs
+under the shared lock. The final review commit is ``779800547f83``; its 70
+selected file blobs and modes match development ``12db586c4c87`` exactly.
+The branch was not pushed or sent as an RFC. Wi-Fi and private hardware inputs
+are excluded. Patch sizing, message wrapping, userspace-fixture style,
+MAINTAINERS, current maintainer-tree selection and actual support gates remain
+open. The first four checkpatch results remain failures; the corrective fifth
+patch has zero errors, warnings or checks.
+
+Runtime validation exposed an actual test-configuration conflict. The initial
+exec-only run had KUNIT_AUTORUN_ENABLED disabled and ran zero cases; that is
+FAIL. With the documented kunit.autorun=1 parameter, 96 cases ran: 87 passed
+and nine failed. Native btws73 bound the auxiliary endpoints before their
+mock clients, causing EBUSY and unexpected native HCI traffic in the mock
+backends. These failures are preserved, not relabeled as transport defects or
+physical failures. The ordinary physical driver was never exercised.
+
+Development ``12db586c4c87`` separates endpoint/link mock suites into
+WS73_BLE_MOCK_KUNIT_TEST, requiring BT_WS73=n, including no native module.
+Protocol tests remain available with the actual driver. The existing runner
+has a combined-HCI mode that runs protocol and native HCI suites together;
+default/core-only modes retain all mock cases. Actual Kconfig generation
+verified native n/y/m: mocks resolve y/n/n while protocol tests remain y.
+
+The default sanitizer VM passed 96/96 cases, including all ten mock cases;
+the combined protocol/native-HCI sanitizer VM passed 100/100. Missing cases,
+SKIP and unexpected suites still fail supervision. The repaired review kernel
+passed its configured 86 protocol/codec cases with the real consumer compiled
+in and mock suites disabled; it does not contain the fourteen native HCI test
+cases that the development combined mode additionally runs. No test is removed
+from the aggregate coverage, and none of these VMs attached physical hardware.
+
+Split-series manifests, source correspondence, tool hashes, failed attempts
+and final review runtime are bound by
+``core-ble-review-series-20261018/manifest.json`` SHA-256
+``5e4f3a8c608026e0198ec11b510f9c9f84511489f1cf0c142c3f433caebe269f``.
+The development repair, Kconfig matrix and regressions are bound by
+``ble-mock-isolation-20261018/manifest.json`` SHA-256
+``11e27175b6af8e362ddce8fa9c5dd07d5f7e5e6401156a07028fd3fb8418978b``.
+Default VM ``20261018T051127.229030Z`` manifest SHA-256:
+``93d587dba339f310ff630f510065c4663d2f03bc132fa9ceb5bd682807da6c18``;
+combined VM ``20261018T050741.588103Z``:
+``28c8895c4c61dec7f1936df4b33e28a1e224c7421e0031553b1140bfafb30849``.
+
+The E BLE image was rebuilt from the repaired source and its empty preflight
+``load-ble-trial-20261018T051546.757264Z`` passed; manifest SHA-256
+``022302a6d2d1a741afff4925d1babeb1db1e44003ec21aa8afc3fed10cf859cb``.
+No new power confirmation has been consumed and no new E BLE hardware result
+exists. The previous HCI-build evidence retains its original source and must
+be refreshed before any future HCI hardware trial. Natural recovery, peer/RF,
+board/address, Wi-Fi STA, mixed-model and U/E formal-support gates remain open.

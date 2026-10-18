@@ -15,6 +15,7 @@ Never install these kernels/modules or run driver experiments on the host.
   python3 tools/testing/ws73/run-kunit.py --jobs 4
   python3 tools/testing/ws73/run-kunit.py --jobs 4 --core-only
   python3 tools/testing/ws73/run-kunit.py --jobs 4 --hci-only
+  python3 tools/testing/ws73/run-kunit.py --jobs 4 --combined-hci
   python3 tools/testing/ws73/run-kunit.py --jobs 4 --hci-only --kcsan
   python3 tools/testing/ws73/build-hci.py module
   python3 tools/testing/ws73/build-hci.py builtin
@@ -24,6 +25,11 @@ checks without binding the native HCI consumer. Runtime-link tests drive actual
 startup/action and USB TX engines with explicit synthetic replies, exercise
 gated publication and synchronous auxiliary probing, and separate local action
 faults from shared transport faults. They do not execute real control URBs.
+The mock-client endpoint/link suites have their own Kconfig option and require
+BT_WS73=n, including no module: both clients would otherwise claim the same
+auxiliary endpoint. Combined-HCI runs the protocol suites and actual native
+HCI suites together, with only those mock-client suites disabled. Default and
+core-only modes retain all mock-client cases; no runtime SKIP is treated as PASS.
 Core-only disables NET and
 Bluetooth. HCI-only binds the production auxiliary/HCI consumer to synthetic backends.
 It verifies failed enable, terminal rebind, two setup queries, packet ownership

@@ -123,6 +123,8 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--hci-only", action="store_true",
                       help="run native HCI synthetic data/lifecycle and codec tests")
+    mode.add_argument("--combined-hci", action="store_true",
+                      help="run protocol and native HCI suites together, without mock clients")
     mode.add_argument("--core-only", action="store_true",
                         help="verify the shared core with NET and Bluetooth disabled")
     args = parser.parse_args()
@@ -148,6 +150,9 @@ def main():
             ) + "\n# CONFIG_NET is not set\n# CONFIG_BT is not set\n"
         if args.hci_only:
             config_text = config_text.replace("CONFIG_WS73_KUNIT_TEST=y", "# CONFIG_WS73_KUNIT_TEST is not set")
+        if args.hci_only or args.combined_hci:
+            config_text = config_text.replace("CONFIG_WS73_BLE_MOCK_KUNIT_TEST=y",
+                                              "# CONFIG_WS73_BLE_MOCK_KUNIT_TEST is not set")
             config_text = config_text.replace("# CONFIG_BT_WS73 is not set", "CONFIG_BT_WS73=y")
             config_text += ("CONFIG_FAULT_INJECTION=y\nCONFIG_FAILSLAB=y\n"
                             "CONFIG_WS73_HCI_KUNIT_TEST=y\n")
@@ -164,8 +169,9 @@ def main():
         config.write_text(config_text)
         manifest = {
             "scope": ("native auxiliary/HCI synthetic data/lifecycle and codecs in VM; no real controller/peer"
-                      if args.hci_only else "synthetic protocol/firmware/endpoint tests in VM; no native HCI registration or peer"),
+                      if args.hci_only or args.combined_hci else "synthetic protocol/firmware/endpoint tests in VM; no native HCI registration or peer"),
             "hci_only": args.hci_only,
+            "combined_hci": args.combined_hci,
             "core_only": args.core_only,
             "kcsan": args.kcsan,
             "source": before,
@@ -219,8 +225,11 @@ def main():
             required.update({"drivers/bluetooth/btws73_proto.o",
                              "drivers/bluetooth/btws73_test.o",
                              "drivers/misc/ws73/usb.o", "drivers/misc/ws73/usb-io.o"})
+        if args.combined_hci:
+            required -= {"drivers/misc/ws73/ble-test.o", "drivers/misc/ws73/ble-link-test.o"}
         if args.hci_only:
             required = {name for name in required if not name.endswith(("-test.o", "/test.o"))}
+        if args.hci_only or args.combined_hci:
             required.update({"drivers/misc/ws73/ble-hci-test.o", "drivers/misc/ws73/ble-hci-data-test.o",
                              "drivers/bluetooth/btws73.o"})
         if args.kcsan:
@@ -322,8 +331,13 @@ def main():
             }
             if args.core_only:
                 del expected_groups["btws73-proto"]
-            if args.hci_only:
-                expected_groups = {"btws73-proto": expected,
+            if args.hci_only or args.combined_hci:
+                if args.hci_only:
+                    expected_groups = {}
+                else:
+                    del expected_groups["ws73-ble-endpoint"]
+                    del expected_groups["ws73-ble-link"]
+                expected_groups.update({"btws73-proto": expected,
                                    "ws73-hci-lifecycle": {"ws73_hci_failed_enable_test"},
                                    "ws73-hci-data": {"ws73_hci_data_test", "ws73_hci_queue_limit_test",
                                                      "ws73_hci_byte_limit_test", "ws73_hci_rejected_acl_test",
@@ -331,7 +345,7 @@ def main():
                                                      "ws73_hci_rx_fault_test", "ws73_hci_tx_nomem_test",
                                                      "ws73_hci_rx_nomem_test", "ws73_hci_link_data_test",
                                                      "ws73_hci_link_short_tx_test",
-                                                     "ws73_hci_link_short_action_test", "ws73_hci_link_abort_test"}}
+                                                     "ws73_hci_link_short_action_test", "ws73_hci_link_abort_test"}})
             passed = len(groups) == len(expected_groups)
             seen = set()
             for group in groups:
@@ -349,6 +363,14 @@ def main():
             passed = (passed and "# CONFIG_NET is not set" in lines
                       and not any(line.startswith(("CONFIG_BT=", "CONFIG_BT_WS73_"))
                                   for line in lines))
+        built_config = record / "artifacts/.config"
+        built_lines = set(built_config.read_text().splitlines()) if built_config.exists() else set()
+        if args.hci_only or args.combined_hci:
+            passed = (passed and "CONFIG_BT_WS73=y" in built_lines and
+                      not any(line.startswith("CONFIG_WS73_BLE_MOCK_KUNIT_TEST=")
+                              for line in built_lines))
+        else:
+            passed = passed and "CONFIG_WS73_BLE_MOCK_KUNIT_TEST=y" in built_lines
         passed = (passed and run.returncode == 0 and before == manifest["source_after"]
                   and required <= manifest["artifacts"].keys())
         try:
@@ -357,7 +379,7 @@ def main():
                 raw, (record / "artifacts/.config").read_text(), kcsan=args.kcsan)
             if args.kcsan:
                 instrumented = ["drivers/misc/ws73/ble.o", "drivers/misc/ws73/ble-link.o"]
-                if args.hci_only:
+                if args.hci_only or args.combined_hci:
                     instrumented.append("drivers/bluetooth/btws73.o")
                 manifest["instrumentation"] = {}
                 for name in instrumented:

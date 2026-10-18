@@ -27,6 +27,19 @@ config WS73_USB_IO
 	tristate
 	depends on USB
 
+config WS73_BLE_MOCK_KUNIT_TEST
+	tristate "WS73 auxiliary BLE mock-client tests" if !KUNIT_ALL_TESTS
+	depends on KUNIT
+	depends on BT_WS73 = n
+	select WS73_CORE
+	default WS73_KUNIT_TEST
+	help
+	  Exercise the BLE endpoint and runtime link with a mock client.
+	  The native btws73 consumer must be disabled, including as a module:
+	  it would otherwise bind the same auxiliary endpoints and compete
+	  with the test client. Use WS73_HCI_KUNIT_TEST to exercise that
+	  consumer instead. Protocol tests remain available in either mode.
+
 config WS73_USB
 	tristate "WS73 USB boot and runtime identity observations"
 	depends on USB

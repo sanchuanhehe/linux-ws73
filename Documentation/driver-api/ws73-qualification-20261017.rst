@@ -4006,3 +4006,54 @@ Validation records and manifest SHA-256:
   ``3ae26884b4d49e5fe6fa1791a6652930220ea3828bb76bb863e392d2246475ae``.
 * Empty VM ``load-hci-trial-20261018T040915.538505Z``,
   ``4011584a05fe01d83b69a9d462cc1ecb7b4117382a2a58a2fca053fc310e4ae5``.
+
+Selected-board RAM/runtime trial preparation (2026-10-18 SGT)
+-------------------------------------------------------------
+
+Source ``2f55834c88d2`` requires an explicit package=0 (U) or package=2 (E)
+matching the specially tagged VM. The existing guest selects its expected
+READM from a required board file; the loader independently matches fresh HCC
+before acquiring firmware or writing RAM. Missing/mismatched tags do not
+register a USB driver. PID 1, exact serial/enumeration, single guest port and
+one-shot admission remain required. This extends the bounded observation
+trial, not the normal physical driver's publication policy.
+
+The existing private RAM runner selects only the requested board's original
+SDK110 code/Wi-Fi/BTC inputs, checks hashes and payload sizes, and supplies a
+separate per-device VM image. Its checker validates complete runtime chip and
+version replies against the explicit board and driver observation; an unknown
+E firmware version is recorded, not forced to the historical U value or
+accepted for BLE. Hardware execution requires a fresh, unconsumed confirmation
+for the same board, port and current device snapshot. No such E execution
+occurred during this preparation increment.
+
+Both profiles passed empty-VM checks: eight admission cases, eight package/tag
+cases and failed module loads with missing device number/package or wrong
+package/tag. No physical device was attached or trial driver registered.
+Inspection of each actual initramfs found exactly its selected three original
+firmware files, matching their full hashes, board file, serial and VM tag.
+Each board's transcript verifier rejected 26 boot mutations and 143 runtime
+reply mutations, including all reply truncations, cross-model/wrong-bus data,
+malformed lengths, failure status, duplicate/reordered responses and driver/wire
+version disagreement. Five CLI rejection checks and strict compilation of
+three existing U guest callers also passed. Kernel checkpatch is clean.
+
+Private preparation record ``e-runtime-path-20261018/manifest.json`` SHA-256:
+``6014ad69c035460dcf05130db9c4f8d15fdddddc85d18ae560cf6275d630e64c``.
+The archived current runner additionally allows the hardware README as a
+non-executable documentation change since build; runtime behavior is unchanged
+from the two preflights. Build and empty-VM manifest SHA-256:
+
+* ``hardware-build-20261018T041501.221803Z``,
+  ``5bb1bb7db9ef85f2beacbe4340218c8316687d63f7227c61eee61216bd84e341``.
+* U ``ram-trial-20261018T041612.438166Z``,
+  ``72838576d5c988d878c09a9de0b87bd857f6c5ed60168aa82f42f5c66b69f93e``.
+* E ``ram-trial-20261018T041635.534754Z``,
+  ``f00537455bea529cc0e5e153ca270a1fe779983586ddecbfd736442f972bed16``.
+
+This does not qualify E loading, runtime, BLE, concurrent mixed devices,
+reference trim as production provisioning, cold-ROM automatic selection or
+natural/non-artificial recovery. BLE/native-HCI callers remain U-only. Earlier
+U evidence stays tied to its original now-excluded serial/epoch; new devices
+must earn separate evidence. All firmware files and private serials remain in
+local records, not the public source commit.

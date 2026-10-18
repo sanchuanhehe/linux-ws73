@@ -1,5 +1,5 @@
-WS73 allocated-U RAM loading experiment
-======================================
+WS73 selected-board RAM loading experiment
+=========================================
 
 This is an explicit development trial, not an automatically enabled production
 board profile. The test module registers only inside the specially tagged VM,
@@ -23,18 +23,21 @@ Kernel/module source, config, symbols and artifacts are archived together.
 The explicitly selected development inputs are SDK110's USB reference INI
 XO coarse/fine 8/60 (wire 0x3c08), temperature compensation off, and the fixed
 calibration-RAM sequence already audited against SDK and libws73 reference
-traffic. Original us/ws73.bin, us/wifi_cali.bin and us/btc_cali.bin remain
-separate and must all pass production validation before any RAM/XO writes.
-Only the U files are supplied: a non-U identity cannot fall back to another
-set. Board marketing identity/INI confirmation, production RF calibration,
+traffic. Original ws73.bin, wifi_cali.bin and btc_cali.bin from the explicitly
+selected us/ or e/ directory remain separate and must all pass production
+validation before any RAM/XO writes. Each VM contains only its selected set;
+a mismatching identity cannot fall back to another set. Board/INI confirmation,
+production RF calibration,
 and cross-board applicability remain unqualified; this bounded experiment
 must not install those values as universal driver defaults.
 
 Before attachment, the tagged guest runs eight pure admission cases in a
-separate test module and verifies that loading the trial without a device
-number fails. The actual trial driver must be absent at READY.
+separate test module, eight package/DMI cases, and verifies rejection of a
+missing device number, missing package or mismatched package/DMI. The actual
+trial driver must be absent at READY. Explicit package=0 or package=2 must
+agree with the tagged U or E VM; this metadata cannot replace HCC identity.
 
-After the normal driver reports exact U READM and the previously observed
+After the normal driver reports the selected board's READM and previously observed
 ROM version, guest PID 1 checks serial, USB ID, the device number captured
 from enumeration and existing observer ownership. Only then does it load
 the trial module with that number, recheck ownership, unbind that guest
@@ -87,9 +90,11 @@ hub/controller ancestry, descriptors and ownership again before each attach;
 use hostport, never a saved hostaddr or enumeration-order selection. The
 private hardware-allocation.json and allocation.py are archived per attempt.
 
-This loading/native-HCI trial is still U-only. Its callers reject an E target
-before building an initramfs or starting a VM. E has a firmware-free ROM
-observation route until its startup/profile/verification path is prepared.
+The existing RAM/runtime-observation runner accepts either explicit board.
+Both image profiles passed empty-VM preflight; no E download or runtime result
+is implied. BLE/native-HCI callers remain U-only and reject E before building
+an initramfs or starting a VM. An E runtime version is observed and recorded,
+not assumed to match U or to qualify BLE startup.
 File integrity checks alone do not authorize a mixed-device firmware load.
 Each later VM must contain only the explicit board's SDK110 three-file set;
 new runtime HCC identity/version must agree before function startup.

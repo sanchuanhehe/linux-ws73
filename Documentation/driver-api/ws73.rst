@@ -543,9 +543,10 @@ before USB traffic. A successful fresh READM must match both package and bus
 before requesting files or issuing RAM/XO writes; mismatch fails at IDENTITY
 with -ENODEV. Substituting another expectation cannot revive that session.
 This binds board inputs to the live observation without using the expectation
-to override HCC or qualifying cold-ROM reads. The physical reference trial
-remains explicitly U-only; the existing dummy_hcd fixture supplies independent
-synthetic board selections to exercise both U and E.
+to override HCC or qualifying cold-ROM reads. The RAM observation trial accepts
+an explicit U or E package bound to its VM tag and per-device firmware set;
+both passed empty-VM preparation, with E loading/runtime still unverified.
+The dummy_hcd fixture supplies independent synthetic U and E board selections.
 
 
 The firmware bundle stays local to the call and holds immutable references
@@ -957,8 +958,8 @@ supervisor failure and full evidence hashes are recorded in the qualification
 page. Physical loading still requires the board/INI, preparation and firmware
 epoch inputs; E hardware, a BLE peer, an AP and upstream review remain open.
 
-Explicit allocated-U RAM trial
-------------------------------
+Explicit selected-board RAM trial
+--------------------------------
 
 ``tools/testing/ws73/hardware/`` provides a separate VM-only development
 loader consumer. It requires the trial DMI markers, an explicit allocated
@@ -971,11 +972,13 @@ replenish it. The normal physical driver remains an observer; no universal
 board defaults or automatic physical loading are introduced.
 The experiment uses explicitly sourced SDK110 USB reference inputs: XO
 8/60 (0x3c08), temperature compensation disabled, fixed calibration-RAM
-preparation, and the three independently validated original U files.
+preparation, and the three independently validated original files for the
+explicit U or E board. A required package parameter must match the VM tag;
+fresh HCC must then match that expectation before input acquisition.
 Board marketing identification and general RF/cross-board applicability
 remain unqualified. A bounded RAM experiment does not establish those claims.
 
-The guest first requires successful U READM and the previously observed ROM
+The guest first requires the selected board's READM and previously observed ROM
 version, then explicitly rebinds only its allocated interface. The production
 loader must independently read identity, validate all files, prepare RAM,
 download and reach WAIT_RUNTIME. A newly enumerated normal observer must
@@ -1070,8 +1073,10 @@ resource. Its worktrees, VMs and evidence remain separate.
 
 Existing private runners require explicit ``--device-port`` and ``--board``
 from one strict four-port allocation. Their archived manifests include that
-allocation and helper hash. U-only RAM/BLE/HCI trials reject E; E currently
-has the firmware-free observation route only. SDK110 inputs are checked and
+allocation and helper hash. BLE/HCI trials remain U-only. The RAM observation
+runner accepts U or E with a fresh per-device state confirmation, verifies the
+selected three-file VM image, and checks complete runtime identity/version
+replies. Its empty-VM tests do not qualify E loading or BLE. SDK110 inputs are checked and
 installed per selected board, with no combined or alternate-profile fallback.
 The local build lock resolves to the existing shared main-build.lock inode.
 

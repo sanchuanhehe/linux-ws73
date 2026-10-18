@@ -42,6 +42,44 @@ source definitions, plus VM-captured cold READM, exact preparation ACKs and
 runtime identity/version for each supported model. A broad success-prefix
 comparison or a marketing product name does not establish these contracts.
 
+Device address read contract (#3, #7, #13)
+-----------------------------------------
+
+The allocated U now completes native HCI initialization and returns consistent
+Read BD_ADDR/management identity, but the source of that address is unknown.
+Its trial customization contains zero BLE/SLE address fields, and no vendor
+address setter is sent. Literal address searches in the six pinned U/E input
+files find no match; this does not prove ROM, eFuse, flash or constructed-default
+origin, uniqueness, or factory provisioning.
+
+* Supply ``c_union_define_efuse_ctrl_rb.h`` and
+  ``efuse_ctrl_rb_reg_offset.h`` for the supported U/E revisions, or equivalent
+  register documentation. SDK110's ``hal_soc_reg.h`` references these files,
+  but they are absent from the inspected checkout. In particular provide
+  masks, polarity and reset/read side effects for efuse_boot_st,
+  efuse_ctrl_busy and efuse_rd_st, including stale read-done behavior.
+* Confirm the reference addresses 0x40018010/14/18/1c, READ_EN 0x5a5a,
+  byte-index meaning of WR_ADDR, and low-byte validity of RDATA. The SDK
+  requires ready/not-busy checks before the read and read-done/not-busy before
+  consuming data. libws73 reads status three times but does not test its bits;
+  it therefore cannot supply the missing completion semantics.
+* Confirm supported access epochs and any clock/reset prerequisites for a
+  bounded read of only the three MAC slots: SDK IDs 72--74, bits 800/848/896
+  with length 48 each (bytes 100--117). No fuse programming, lock modification,
+  generic register API or use of the UART-only READ_EFUSE message is proposed.
+* Specify slot validity and precedence, byte order, address type/provisioning,
+  and the BLE derivation policy. The Host tries slot 74 down to 72 and adds
+  one in the last 24 address bits for BLE, with wrap behavior. Confirm collision
+  avoidance and how invalid/missing factory data must fail; neither INI nor
+  Ethernet-random fallback establishes a provisioned public Bluetooth address.
+
+Useful closure evidence: revisioned generated definitions or a narrow read
+contract, matching full-status captures and independently known provisioned
+addresses for assigned U/E samples. A nonzero HCI address alone is insufficient.
+The shared owner must serialize the entire address-read operation, bound its
+absolute deadline including all register transfers, and leave caller output
+unchanged on failure. SDK per-register locking is not whole-operation exclusion.
+
 Wi-Fi control replies (#3, #5, #8)
 ----------------------------------
 

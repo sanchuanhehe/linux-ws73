@@ -676,6 +676,45 @@ preserve the source and validate address type, instead of treating the fallback
 or SDK's fixed flash-failure development address as a public device identity.
 No customization defaults or address fallback are installed by this increment.
 
+Address provenance after the first complete physical HCI run
+------------------------------------------------------------
+
+The allocated U's successful native HCI experiment returned a stable nonzero
+address through two Read BD_ADDR replies and management Read Info. The pinned
+140-byte customization body supplied zero at both address fields; no vendor
+address-setting command was issued. A literal search in all six original U/E
+code/calibration inputs found no matching six-byte sequence in either order.
+This narrows what the Host explicitly supplied, but cannot distinguish ROM,
+eFuse, flash or constructed defaults, and does not establish public-address
+provisioning or uniqueness. The address value itself remains in private logs.
+
+A pinned SDK110/libws73 comparison establishes a specific remaining read gap.
+SDK ``efuse_normal_read`` waits for boot-ready and not-busy, writes the byte
+index and READ_EN, then waits for read-done and not-busy before taking RDATA's
+low byte. libws73 provides candidate addresses but discards its status reads.
+Successful register transfers therefore cannot substitute for the SDK's
+completion predicates. The referenced generated status/offset headers are
+absent from the inspected SDK checkout; status masks and stale completion
+semantics must not be invented.
+
+SDK table IDs 72--74 select three 48-bit fields beginning at bits 800, 848
+and 896. Their byte indices are 100--105, 106--111 and 112--117, not 32-bit
+word indices. Host selection tries the highest slot first. BLE derivation adds
+one at byte 5, propagates carry only through byte 3 and can wrap the last
+24 bits. This implementation evidence is not factory address-allocation policy.
+A future read must serialize the entire multi-register transaction, whereas
+the SDK's USB lock surrounds individual register operations. No programming,
+lock changes, unbounded poll loop or generic register interface is added.
+
+The private ``address-read-contract-20261018/manifest.json`` binds seven
+byte-compared reference files, six original firmware inputs and the successful
+physical capture (SHA-256
+``81369166e0a154e2a38c3c5c113334d5ebee7a897df2bbe8de90d24e0405db4d``).
+This is static contract evidence, not a new physical eFuse read. The precise
+missing definitions and provisioning questions are in
+:doc:`ws73-interface-questions`. Ordinary automatic publication and RF/peer
+qualification remain gated by real board/address inputs.
+
 The first batch checks source/firmware identities, implements bounded BLE
 wire parsing and encoding, and runs it in an independent instrumented VM.
 Its exit criteria are a reproducible build, all named codec tests passing,

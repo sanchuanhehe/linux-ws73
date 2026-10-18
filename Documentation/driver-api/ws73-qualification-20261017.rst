@@ -4216,3 +4216,61 @@ E requests and missing fresh hardware confirmation. Preparation manifest
 Only RAM and this U native-HCI caller have adopted the new execution profile;
 other older callers still reject physical attachment. E BLE requires explicit
 package/tag/runtime admission and a separately verified continuous guest path.
+
+Selected-board BLE trial admission preparation (2026-10-18 SGT)
+---------------------------------------------------------------
+
+Source ``3fb568f99daf`` extends the explicit tagged-VM BLE trial with a required
+package parameter. U/package0 and E/package2 must agree with their DMI tag and
+fresh runtime HCC identity before customization or enable. Both separately
+observed SDK110 versions are pinned to firmware 0x010a6e3c, ROM 0x00010101.
+Unknown packages, non-USB identity and any version-bit difference are rejected.
+The 140-case pure identity test covers both positive identities, cross-package
+and bus errors, unsupported/missing package, null inputs and each version bit.
+E native-HCI publication remains forbidden; existing U HCI callers pass package0.
+
+The existing continuous BLE runner and guest now select exactly one us/e
+three-file image set and require matching trial-board metadata. There is no
+combined image, cross-profile fallback or enumeration-order selection. The
+runner adopts the pinned private reset-disabled QEMU, four per-object QOM
+checks, timestamped QMP and bounded transition observations already used by
+the successful E RAM observation. It requires a new port/board/device-bound
+power-removal confirmation before each physical load. The private reference
+140-byte INI customization remains a bounded trial candidate, not production
+board provisioning. The SDK110 common USB BLE customization/enable call chain
+was checked against its pinned commit; no E-specific override was inferred.
+
+Both non-HCI and HCI four-job builds passed under the shared global lock.
+Empty E ``load-ble-trial-20261018T044857.800877Z`` and empty U
+``load-ble-trial-20261018T044914.661132Z`` each passed the 140 identity cases,
+existing profile corruption/length cases and actual invalid module admissions,
+then registered/unregistered the empty trial driver. Neither attached a USB
+device. E manifest SHA-256:
+``4828331b12ad5bf5718bd08c9f6b5d92e34de51ee44d332584b322508d67a0f2``;
+U manifest SHA-256:
+``3076b63d13470ddf4c2d67f24719997a57a8529413228c68e75e7a0dfc7b0f6a``.
+The updated U native-HCI caller also passed its empty VM, recorded separately
+as ``load-hci-trial-20261018T045024.326128Z``. This is compatibility preflight,
+not another U hardware qualification.
+
+For each selected board, the BLE verifier accepted one synthetic transcript
+and rejected 12 damaged variants plus three wrong-board requests. The boot
+verifier accepted archived boot traffic with four synthetic runtime OUT
+placeholders, and rejected five damaged variants plus three wrong boards.
+These fixture checks do not qualify hardware or the placeholder runtime bytes.
+Five invalid CLI requests were rejected before creating a run directory.
+The initial E boot-fixture mutation failed because grouped text hex was not
+normalized; that failed check and corrected U/E reruns are retained. Initial
+syntax checks encountered sandbox ccache access; repeated checks disabled
+ccache. The first E preflight stopped at a guest format-truncation compiler
+error before starting QEMU. Expanding its parameter buffer from 160 to 192
+bytes resolved that failure; the successful preflights use the corrected file.
+
+Preparation, before/after private callers, SDK audit hashes, all build and VM
+manifests and limitations are bound by
+``e-ble-preparation-20261018/manifest.json`` SHA-256
+``943ea0cf040440ee4c0c633e558e1158a3d609d53e1f20f4fc133a4378421c9d``.
+At this point a fresh E power-removal confirmation has been requested for one
+bounded BLE startup/enable/disable experiment. There is no new E BLE hardware
+result yet. All earlier failures, board/address/RF and peer gates, mixed-model
+qualification, natural recovery and U/E joint formal submission remain open.

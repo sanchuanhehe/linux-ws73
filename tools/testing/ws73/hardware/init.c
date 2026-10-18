@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Tagged VM PID 1 only: observe, explicitly rebind one U, capture and stop. */
+/* Tagged VM PID 1 only: observe, explicitly rebind one selected U/E, capture and stop. */
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
@@ -62,11 +62,21 @@ int main(void)
  dup2(console, 0); dup2(console, 1); dup2(console, 2); setvbuf(stdout, NULL, _IONBF, 0);
  if (mount("proc", "/proc", "proc", 0, NULL) || mount("sysfs", "/sys", "sysfs", 0, NULL) ||
      mount("debugfs", "/sys/kernel/debug", "debugfs", 0, NULL)) fail("mount");
- char serial[128], value[128], parameters[160];
+ char serial[128], value[128], parameters[160], board[8];
+ unsigned int package;
+ const char *product, *identity_line;
+ read_text("/trial-board", board, sizeof(board));
+ if (!strcmp(board, "us")) {
+  package = 0; product = "WS73-U-trial";
+  identity_line = "ws73 1-1:1.0: boot chip observation 0x00000000: package 0 bus 0;";
+ } else if (!strcmp(board, "e")) {
+  package = 2; product = "WS73-E-trial";
+  identity_line = "ws73 1-1:1.0: boot chip observation 0x0000000a: package 2 bus 0;";
+ } else { fail("explicit board missing or invalid"); }
  read_text("/sys/class/dmi/id/sys_vendor", value, sizeof(value));
  if (strcmp(value, "WS73-VM")) fail("VM vendor guard");
  read_text("/sys/class/dmi/id/product_name", value, sizeof(value));
- if (strcmp(value, "WS73-U-trial")) fail("VM product guard");
+ if (strcmp(value, product)) fail("VM product guard");
  read_text("/trial-serial", serial, sizeof(serial));
  if (strpbrk(serial, "\"\\ \t")) fail("serial parameter syntax");
  snprintf(parameters, sizeof(parameters), "serial=\"%s\"", serial);
@@ -74,6 +84,10 @@ int main(void)
  load_module("/guard-test.ko", "", 0);
  if (syscall(SYS_delete_module, "ws73_ram_trial_guard_test", O_NONBLOCK)) fail("guard test unload");
  load_module("/trial.ko", parameters, ENODEV); /* Missing enumeration is forbidden. */
+ snprintf(parameters, sizeof(parameters), "serial=\"%s\" devnum=2", serial);
+ load_module("/trial.ko", parameters, ENODEV); /* Missing package is forbidden. */
+ snprintf(parameters, sizeof(parameters), "serial=\"%s\" devnum=2 package=%u", serial, package == 0 ? 2 : 0);
+ load_module("/trial.ko", parameters, ENODEV); /* Wrong tagged package is forbidden. */
  errno = 0;
  if (!access("/sys/bus/usb/drivers/ws73-ram-trial", F_OK) || errno != ENOENT)
   fail("premature trial registration");
@@ -111,9 +125,9 @@ int main(void)
      observed_devnum = number;
     }
     if (strstr(data, "usb 1-1: USB disconnect")) fail("observed boot epoch disconnected");
-    if (strstr(data, "ws73 1-1:1.0: boot chip observation 0x00000000: package 0 bus 0;")) identity = 1;
+    if (strstr(data, identity_line)) identity = 1;
     if (!strstr(data, "ws73 1-1:1.0: boot version observation: 12 bytes 424f4f545645523030310000")) continue;
-    if (!identity || !observed_devnum) fail("initial U identity/epoch missing");
+    if (!identity || !observed_devnum) fail("initial selected identity/epoch missing");
     read_text("/sys/bus/usb/devices/1-1/serial", value, sizeof(value));
     if (strcmp(serial, value)) fail("guest serial mismatch");
     read_text("/sys/bus/usb/devices/1-1/idVendor", value, sizeof(value));
@@ -125,10 +139,10 @@ int main(void)
     if (*end || current_devnum != observed_devnum) fail("guest enumeration changed");
     attempted = 1;
     require_observer();
-    snprintf(parameters, sizeof(parameters), "serial=\"%s\" devnum=%u", serial, observed_devnum);
+    snprintf(parameters, sizeof(parameters), "serial=\"%s\" devnum=%u package=%u", serial, observed_devnum, package);
     load_module("/trial.ko", parameters, 0);
     require_observer();
-    puts("WS73_RAM_TRIAL_REBIND_ONE_U reference_xo=8,60");
+    printf("WS73_RAM_TRIAL_REBIND board=%s package=%u reference_xo=8,60\n", board, package);
     bind_command("/sys/bus/usb/drivers/ws73/unbind");
     bind_command("/sys/bus/usb/drivers/ws73-ram-trial/bind");
    }

@@ -14,6 +14,9 @@ MODULE_PARM_DESC(serial, "Exact allocated USB serial, required inside the tagged
 static unsigned int devnum;
 module_param(devnum, uint, 0400);
 MODULE_PARM_DESC(devnum, "Guest device number from the successful observation, required");
+static int package = -1;
+module_param(package, int, 0400);
+MODULE_PARM_DESC(package, "Explicit USB package (0=U, 2=E), must match DMI and fresh HCC");
 static atomic_t available = ATOMIC_INIT(1);
 
 /* Trial-only full reply capture: usbmon text keeps only the first 32 bytes. */
@@ -39,8 +42,7 @@ static void ws73_trial_load(struct work_struct *work)
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	/* Explicit SDK110 USB reference INI input, not a universal board default. */
 	const struct ws73_boot_board board = { .xo_coarse = 8, .xo_fine = 60 };
-	/* This reference trial remains explicitly U-only until E preparation. */
-	const struct btws73_chip_identity expected = { .package = 0, .bus = 0 };
+	const struct btws73_chip_identity expected = { .package = package, .bus = 0 };
 	struct ws73_boot_session session = {};
 	struct ws73_boot_io io = ws->boot_io;
 	int ret;
@@ -92,7 +94,7 @@ static int __init ws73_trial_init(void)
 {
 	if (!serial || !*serial || !devnum || devnum > 127 ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
-	    !dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial"))
+	    !ws73_trial_package_allowed(package, dmi_get_system_info(DMI_PRODUCT_NAME)))
 		return -ENODEV;
 	return usb_register(&ws73_trial_driver);
 }

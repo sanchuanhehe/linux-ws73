@@ -23,10 +23,21 @@ static int __init ws73_trial_guard_test_init(void)
 		{ 2, 3, true, -ENODEV },
 		{ 2, 2, true, -EALREADY }, /* Re-enumeration cannot replenish it. */
 	};
+	const struct {
+		int package;
+		const char *product;
+		bool allowed;
+	} profiles[] = {
+		{ 0, "WS73-U-trial", true }, { 2, "WS73-E-trial", true },
+		{ 0, "WS73-E-trial", false }, { 2, "WS73-U-trial", false },
+		{ -1, "WS73-U-trial", false }, { 1, "WS73-E-trial", false },
+		{ 0, NULL, false }, { 2, "WS73-trial", false },
+	};
 	unsigned int i;
 
 	if (!dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
-	    !dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial"))
+	    (!dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial") &&
+	     !dmi_match(DMI_PRODUCT_NAME, "WS73-E-trial")))
 		return -ENODEV;
 	for (i = 0; i < ARRAY_SIZE(cases); i++) {
 		if (ws73_trial_claim(&available, cases[i].expected, cases[i].observed,
@@ -35,6 +46,14 @@ static int __init ws73_trial_guard_test_init(void)
 			return -EINVAL;
 		}
 	}
+	for (i = 0; i < ARRAY_SIZE(profiles); i++) {
+		if (ws73_trial_package_allowed(profiles[i].package, profiles[i].product) !=
+		    profiles[i].allowed) {
+			pr_err("RAM trial profile check %u failed\n", i);
+			return -EINVAL;
+		}
+	}
+	pr_info("RAM trial profile checks passed: %zu\n", ARRAY_SIZE(profiles));
 	pr_info("RAM trial admission checks passed: %zu\n", ARRAY_SIZE(cases));
 	return 0;
 }

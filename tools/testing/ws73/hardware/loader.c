@@ -39,13 +39,15 @@ static void ws73_trial_load(struct work_struct *work)
 	struct ws73_usb *ws = container_of(work, struct ws73_usb, initialize);
 	/* Explicit SDK110 USB reference INI input, not a universal board default. */
 	const struct ws73_boot_board board = { .xo_coarse = 8, .xo_fine = 60 };
+	/* This reference trial remains explicitly U-only until E preparation. */
+	const struct btws73_chip_identity expected = { .package = 0, .bus = 0 };
 	struct ws73_boot_session session = {};
 	struct ws73_boot_io io = ws->boot_io;
 	int ret;
 
 	io.receive = ws73_trial_receive;
 	ret = ws73_boot_start(&ws->interface->dev, &io, &board,
-			      ws->boot_io.now_ms(ws) + 15000, &session);
+			      &expected, ws->boot_io.now_ms(ws) + 15000, &session);
 	if (ret)
 		ws73_usb_fail(ws, ret);
 	dev_info(&ws->interface->dev,

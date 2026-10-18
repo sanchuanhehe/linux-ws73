@@ -175,7 +175,7 @@ if proof.get('phase')=='loader':
   'missing_file_accepted':(k,s.replace('result=-2 repeat=-2','result=0 repeat=0',1)),
   'rehashed_modification_accepted':(k,s.replace('result=-129 repeat=-129','result=0 repeat=0',1)),
   'mixed_profile_accepted':(k,s.replace('result=-90 repeat=-90','result=0 repeat=0',1)),
-  'unsupported_accepted':(k,s.replace('result=-95 repeat=-95','result=0 repeat=0',1)),
+  'mismatched_bus_accepted':(k,s.replace('result=-19 repeat=-19','result=0 repeat=0',1)),
   'failed_session_retried':(k,s.replace('repeat=-129','repeat=0',1)),
   'completed_session_retried':(k,s.replace('repeat=-114','repeat=0',1)),
   'false_ready':(k,s.replace('phase=4 stage=6','phase=4 stage=0',1)),

@@ -26,7 +26,11 @@ struct ws73_boot_session {
  * board inputs for the intended hardware or bounded development trial. This
  * API supplies no board defaults and cannot turn a successful load into cold
  * boot, RF/trim, or cross-board qualification.
- * It performs a fresh READM, selects exactly one USB U/E profile, acquires and
+ * expected binds the explicit board inputs to a supported U/USB or E/USB
+ * identity. A fresh READM must agree before any firmware request or write;
+ * mismatch is terminal, never an invitation to switch profiles. This check
+ * does not prove cold-ROM identity validity or board input provenance.
+ * It then selects exactly one USB U/E profile, acquires and
  * validates all three original files, prepares RAM/XO, then sends FILES/QUIT.
  * Firmware references stay live until all synchronous transfers have joined.
  * Filesystem acquisition is synchronous; cancellation/deadline is checked
@@ -35,7 +39,8 @@ struct ws73_boot_session {
  * is not Ready and conveys no state/cache to a re-enumerated runtime instance.
  */
 int ws73_boot_start(struct device *dev, const struct ws73_boot_io *io,
-		    const struct ws73_boot_board *board, u64 deadline_ms,
+		    const struct ws73_boot_board *board,
+		    const struct btws73_chip_identity *expected, u64 deadline_ms,
 		    struct ws73_boot_session *session);
 
 #endif

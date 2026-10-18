@@ -1,27 +1,35 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#include <linux/err.h>
 #include <linux/errno.h>
 #include <linux/module.h>
 
 #include "boot-loader.h"
 
 int ws73_boot_start(struct device *dev, const struct ws73_boot_io *io,
-		    const struct ws73_boot_board *board, u64 deadline_ms,
+		    const struct ws73_boot_board *board,
+		    const struct btws73_chip_identity *expected, u64 deadline_ms,
 		    struct ws73_boot_session *session)
 {
 	struct ws73_firmware files = {};
 	struct ws73_boot_board selected;
+	struct btws73_chip_identity selected_chip;
 	int ret;
 
 	if (!session)
 		return -EINVAL;
 	if (session->error || session->stage != WS73_SESSION_NEW)
 		return session->error ?: -EALREADY;
-	if (!dev || !board || !io || !io->now_ms || !io->cancelled ||
+	if (!dev || !board || !expected || !io || !io->now_ms || !io->cancelled ||
 	    !io->send || !io->receive || !io->wait_ready) {
 		ret = -EINVAL;
 		goto fail;
 	}
 	selected = *board;
+	selected_chip = *expected;
+	if (IS_ERR(ws73_fw_profile(&selected_chip))) {
+		ret = -EOPNOTSUPP;
+		goto fail;
+	}
 	if (selected.xo_coarse > 15 || selected.xo_fine > 127) {
 		ret = -ERANGE;
 		goto fail;
@@ -30,6 +38,11 @@ int ws73_boot_start(struct device *dev, const struct ws73_boot_io *io,
 	ret = ws73_boot_read_chip(io, deadline_ms, &session->observation);
 	if (ret)
 		goto fail;
+	if (session->observation.chip.package != selected_chip.package ||
+	    session->observation.chip.bus != selected_chip.bus) {
+		ret = -ENODEV;
+		goto fail;
+	}
 	session->stage = WS73_SESSION_INPUTS;
 	ret = ws73_firmware_request(dev, &session->observation.chip, &files);
 	if (ret)

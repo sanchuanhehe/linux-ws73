@@ -321,7 +321,7 @@ def validate_loader(kernel, log, speed="full"):
   else:
    assert repeated==result,number
    if n==7:assert result in (-19,-108,-71,-2,-104) and phase==1,number
-   else:assert (result,phase)==({2:-2,3:-129,4:-90,5:-95,6:-95,8:-71}[n],3 if n==8 else 2),number
+   else:assert (result,phase)==({2:-2,3:-129,4:-90,5:-19,6:-19,8:-71}[n],3 if n==8 else 1 if n in (5,6) else 2),number
    assert (stage,prep,image,ack)==(0,0,0,0),number
   assert part.count('WS73_LOADER_READM actual=19 verified')==1,number
   assert re.findall(r'WS73_LOADER_ID actual=(\d+) word=([0-9a-f]+) synthetic',part)==([] if n==7 else [('4',f'{words[n]:08x}')]),number

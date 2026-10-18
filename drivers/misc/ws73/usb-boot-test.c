@@ -93,11 +93,18 @@ static void ws73_test_download(struct work_struct *work)
 		struct ws73_boot_session session = {};
 		/* Explicit fixture trim, not a default for any physical board. */
 		const struct ws73_boot_board board = { .xo_coarse = 1, .xo_fine = 2 };
+		/* Explicit test input from dummy_hcd, never a physical USB identity. */
+		const struct btws73_chip_identity expected = {
+			.package = le16_to_cpu(test->usb.udev->descriptor.bcdDevice),
+			.bus = 0,
+		};
 		u64 deadline = ws73_test_now(test) + 15000;
 		int repeated;
 
-		ret = ws73_boot_start(&test->intf->dev, &io, &board, deadline, &session);
-		repeated = ws73_boot_start(&test->intf->dev, &io, &board, deadline, &session);
+		ret = ws73_boot_start(&test->intf->dev, &io, &board, &expected,
+				      deadline, &session);
+		repeated = ws73_boot_start(&test->intf->dev, &io, &board, &expected,
+					   deadline, &session);
 		dev_info(&test->intf->dev,
 			 "synthetic loader result=%d repeat=%d phase=%u stage=%u prep=%u image=%u ack=%zu raw=%08x\n",
 			 ret, repeated, session.stage, session.progress.stage,

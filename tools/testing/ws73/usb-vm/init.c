@@ -415,6 +415,8 @@ static void loader_trials(int control, int *eps, int log, const char *udc)
   if (trial == 2 && unlink(paths[0][2])) die("remove BTC input");
   if (trial == 3) loader_install(paths[0][0], mutant);
   if (trial == 4) loader_install(paths[0][1], blobs[1][1]);
+  /* Explicit dummy_hcd board fixture, independent of the READM reply. */
+  setting(G "bcdDevice", model ? "0x0002" : "0x0000");
   setting(G "UDC", udc); enabled(control);
   ssize_t n = read(eps[1], got, sizeof(got));
   if (n != 19 || memcmp(got, "READM 0x40019000 4 ", 19)) die("loader identity before writes");

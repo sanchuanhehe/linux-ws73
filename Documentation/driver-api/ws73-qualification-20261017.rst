@@ -4357,3 +4357,38 @@ No new power confirmation has been consumed and no new E BLE hardware result
 exists. The previous HCI-build evidence retains its original source and must
 be refreshed before any future HCI hardware trial. Natural recovery, peer/RF,
 board/address, Wi-Fi STA, mixed-model and U/E formal-support gates remain open.
+
+
+Synthetic USB fixture formatting (2026-10-18 SGT)
+------------------------------------------------
+
+Development ``91b8a485eace`` expands the existing userspace FunctionFS fixture
+for review. Its 10,329 non-comment raw C tokens match the preceding source
+exactly. Runtime, boot, download, loader, startup and HCI fixture variants all
+compile with GCC -O2 -Wall -Wextra -Werror. These executables were not run on
+the host. This is formatting evidence, not a new USB or hardware qualification;
+source locations and diagnostic line numbers can change.
+
+The strict file check now reports zero errors, twelve warnings and eight
+checks. Remaining findings include the userspace signal flag, descriptive
+log text, existing array qualifiers, guarded strcpy, branch braces, nesting
+and long log literals. Structural refactoring is separate; full checkpatch
+cleanliness and RFC readiness are not claimed. The earlier frozen review
+series and its original failing checkpatch reports remain unchanged.
+
+``usb-fixture-style-20261018/manifest.json`` SHA-256:
+``ca581af235873ef085f4bb206552125bf913aa3e6c5d37b82b417c07c00e5332``.
+The non-HCI hardware build from this commit passed; manifest SHA-256:
+``36f5acf7dc2bbf5bb8bdc38d051bcbcf926b3f651001e2a44b7f6e756dd3c559``.
+The refreshed E empty-VM preflight ``20261018T052600.053696Z`` passed;
+manifest SHA-256:
+``616cfcef4b55fac4a2cbfa9d63a414f4b608a7cb1514045082e780a7244be691``.
+No physical device was attached in this preflight and the VM exited.
+
+A new user power-cycle report was recorded, but read-only checks still found
+the exact selected E at its previous runtime enumeration, with no new kernel
+USB disconnect/re-enumeration after 12:37 SGT. The report has not been consumed
+for a hardware trial. Device/time clarification is pending; no new E BLE
+hardware result is claimed and no hub, controller or other-thread device was
+operated. Existing cold-selection, board/address, peer/RF, mixed-model and
+natural-recovery gates remain open.

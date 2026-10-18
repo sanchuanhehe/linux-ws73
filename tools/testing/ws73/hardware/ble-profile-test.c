@@ -5,6 +5,53 @@
 #include <linux/module.h>
 #include "ble-profile.h"
 
+static int ws73_ble_identity_test(void)
+{
+	static const struct {
+		int expected;
+		u8 package, bus;
+		bool valid;
+	} cases[] = {
+		{ 0, 0, 0, true }, { 2, 2, 0, true },
+		{ 0, 2, 0, false }, { 2, 0, 0, false },
+		{ 0, 0, 1, false }, { 2, 2, 2, false },
+		{ -1, 0, 0, false }, { 1, 1, 0, false },
+		{ 3, 3, 0, false }, { 2, 3, 0, false },
+	};
+	const struct ws73_version known = { .firmware = 0x010a6e3c, .rom = 0x00010101 };
+	struct btws73_chip_identity chip = {};
+	struct ws73_version changed;
+	unsigned int i, bit;
+
+	for (i = 0; i < ARRAY_SIZE(cases); i++) {
+		chip.package = cases[i].package;
+		chip.bus = cases[i].bus;
+		if (ws73_ble_trial_identity(cases[i].expected, &chip, &known) != cases[i].valid)
+			return -EINVAL;
+	}
+	chip.package = 0;
+	chip.bus = 0;
+	if (ws73_ble_trial_identity(0, NULL, &known) ||
+	    ws73_ble_trial_identity(0, &chip, NULL))
+		return -EINVAL;
+	chip.bus = 0;
+	for (i = 0; i <= 2; i += 2) {
+		chip.package = i;
+		for (bit = 0; bit < 32; bit++) {
+			changed = known;
+			changed.firmware ^= 1U << bit;
+			if (ws73_ble_trial_identity(i, &chip, &changed))
+				return -EINVAL;
+			changed = known;
+			changed.rom ^= 1U << bit;
+			if (ws73_ble_trial_identity(i, &chip, &changed))
+				return -EINVAL;
+		}
+	}
+	pr_info("BLE trial identity checks passed: 140\n");
+	return 0;
+}
+
 static int __init ws73_ble_profile_test_init(void)
 {
 	const struct firmware *fw;
@@ -14,8 +61,12 @@ static int __init ws73_ble_profile_test_init(void)
 	int ret;
 
 	if (!dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
-	    !dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial"))
+	    (!dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial") &&
+	     !dmi_match(DMI_PRODUCT_NAME, "WS73-E-trial")))
 		return -ENODEV;
+	ret = ws73_ble_identity_test();
+	if (ret)
+		return ret;
 	ret = request_firmware_direct(&fw, WS73_BLE_TRIAL_PROFILE, NULL);
 	if (ret)
 		return ret;

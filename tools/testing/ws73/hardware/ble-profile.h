@@ -5,13 +5,24 @@
 #include <crypto/sha2.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
+#include <linux/ws73.h>
 #include "customize.h"
 
 #define WS73_BLE_TRIAL_PROFILE "ws73-trial/customization-body.bin"
 
+/* Observed separately on U and E; this is a trial gate, not board provisioning. */
+static inline bool ws73_ble_trial_identity(int expected,
+					   const struct btws73_chip_identity *chip,
+					   const struct ws73_version *version)
+{
+	return (expected == 0 || expected == 2) && chip && version &&
+	       chip->package == expected && chip->bus == 0 &&
+	       version->firmware == 0x010a6e3c && version->rom == 0x00010101;
+}
+
 /* One private SDK110 INI candidate, not a public or automatically selected board. */
 static inline int ws73_ble_trial_profile(const u8 *data, size_t length,
-					struct ws73_customization *out)
+					 struct ws73_customization *out)
 {
 	static const u8 expected[SHA256_DIGEST_SIZE] = {
 		0x61, 0x5e, 0x2e, 0xe9, 0x21, 0xfb, 0xb5, 0xa0,

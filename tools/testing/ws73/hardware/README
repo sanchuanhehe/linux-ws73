@@ -64,7 +64,8 @@ and excluding CONFIG_BT_BREDR. It leaves the previous non-HCI build
 and its evidence pointer intact. The BLE trial's default behavior still ends
 after acknowledged disable. Explicit `native_hci=1` instead publishes the BLE
 child after that disable; native open then owns the next enable. Publication
-is not an HCI initialization result. Builds without BT_WS73 reject this mode.
+is not an HCI initialization result. Builds without BT_WS73 and all E trial
+instances reject this mode. Native HCI remains an explicit U-only experiment.
 
 Use this option only in the tagged VM's continuous fresh-load experiment:
 identity, three-file download, new runtime owner, reference customization,
@@ -91,10 +92,15 @@ use hostport, never a saved hostaddr or enumeration-order selection. The
 private hardware-allocation.json and allocation.py are archived per attempt.
 
 The existing RAM/runtime-observation runner accepts either explicit board.
-Both image profiles passed empty-VM preflight; no E download or runtime result
-is implied. BLE/native-HCI callers remain U-only and reject E before building
-an initramfs or starting a VM. An E runtime version is observed and recorded,
-not assumed to match U or to qualify BLE startup.
+The allocated E on 1-2.1.3 has a separately recorded RAM/runtime observation;
+that result does not qualify BLE startup or other allocated devices. The BLE
+trial now requires package=0 or package=2, matching its U/E DMI tag. Fresh
+runtime HCC package/USB and the separately observed SDK110 firmware/ROM
+versions must match before reference customization or BLE enable. The empty
+VM profile test includes 140 identity/version boundary cases. Missing package,
+cross-board DMI and E native-HCI publication are rejected. The continuous
+BLE supervisor selects one board per VM; native-HCI callers remain U-only.
+This admission extension is not an E BLE hardware result.
 File integrity checks alone do not authorize a mixed-device firmware load.
 Each later VM must contain only the explicit board's SDK110 three-file set;
 new runtime HCC identity/version must agree before function startup.

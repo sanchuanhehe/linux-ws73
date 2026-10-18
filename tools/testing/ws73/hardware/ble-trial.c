@@ -13,6 +13,8 @@ static char *serial;
 module_param(serial, charp, 0400);
 static unsigned int devnum;
 module_param(devnum, uint, 0400);
+static int package = -1;
+module_param(package, int, 0400);
 /* Only the continuous fresh-load supervisor may request this experiment. */
 static bool native_hci;
 module_param(native_hci, bool, 0400);
@@ -39,12 +41,12 @@ static void ws73_ble_trial_start(struct work_struct *work)
 	if (!ret)
 		ret = ws73_platform_get_version(&ws->identity, &ws->tx, &ws->runtime_io,
 						now + 4000, &version);
-	if (!ret && (chip.package || chip.bus || version.firmware != 0x010a6e3c ||
-		     version.rom != 0x00010101))
+	if (!ret && !ws73_ble_trial_identity(package, &chip, &version))
 		ret = -ENODEV;
 	if (ret)
 		goto done;
-	dev_info(&ws->interface->dev, "BLE trial U/USB version matched; reference profile only\n");
+	dev_info(&ws->interface->dev, "BLE trial package %d/USB version matched; reference profile only\n",
+		 package);
 	stage = "startup";
 	ret = ws73_startup_run(&ws->startup, &ws->tx, &ws->runtime_io, &ws->ble_io,
 			       &platform, &parameters);
@@ -69,7 +71,8 @@ done:
 			 "BLE trial result=%d stage=%s; native HCI experiment, address source unqualified\n",
 			 ret, stage);
 	else
-		dev_info(&ws->interface->dev, "BLE trial result=%d stage=%s; no HCI published\n", ret, stage);
+		dev_info(&ws->interface->dev, "BLE trial result=%d stage=%s; no HCI published\n",
+			 ret, stage);
 }
 
 static int ws73_ble_trial_probe(struct usb_interface *intf, const struct usb_device_id *id)
@@ -107,9 +110,9 @@ static int __init ws73_ble_trial_init(void)
 	int ret;
 
 	if (!serial || !*serial || !devnum || devnum > 127 ||
-	    (native_hci && !IS_ENABLED(CONFIG_BT_WS73)) ||
+	    (native_hci && (package != 0 || !IS_ENABLED(CONFIG_BT_WS73))) ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
-	    !dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial"))
+	    !ws73_trial_package_allowed(package, dmi_get_system_info(DMI_PRODUCT_NAME)))
 		return -ENODEV;
 	ret = request_firmware_direct(&fw, WS73_BLE_TRIAL_PROFILE, NULL);
 	if (ret)
@@ -127,7 +130,7 @@ static void __exit ws73_ble_trial_exit(void)
 	usb_deregister(&ws73_ble_trial_driver);
 }
 module_exit(ws73_ble_trial_exit);
-MODULE_DESCRIPTION("WS73 allocated-U reference BLE startup trial, tagged VM only");
+MODULE_DESCRIPTION("WS73 selected-board reference BLE startup trial, tagged VM only");
 MODULE_LICENSE("GPL");
 MODULE_IMPORT_NS("WS73");
 MODULE_IMPORT_NS("WS73_USB_OWNER");

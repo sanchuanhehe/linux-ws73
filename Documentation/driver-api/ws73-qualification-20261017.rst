@@ -4057,3 +4057,55 @@ natural/non-artificial recovery. BLE/native-HCI callers remain U-only. Earlier
 U evidence stays tied to its original now-excluded serial/epoch; new devices
 must earn separate evidence. All firmware files and private serials remain in
 local records, not the public source commit.
+
+First newly allocated E load: runtime transition failed (2026-10-18 SGT)
+-----------------------------------------------------------------------
+
+The user confirmed removal of all power from E at 1-2.1.3 and reinsertion into
+that same port. A fresh exact-serial/topology/boot-descriptor/ownership check
+bound confirmation ``e-ram-confirmation-20261018T042309.776323Z`` to this device,
+not an earlier allocation. It was consumed once by
+``ram-trial-20261018T042320.692535Z``, compiled source ``2f55834c88d2`` and
+worktree ``0fc67bea04f6``. Only that individual device was attached to the
+isolated VM; no hub/controller or other-thread device operation occurred.
+
+Both pre-write READM replies were exactly 0a000000; VERSION was BOOTVER001.
+The original E code/Wi-Fi/BTC inputs passed full hash checks, with payloads
+137580/20996/34056 bytes. Eleven preparation writes and eight file blocks
+(total 192632 bytes) completed before QUIT. The tagged loader reached
+WAIT_RUNTIME. Independent post-processing checks all 31 OUT and 30 IN
+completions, complete replies, command/chunk ordering and READY holdoffs.
+Binary usbmon checks at most the first 512 bytes of each OUT against the
+hash-verified input; it does not prove uncaptured payload bytes on the wire.
+An initial offline audit incorrectly treated an interrupt record as bulk;
+that audit failure is retained alongside the corrected bulk-only analysis.
+
+After the controlled QMP boot detach, the 10-second runtime admission deadline
+expired. The host recorded repeated full-speed enumeration, setup-address
+error -71 and then the same serial with 12-Mbps/two-endpoint boot descriptors.
+No runtime attachment, GET_CHIP_TYPE, version query, BLE or RF operation
+followed. Both guest owners drained and QEMU exited zero. A post-exit check
+found the same allocated device unbound and without a visible owner. The
+original trial remains FAIL; confirmed download transactions are not a
+successful firmware startup. Device startup versus controlled-handoff effects
+remain unresolved, and no retry, firmware substitution or recovery was run.
+
+Private failure manifest SHA-256:
+``cdc5a18b1d99ad80f92bfb50e8ea51b93c0fe567c0435c9efa66a9f9fa058bc5``.
+The separate analysis binds the unchanged failure, raw host enumeration,
+post-inspection, consumed confirmation and audit:
+``e-first-load-analysis-20261018/manifest.json``, SHA-256
+``2e765469977e30ac1b323d6aefaa48f8a0bc30e6cc544f8dc98c34682c03ab0a``.
+
+The existing U native-HCI trial was independently rebuilt for the package
+parameter change and passed empty-VM preparation without any physical attach:
+
+* ``hardware-hci-build-20261018T042248.714608Z``, SHA-256
+  ``26c773ae4292598543a2ce1393dc4318ba33dc263f0e4d917ae3557bcbe1a7ba``.
+* ``load-hci-trial-20261018T042454.209447Z``, SHA-256
+  ``ca04ddf0c6f1691484536ebefe0926c8f226380713d29e99a0c1d29a4e9db208``.
+
+The next E step is to examine transition timing and ownership against the
+existing reference path before preparing another bounded trial. This result
+does not qualify E runtime, mixed devices, cold-ROM automatic selection or
+natural/non-artificial recovery. All project test VMs have exited.

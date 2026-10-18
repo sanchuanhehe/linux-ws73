@@ -4109,3 +4109,55 @@ The next E step is to examine transition timing and ownership against the
 existing reference path before preparing another bounded trial. This result
 does not qualify E runtime, mixed devices, cold-ROM automatic selection or
 natural/non-artificial recovery. All project test VMs have exited.
+
+Reset-disabled reference handoff preparation (2026-10-18 SGT)
+------------------------------------------------------------
+
+Read-only comparison found a material difference in the VM transport. Upstream
+QEMU v10.2.2 hw/usb/host-libusb.c calls libusb_reset_device in close, open-failure
+and exit paths. The installed usb-host property list has guest-reset controls
+but no host-reset opt-out. The first E attempt used that system QEMU; its trace
+cannot establish whether a particular reset caused the observed boot return.
+Source: https://raw.githubusercontent.com/qemu/qemu/v10.2.2/hw/usb/host-libusb.c
+
+The historical E software-reset observation used a different QEMU executable
+with host-reset, guest-reset, guest-resets-all and kernel-driver-detach all
+false. Its current binary, source and object hashes match the archived build;
+the binary also matches that historical trial's prepared-input hash. A private
+copy, including checked PC boot assets and a manifest of resolved libraries,
+now lives inside this project's own directory. The shared reference executable,
+build tree, VMs and hardware were not changed. The copied executable SHA-256 is
+``05a3b654eb2801ed1ddb60fc6c6fa9bd5cd48eefa8194f999170eab90b26185a``.
+
+The existing RAM runner now requires that pinned profile with no PATH fallback.
+Each attach supplies the four false options and then checks their actual QOM
+values. The common private attachment helper rejects callers that have not
+verified this profile; older BLE/HCI/observation callers are consequently not
+eligible for another hardware attachment until adapted and preflighted.
+This withdraws their execution path, not their historical evidence.
+The runner records monotonic/wall timestamps for QMP messages, USB lifecycle
+trace events, and at most 256 changes in selected-port sysfs observations
+around the controlled handoff. Observations never replace strict admission.
+The runtime deadline stays absolute and does not renew on an observation error.
+
+Twenty-two offline helper checks passed, covering unverified executables,
+changed/missing executable or libraries, strict ports/board matching, false
+reset options, and missing/inconsistent observation data. Both selected-board
+empty VMs passed admission/profile guards and QMP property discovery without
+any physical device_add; USB lifecycle logs were empty as expected. The
+unchanged wire verifier again rejected 26 boot and 143 runtime mutations per
+board. A hardware-only post-add QOM check is prepared, not exercised by those
+empty VMs. This is not a new E firmware-startup result.
+
+Preparation record ``reset-free-transition-preparation-20261018/manifest.json``
+SHA-256 ``35508f5bcf3018af1c2f283ec973b84475504925f80473054f6656fb704d372f``.
+Empty E ``ram-trial-20261018T043127.103547Z`` manifest SHA-256
+``6ecacce428fd1f8c93a3ef38b61c5b2333a668e89ac8b3f65da1cf5ddedebc03``;
+empty U ``ram-trial-20261018T043222.869192Z`` manifest SHA-256
+``08d047b71b2e294045b4bcedf7501346c232f5811cf9ee218a4b6aad9052ca0b``.
+
+The reference also differs in QEMU version and autoscan behavior. A subsequent
+success would not isolate reset as the sole cause of the preceding failure.
+Controlled QMP removal/reattachment remains artificial; natural transition,
+recovery and new E runtime/BLE qualification remain open. Another load requires
+fresh device-state confirmation; the first E confirmation remains consumed.

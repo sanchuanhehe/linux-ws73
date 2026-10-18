@@ -173,20 +173,24 @@ Rebinding or QMP reattachment is not a cold-power test or proof of stale
 response removal. Automatic loading remains disabled.
 
 The first allocated-U observation had unknown power history. Subsequent
-user-confirmed power cycles on the same allocated U also produced successful
+user-confirmed power cycles on the same allocated U produced successful
 19-byte OUT and four-byte ``00000000`` IN, decoded U/USB, before preparation
-writes. These are this project's same-sample cold-read observations, without
-independent power instrumentation. The latest original-file trial verified
-all eleven preparation ACKs, seven original-file blocks and QUIT. After fixing
-the platform allocation/returned-length distinction, a controlled QMP handoff
-to the same checked runtime device produced complete U/USB identity and version
-replies (firmware 0x010a6e3c, ROM 0x00010101). An independent binary transcript
-proves this limited path; the original supervisor remains FAIL because the
-text stream lost thirteen events. Natural in-VM reenumeration is unverified.
+writes. These are same-sample cold-read observations without independent
+power instrumentation. The fully supervised native-HCI trial now verifies
+eleven preparation ACKs, seven original-file blocks and QUIT, a controlled
+QMP handoff, U/USB runtime identity and versions (firmware 0x010a6e3c,
+ROM 0x00010101), startup/disable and native HCI initialization/auto-off.
+Its 23 real HCI command/reply pairs, management registration/removal,
+complete runtime RX captures and three drains passed. Ordinary automatic
+loading/publication remains disabled pending board/address requirements.
+
+Prior failures, including a thirteen-event text-capture loss and the first
+native-HCI attempt's management-removal observer bug, remain FAIL. The later
+success does not retroactively qualify them. Natural in-VM reenumeration,
+E cold starts, other samples, address provisioning, board applicability,
+RF/peer business and full physical lifecycle qualification remain open.
 See :doc:`ws73-qualification-20261017` for each attempt and its consumed
 confirmation. Other-project U/E software-reset reports remain references only.
-E cold starts, additional samples, board applicability, actual BLE/Wi-Fi and
-full physical lifecycle qualification remain open.
 
 Validation and resources
 ------------------------

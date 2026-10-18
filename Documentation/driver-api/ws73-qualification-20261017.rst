@@ -3736,3 +3736,72 @@ Private records and manifest SHA-256:
   ``68364f2ea05fd8a84e94eba3a5d277b0fe840a78511db2fb6652b85bcfb1ca79``.
 * ``load-hci-trial-20261018T023621.226788Z`` (empty VM only),
   ``5f301b004ef127ecfe493cf39325de493519cd7bd590963aa308280b5b186f8a``.
+
+Allocated U native HCI initialization and teardown pass (2026-10-18 SGT)
+----------------------------------------------------------------------
+
+The user's new power-removal reply was recorded as a fresh single-use
+confirmation, with exact serial/topology, unowned two-endpoint boot device 4,
+source/preflight hashes and a read-only snapshot of the four excluded
+SparkLink devices. No prior confirmation was reused. The compiled source is
+``b5e5fe852012``; worktree HEAD ``ffead2df06af`` differs only in documentation.
+
+This physical run completed the bounded SDK110 path: boot READM returned
+four-byte zero (U/USB) before writes, VERSION returned BOOTVER001, all eleven
+preparation writes were acknowledged, and the three separate original files
+transferred 172580 payload bytes in seven blocks before QUIT. The boot checker
+validated 29 OUT transactions and 28 replies, including 26 full loader replies.
+The explicit QMP handoff admitted a separately checked five-endpoint runtime
+instance, host device 9 and guest device 3. U/USB and firmware/ROM versions
+0x010a6e3c/0x00010101 matched before platform/customization and function startup.
+Host device addresses need not be consecutive; the bounded host kernel log
+records target boot disconnect, runtime enumeration and a target-device reset
+on release, with no matched parent-hub or excluded-device event. This is not
+natural reenumeration or recovery qualification.
+
+The real auxiliary/HCI consumer completed 23 matching successful command/event
+pairs. Commands were Read Local Features/BD_ADDR, Reset, local version and
+supported commands, LE features/buffer size/supported states, event masks,
+LE transmit-power and list-size reads, list clears, RPA timeout, data-length
+reads/defaults, advertising-set count and default PHY. The transcript's exact
+opcode list is bound to the private manifest. Management announced one
+configured controller and returned matching address/version/manufacturer with
+LE support and no BR/EDR. Both address reads and management agreed; agreement
+does not establish how that address was provisioned. No vendor address write,
+scan, advertising enable, connection or ACL business request was sent.
+
+There were 33 successful runtime bulk OUT and 32 complete bulk IN records,
+four completed class requests (25,26,25,26), seven function notifications,
+and two actual close replies. Final close followed the HCI exchange. Text and
+binary bulk captures matched with zero reported drops; all runtime replies
+fit the 512-byte capture bound. The prior customization limitation remains:
+its final 352 TX padding bytes were not captured.
+
+After the actual final close, the supervisor deliberately removed the runtime
+USB device. Management Index Removed was accepted once, all three owner
+instances drained, and QEMU quit with exit zero. No KASAN/UBSAN/lockdep diagnostic
+was reported. The overall status is
+RAM_LOAD_CONTROLLED_HANDOFF_NATIVE_HCI_INIT_PASS_NOT_RF_OR_ADDRESS_PROVENANCE.
+The prior first-native-HCI attempt remains FAIL and is not rewritten. This is
+one successful initialized-and-closed reference-profile U instance, not the
+20-start/100-cycle/24-hour qualification or completed BLE support.
+
+A separate read-only postcheck confirms no project VM, no private QMP socket,
+an unowned allocated U and unchanged serials/device numbers for all four
+SparkLink devices. The confirmation is consumed. Ordinary parent automatic
+loading/publication, board and address provenance, RF/BlueZ/peer communication,
+E qualification, Wi-Fi STA, natural recovery and formal upstream submission
+remain open. No new power cycle is requested merely to repeat this success;
+a subsequent physical experiment must define its scope and establish a fresh
+appropriate device state.
+
+Private records and manifest SHA-256:
+
+* ``load-hci-confirmation-20261018T032545.153903Z`` (consumed),
+  ``5a7f76d24558a6d74c3c35bcab84ebc71e9cfccaa6e083487f0f481a6b9f6748``.
+* ``load-hci-trial-20261018T032553.058168Z`` (scoped physical PASS),
+  ``ddeb87e2cc056dd6f1ba24860296b36993ac013c10fe8ba6ba91257097b67960``.
+* ``native-hci-success-postcheck-20261018``,
+  ``39303e700ed427a422fe31d1fe083f24081a33ac190f76a2318fef38048f9762``.
+* The same postcheck's ``host-window-manifest.json``,
+  ``cc8170bddc7e2b82adbc2e3865eef2d6179ba727a0076ccde564d1943a7d67c1``.

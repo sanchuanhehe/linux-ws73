@@ -34,10 +34,16 @@ Runtime USB wire helpers now encode a single HCC record and queue-control
 descriptors and validate bounded receive aggregates for BLE (queue 7) and
 platform messages (queue 9), plus function notifications (queue 10) on RX
 and explicit no-flash customization records on TX.
-They are exercised with synthetic inputs;
-the runtime USB path now consumes these helpers. The new runtime path has
-not been exercised on physical hardware; it does not establish firmware
-compatibility, version or boot/runtime identity agreement.
+The runtime USB path consumes these helpers. In the explicitly tagged VM
+trial, the allocated U now completes boot READM, three original SDK110 file
+loads, a controlled boot/runtime handoff, runtime identity/version agreement,
+BLE startup and native HCI initialization/readout/close. Twenty-three actual
+HCI commands and replies, management registration/removal and three drains
+passed complete supervision. This same-sample reference-profile experiment
+is not board/address provisioning, natural reenumeration, E, RF or peer
+qualification. The ordinary USB parent remains observation-only. See
+:doc:`ws73-qualification-20261017` for the retained failed attempts and the
+separate successful physical run.
 
 .. toctree::
    :maxdepth: 1
@@ -63,8 +69,11 @@ The owner must establish verified U/E USB identity, firmware epoch/version,
 board/address inputs and startup handshakes, then disable/drain the initial BLE
 session before publishing. These are constructor preconditions, not facts that
 an arbitrary caller can prove by passing a boolean. The current USB observer
-**does not call the publication operation**. Explicit KUnit and dummy_hcd test backends publish endpoints; they do not
-supply hardware qualification.
+**does not call the publication operation**. Explicit KUnit and dummy_hcd
+backends publish test endpoints. The separately tagged physical trial also
+publishes after its pinned reference profile and real startup/disable replies;
+its observed address is explicitly unqualified. That experimental admission
+does not relax the ordinary parent's board/address publication requirements.
 
 The owner must abort IO and join RX/fault producers before removal. Removal
 closes admission, joins active backend calls, clears backend pointers and
@@ -1215,12 +1224,13 @@ config, binary/object hashes, raw serial log and all named test results.
 It rejects missing cases, skipped cases, source changes and absent artifacts.
 No firmware/board/device claim is made for this synthetic VM run.
 
-Still required: qualified physical-parent firmware/board/startup integration,
-independent device passthrough with cold boot and runtime identity agreement,
-physical USB class-control/startup qualification, complete HCI initialization,
-BlueZ and peer communication. Implemented codecs, loader sequencing, bounded
-H4 reassembly, BLE action engine and native HCI model coverage do not by
-themselves qualify those physical paths.
+The allocated U has one fully supervised, user-confirmed cold-power trial
+through original-file loading, controlled handoff, native HCI initialization
+and acknowledged close/removal. Earlier failed attempts remain separate.
+Still required: ordinary-parent board/address integration, natural transitions,
+E hardware, repeated starts/function cycles, BlueZ discovery and peer business,
+and sustained traffic. One reference-profile U initialization does not meet
+the dual-model formal submission or full BLE qualification gates.
 The user reports no BLE peer available. PM, recovery, coexistence, multi-device,
 Wi-Fi STA, fuzzing and formal qualification remain separate open gates.
 

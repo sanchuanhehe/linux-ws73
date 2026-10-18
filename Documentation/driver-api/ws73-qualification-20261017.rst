@@ -3621,3 +3621,74 @@ Private records and manifest SHA-256:
   ``dc8c9e631ea2627147d4b676e85c5c62654e0154c76a6851935b637aad5d20de``.
 * ``native-hci-le-correction-20261017T223929.335578Z``,
   ``854861f6ccc21ab94e88de9bc27c13d28e05ee1a668b0d72a2d8afe5b9e7a5cd``.
+
+Allocated U native HCI observations and retained teardown failure (2026-10-18 SGT)
+--------------------------------------------------------------------------------
+
+After the user's fresh power-removal confirmation, the allocated U matched its
+exact serial, port 1-1.1.1, unowned boot descriptors and host device 126. The
+physical trial used source ``2202c0568ffc`` with documentation-only worktree
+HEAD ``a0b947996aef`` and explicit CONFIG_BT_LE. HCC READM returned U/USB before
+writes; the three original SDK110 files transferred 172580 payload bytes in
+seven blocks after eleven preparation writes. The controlled QMP handoff
+produced runtime host device 127 and guest device 3, with matching runtime
+identity and versions. This remains a controlled transition, not natural
+reenumeration qualification.
+
+The actual auxiliary consumer registered native HCI. Twenty-three HCI commands
+received matching successful Command Complete events, including Reset, local
+features/version/commands, two consistent Read BD_ADDR replies, LE features,
+buffer size, supported states, event masks, data-length settings and default
+PHY. Management Index Added and Read Info returned one configured LE-only
+controller. A nonzero address was observed; its provisioning source remains
+unqualified. No scan, advertising or connection request was issued.
+
+The independent binary/text checker found 32 complete runtime bulk replies,
+matching transfer records and zero reported drops. Four class transactions
+(25,26,25,26) and two actual BLE_CLOSE replies were present; the final close
+followed the HCI exchange. All three device owners drained. KASAN, UBSAN and
+lockdep diagnostics were absent in this bounded run. The earlier capture
+limitation remains: only the first 512 bytes of the 864-byte customization TX
+were captured, leaving its final 352 padding bytes unobserved.
+
+The overall trial is nevertheless FAIL. After the supervisor deliberately
+removed the runtime USB device, the guest observer treated management Index
+Removed as an error and powered off. QEMU exited zero, but the host's subsequent
+QMP quit raised BrokenPipeError. The unchanged archived HCI verifier also
+rejects the explicit guest error marker after its preceding wire checks. The
+original manifest, logs and consumed confirmation are retained unchanged;
+partial observations do not replace the failed end-to-end result.
+
+The private observer now accepts one correctly sized/indexed removal only
+after management readout and the not-powered observation. The host separately
+requires actual wire close, rejects removal or runtime drain before its detach,
+and waits for Index Removed plus all three drains before quit. Command-status,
+premature, malformed and repeated removal remain failures. Review also found
+an inherited BLE-only ``boot + 8 OUT`` assumption in the boot checker; it now
+checks the exact boot epoch independently of the strict runtime HCI verifier.
+
+Three pure socketpair management positives and twenty rejection cases passed.
+Two archived physical boot captures and four corrupted variants exercised the
+boot filter. Two synthetic HCI transcripts passed, with 26 shared negative
+types and two extended-path negatives rejected. The wire-close checker retained
+two positives and thirteen negatives. A corrected empty-VM preflight passed;
+no second physical attempt occurred. The VM exited, allocated U was unowned,
+and the four SparkLink serials/device numbers remained unchanged. No hub,
+controller or SparkLink operation was performed.
+
+Another physical load requires a new allocated-U power-removal confirmation.
+Native-HCI end-to-end qualification, RF/peer operation, address provenance, E,
+Wi-Fi STA and formal joint submission gates remain open.
+
+Private records and manifest SHA-256:
+
+* ``load-hci-confirmation-20261018T022739.779832Z`` (consumed),
+  ``b896278bbf509c7ba7af096dcc8af4197200e9bf4e7d2bcdc65369d8a414d830``.
+* ``load-hci-trial-20261018T022751.089293Z`` (FAIL),
+  ``e28df9d91cf44ceff0960ac02a5aa9c119bdf51e7c8f9da78b74234c56d8e580``.
+* ``native-hci-failure-audit-20261018`` (partial observations, not a trial PASS),
+  ``84acd675c77f7211deeee7bc5bf067fe6662cdba4c282484216fba0a5f5c0f20``.
+* ``load-hci-trial-20261018T023024.554968Z`` (empty VM only),
+  ``45e377d78af2f880eed9191305669ff59bbd09c97d4a3b4221e547e25adbfd18``.
+* ``native-hci-postcheck-20261018``,
+  ``14fcc8a2926a3225e86216b57e0f0a202fa5bab2a5aa0c2e477765c6570b6512``.

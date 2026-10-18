@@ -6,8 +6,7 @@ From the kernel worktree:
   python3 tools/testing/ws73/wifi/check-abi.py
 
 Requires a clean committed worktree, sibling ws73_SDK checkout, Clang and
-llvm-objcopy. Six SDK
-headers must byte-match commit d5e68a58fe38c2b04a16769c69de1e8a80e86d74.
+llvm-objcopy. Ten pinned SDK headers/source files must byte-match commit d5e68a58fe38c2b04a16769c69de1e8a80e86d74.
 The tool compiles declarations and sentinel initializers sequentially for
 x86-64, i386, arm64, RISC-V32 and big-endian PowerPC64. It extracts object
 sections and checks exact bytes and sizes, plus ELF class/endianness/machine
@@ -18,7 +17,16 @@ In addition to FRW/control envelopes, the probe extracts the pinned RX info,
 status/statistic and TX-status declarations. HAL pack(1) scopes are preserved;
 the outer DMAC declarations stay unpacked. Independent sentinel bytes and
 offset/size assertions cover the 32-byte RX control and eight-byte TX status.
-The sentinels are deliberately not valid packets or descriptor statuses.
+The TX probe additionally preserves pack(1) for mac_tx_ctl and its Host-only
+expanded suffix. Five byte-sized scalar aliases are extracted from their
+pinned declarations; the frame pointee is opaque, without changing pointer
+width/alignment. An independent bit-group oracle checks every byte, including
+nonzero reserved fields and a pointer sentinel. Offsets prove the copied prefix
+ends at 32 and the whole structure is 40 bytes on 32-bit or 44 on 64-bit.
+The pinned sender copies OAL_MAX_CB_LEN=32, not sizeof(mac_tx_ctl). Static
+source checks are drift guards, not proof of device consumption. No pointer
+sentinel or synthetic descriptor is transmitted. The sentinels are deliberately
+not valid packets or descriptor statuses.
 
 Records live in the private sibling .dev/ws73-upstream/records directory.
 They include SDK excerpts, objects, tool/source hashes and expected/observed

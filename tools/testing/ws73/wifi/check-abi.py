@@ -25,6 +25,10 @@ FILES = {
     "hal_rx.h": "driver/wifi/device/source/inc/romable/device_common/hal_common_ops_device_rom.h",
     "dmac_rx.h": "driver/wifi/device/source/inc/romable/device_common/dmac_ext_if_device_rom.h",
     "tx_status.h": "driver/wifi/device/source/inc/romable/dmac_ext_if_type_rom.h",
+    "wlan_base.h": "driver/wifi/device/source/inc/romable/wlan_types_base_rom.h",
+    "netbuf.h": "driver/wifi/device/source/inc/romable/oal_netbuf_common_rom.h",
+    "frw_hmac_adapt.c": "driver/wifi/frw/frw_hmac_adapt.c",
+    "hmac_tx_mgmt.c": "driver/wifi/hmac/hmac_tx_mgmt.c",
 }
 TARGETS = {
     "x86_64-linux-gnu": (8, False),
@@ -40,6 +44,7 @@ PROBE = r'''
 #include "frw_msg_rom.h"
 #include "comm-excerpt.h"
 #include "descriptor-excerpt.h"
+#include "tx-excerpt.h"
 #define SECTION(name) __attribute__((section(name), used))
 /* Deliberate field sentinels, not valid commands for transmission. */
 const frw_hcc_extend_hdr_stru ext SECTION(".ws73_ext") = {
@@ -90,6 +95,37 @@ _Static_assert(__builtin_offsetof(dmac_rx_ctl_stru, rx_statistic) == 24, "RX sta
 _Static_assert(__builtin_offsetof(hal_rx_ctl_stru, frame_len) == 4, "RX frame length offset");
 _Static_assert(__builtin_offsetof(hal_rx_ctl_stru, pul_mac_hdr_start_addr) == 16, "device address offset");
 _Static_assert(sizeof(dmac_tx_status_stru) == 8, "TX status size");
+const mac_tx_ctl_stru tx SECTION(".ws73_tx") = {
+    .frame_type = 0x12, .frame_subtype = 0x34, .mpdu_num = 0x35, .netbuf_num = 1,
+    .mpdu_payload_len = 0x5678, .frame_header_length = 26, .is_amsdu = 1, .is_first_msdu = 1,
+    .tid = 9, .ac = 5, .ismcast = 1, .retried_num = 3, .mgmt_frame_id = 11,
+    .tx_user_idx = 35, .roam_data = 1, .is_get_from_ps_queue = 1,
+    .tx_vap_index = 5, .ack_policy = 3, .is_needretry = 1, .need_rsp = 1,
+    .is_eapol_key_ptk = 1, .is_m2u_data = 0, .is_large_skb_amsdu = 1,
+    .ether_head_including = 1, .use_4_addr = 1, .resrv_6 = 3,
+    .alg_pktno = 0x56, .alg_frame_tag = 0x78, .align_padding_offset = 2,
+    .is_tcp_ack = 1, .is_bcast = 1, .is_wur = 5, .is_fake_buffer = 1,
+    .msdu_num = 0x9a, .latency_timestamp_us = 0xabcdef, .latency_index = 0x12,
+    .partial_aid = 0x123, .ax_bss_color = 0x25, .txop_ps_not_allowed = 1,
+    .tx_hal_vap_index = 2, .ra_lut_index = 5, .lsig_txop = 1, .slp_frame_id = 2,
+    .retry_flag_hw_bypass = 1, .duration_hw_bypass = 0, .timestamp_hw_bypass = 1,
+    .tx_pn_hw_bypass = 1, .is_custom_rts = 0, .is_custom = 1, .resrv_2 = 2,
+    .cipher_key_type = 0x13, .cipher_protocol_type = 0x24, .cipher_key_id = 0x35,
+    .resrv_3 = 0x46, .ftm_protocol_mode = 7, .ftm_bandwidth = 9,
+    .ftm_cali_en = 1, .is_ftm = 2, .ftm_chain = 3, .resrv_4 = 5,
+    .rssi_level = 2, .tpc_code_is_valid = 1, .probe_data_type = 9, .tx_tuple_opt_meet = 1,
+    .tpc_code = 0x57, .al_rx_tid_type = 0x68,
+    .expand_cb = { .frame_header = (mac_ieee80211_frame_stru *)(__UINTPTR_TYPE__)0x10203040,
+                   .seqnum = 0x2468, .frame_type = 0x56, .mac_head_type_80211 = 1, .res = 0x35 },
+};
+_Static_assert(__builtin_offsetof(mac_tx_ctl_stru, mpdu_payload_len) == 3, "TX payload");
+_Static_assert(__builtin_offsetof(mac_tx_ctl_stru, alg_pktno) == 11, "TX marker");
+_Static_assert(__builtin_offsetof(mac_tx_ctl_stru, cipher_key_type) == 23, "TX cipher");
+_Static_assert(__builtin_offsetof(mac_tx_ctl_stru, al_rx_tid_type) == 31, "TX prefix end");
+_Static_assert(__builtin_offsetof(mac_tx_ctl_stru, expand_cb) == 32, "Host-only TX suffix");
+_Static_assert(sizeof(mac_tx_expand_cb_stru) == sizeof(void *) + 4, "packed TX suffix");
+_Static_assert(sizeof(mac_tx_ctl_stru) == 36 + sizeof(void *), "whole TX structure");
+
 _Static_assert(__builtin_offsetof(dmac_tx_status_stru, user_idx) == 6, "TX user offset");
 '''
 
@@ -108,6 +144,44 @@ def declaration(text, name, start="typedef struct {"):
     body = text[first:last]
     assert body.count("{") == body.count("}"), "unbalanced declaration: " + name
     return body
+
+
+
+def expected_tx(pointer_size, big_endian):
+    """Manually specified sentinel bit groups, independent of compiler layout."""
+    order = "big" if big_endian else "little"
+
+    def bits(*groups):
+        width = sum(n for n, value in groups)
+        assert width in (8, 16, 32)
+        result = shift = 0
+        for n, value in groups:
+            assert 0 <= value < (1 << n)
+            if big_endian:
+                result = (result << n) | value
+            else:
+                result |= value << shift
+                shift += n
+        return result.to_bytes(width // 8, order)
+
+    prefix = bytes([0x12, 0x34]) + bits((7, 0x35), (1, 1))
+    prefix += (0x5678).to_bytes(2, order)
+    prefix += bits((6, 26), (1, 1), (1, 1))
+    prefix += bits((4, 9), (3, 5), (1, 1)) + bits((4, 3), (4, 11))
+    prefix += bits((6, 35), (1, 1), (1, 1)) + bits((3, 5), (3, 3), (1, 1), (1, 1))
+    prefix += bits((1, 1), (1, 0), (1, 1), (1, 1), (1, 1), (3, 3))
+    prefix += bytes([0x56, 0x78]) + bits((2, 2), (1, 1), (1, 1), (3, 5), (1, 1))
+    prefix += bytes([0x9a]) + bits((24, 0xabcdef), (8, 0x12))
+    prefix += bits((9, 0x123), (6, 0x25), (1, 1))
+    prefix += bits((2, 2), (3, 5), (1, 1), (2, 2))
+    prefix += bits((1, 1), (1, 0), (1, 1), (1, 1), (1, 0), (1, 1), (2, 2))
+    prefix += bytes([0x13, 0x24, 0x35, 0x46]) + bits((4, 7), (4, 9))
+    prefix += bits((1, 1), (2, 2), (2, 3), (3, 5))
+    prefix += bits((2, 2), (1, 1), (4, 9), (1, 1)) + bytes([0x57, 0x68])
+    assert len(prefix) == 32
+    suffix = (0x10203040).to_bytes(pointer_size, order) + (0x2468).to_bytes(2, order)
+    suffix += bytes([0x56]) + bits((1, 1), (7, 0x35))
+    return (prefix + suffix).hex()
 
 
 def main():
@@ -160,6 +234,30 @@ def main():
                  declaration((record / "tx_status.h").read_text(), "dmac_tx_status_stru")]
         (record / "descriptor-excerpt.h").write_text("#pragma pack(push, 1)\n" +
             "\n".join(rx) + "\n#pragma pack(pop)\n" + "\n".join(outer) + "\n")
+        dmac = (record / "dmac_rx.h").read_text()
+        names = ("wlan_cb_frame_type_enum_uint8", "wlan_cb_frame_subtype_enum_uint8",
+                 "wlan_frame_type_enum_uint8", "wlan_wme_ac_type_enum_uint8",
+                 "wlan_tx_ack_policy_enum_uint8")
+        typedefs = []
+        scalar_source = dmac + (record / "tx_status.h").read_text() + (record / "wlan_base.h").read_text()
+        for name in names:
+            found = re.findall(r"typedef osal_u8\s+" + name + r";", scalar_source)
+            assert len(found) == 1, "ambiguous scalar alias: " + name
+            typedefs.append(found[0])
+        found = re.findall(r"struct mac_tx_ctl \{[^{}]*\};\s*typedef struct mac_tx_ctl mac_tx_ctl_stru;", dmac)
+        assert len(found) == 1, "ambiguous TX control declaration"
+        tx = declaration(dmac, "mac_tx_expand_cb_stru") + "\n" + found[0]
+        # The pointed-to frame is opaque: only its actual pointer ABI is probed.
+        (record / "tx-excerpt.h").write_text("\n".join(typedefs) +
+            "\ntypedef struct ws73_opaque_frame mac_ieee80211_frame_stru;\n" +
+            "#pragma pack(push, 1)\n" + tx + "\n#pragma pack(pop)\n")
+        netbuf = (record / "netbuf.h").read_text()
+        for macro, value in (("OAL_MAX_CB_LEN", 32), ("OAL_MAX_MAC_HDR_LEN", 36)):
+            assert re.findall(r"^#define " + macro + r"\s+(\d+)\b", netbuf, re.M) == [str(value)]
+        sender = (record / "frw_hmac_adapt.c").read_text()
+        assert sender.count("netbuf->cb, OAL_MAX_CB_LEN)") == 1, "TX copy length changed"
+        manifest["tx_copy_scope"] = {"bytes": 32, "header_reservation": 36,
+            "host_suffix_offset": 32, "proof_scope": "pinned declarations/copy source, not device acceptance"}
         (record / "probe.c").write_text(PROBE)
         shutil.copyfile(__file__, record / "check-abi.py")
         for target, (pointer_size, big_endian) in TARGETS.items():
@@ -178,7 +276,7 @@ def main():
                            "encoding": 2 if big_endian else 1,
                            "type": 1, "machine": ELF_MACHINES[target]}, (target, elf)
             extract_cmd = ["llvm-objcopy"]
-            for field in ("ext", "comm", "sizes", "rx", "tx_status"):
+            for field in ("ext", "comm", "sizes", "rx", "tx_status", "tx"):
                 extract_cmd += [f"--dump-section=.ws73_{field}={record / (target + '.' + field)}"]
             extract_cmd += [str(obj), str(record / (target + "-copy.o"))]
             subprocess.run(extract_cmd, check=True, capture_output=True, text=True)
@@ -192,6 +290,7 @@ def main():
                        if big_endian else
                        "7102d39a3412350bcbab563412785634efcdab89a3adce6dd68b07f8d5d42efb"),
                 "tx_status": "1020304005091234" if big_endian else "4030201005093412",
+                "tx": expected_tx(pointer_size, big_endian),
             }
             observed = {field: (record / (target + "." + field)).read_bytes().hex() for field in expected}
             manifest["targets"][target] = {"compile": compile_cmd, "extract": extract_cmd,

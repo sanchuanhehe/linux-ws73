@@ -3857,3 +3857,96 @@ Its isolated validation records are under the review worktree's sibling
   ``be9e5e5effb1ab7701d131a80762220dde70fe8770b1fa1f078eb1855bc07a28``.
 * ``virtual-usb-negative-20261018T034130.650349Z``,
   ``af166296f61aca5bdd80063963c3216d1a187fefa5ddf21fbe7b4ee81c47f409``.
+
+Kernel review formatting increment (2026-10-18 SGT)
+--------------------------------------------------
+
+Commit ``bf3c2801d9e1`` corrects the kernel-side findings from the frozen
+internal review snapshot: six warnings and 44 checks. Four unchanged BLE
+exports now follow their definitions; transaction/RX lock responsibilities
+are documented; declarations and test expressions are aligned. Raw Clang
+lexing compared 14417 tokens across 11 files after excluding whitespace,
+comments and the separately verified export relocation. This does not claim
+identical source locations or diagnostic line numbers.
+
+Strict checkpatch reports zero errors/warnings/checks for this increment.
+The current kernel-only extraction retains one MAINTAINERS metadata warning;
+userspace-fixture findings and series splitting remain outstanding. The
+frozen review snapshot and its original failed checkpatch result are unchanged.
+Clang W=1 built the changed source and all 94 existing KUnit cases passed in
+the x86-64 KASAN/UBSAN/lockdep VM. The first attempt compiled but could not
+create its QMP socket inside the sandbox, ran zero tests and remains FAIL.
+The second attempt used the same source/patch in the permitted VM environment.
+
+Private record ``kernel-style-20261018/manifest.json`` SHA-256:
+``4036dfbb300b3c60a3504302d0ed6de1002a5f933b74edc935ca324e6dd99557``.
+KUnit PASS record ``20261018T035309.755441Z`` manifest SHA-256:
+``ebaa4af357286a8cbf9d6e40b0fe03b5bcbad5b76e3c913ebe500e5e23991998``.
+
+Four-device allocation and boot observations (2026-10-18 SGT)
+------------------------------------------------------------
+
+The user reassigned this thread U ports 1-1.1.3/1-1.1.4 and E ports
+1-2.1.3/1-2.1.4. Hub 1-1.1 is 05e3:0610; hub 1-2.1 is 1a40:0101. Both share
+0000:c5:00.3. Ports 1/2 on both hubs are exclusively the other thread's.
+These are topology ports, not physical enclosure numbers. The now-excluded
+1-1.1.1 and its earlier native-HCI PASS are not current test resources.
+
+Read-only sysfs inspection found all four assigned devices at 12 Mbps with
+unbound boot interfaces. Exact serials and descriptor bytes are retained
+privately. Current-user fuser found no assigned-device owner; existing libvirt
+XML showed only unrelated bus-7/bus-8 hostdev entries. Privileged fuser was
+unavailable because sudo required a password, so this does not assert a
+complete inventory of inaccessible process descriptors. No conflicting owner
+was observed or interrupted. The other thread's enumeration changed during
+inspection and was not claimed as stable or operated on.
+
+Nine existing private runners now require explicit --device-port and --board,
+share one exact four-port/serial allowlist and recheck topology, hub, descriptors,
+node access and ownership immediately before each device_add. Device numbers
+are freshly observed, never selectors. The current-U retained-runtime trial
+is retired for hardware because its old epoch belongs to an excluded device.
+RAM/BLE/native-HCI loading callers reject E before VM startup; the existing
+ROM observation runner accepts both explicit profiles. SDK110 U and E three-file
+hash/header checks passed separately. Download inputs/install paths derive
+from the selected board, never from a global mixed image set or fallback.
+Sixty offline admission checks passed, including all nine callers' rejection
+of omitted and excluded targets. This is no replacement test framework.
+
+The local build.lock was free, as was the existing cross-thread
+.dev/main-build.lock. With both held, the former became an alias to the latter's
+inode. A second open through the alias correctly failed admission. No lock
+owner was terminated; the prior local file was retained. Existing builders
+and VM runners now serialize through the same global lock, retaining four-job
+builds and the combined 12/8-with-hardware-VM limits.
+
+After an empty-VM preflight, four separate device-level VM observations used
+source ``bf3c2801d9e1`` and the adapted existing runner. Each executed exactly
+READM 0x40019000 4 and VERSION, with actual successful USB replies, one disconnect
+drain and QEMU exit zero. Both U ports returned four zero bytes; both E ports
+returned 0a000000, matching candidate U/USB and E/USB decoding respectively.
+All returned BOOTVER001 plus two NUL bytes. No firmware or calibration file
+was downloaded, no runtime GET_CHIP_TYPE was performed, and no hub/controller
+operation was issued. All four remained unbound with no visible owner after
+VM exit; no project VM/QMP endpoint remained.
+
+Each result is OBSERVATION_PASS_NOT_COLD. The user power-cycle messages do not
+establish per-device cold-state history for the newly assigned set. Cold-ROM
+automatic selection, U/E startup profiles, runtime cross-checks, BLE, RF/peer,
+STA, concurrent mixed devices and natural/non-artificial recovery remain open.
+No new device inherits the former allocation's qualification or confirmation.
+
+Private per-device records and manifest SHA-256:
+
+* U 1-1.1.3, ``usb-observe-20261018T035618.234315Z``,
+  ``63e4af03f3b34e3b0d471a278a204f5cb3df8a81da520751a59b15b4e1a94e2e``.
+* U 1-1.1.4, ``usb-observe-20261018T035635.522623Z``,
+  ``93d5b378b941d0b909e42ba99a2faa4942eed2207fd8aaa6343a4424419e3564``.
+* E 1-2.1.3, ``usb-observe-20261018T035705.971985Z``,
+  ``92dfa526c4322ccaa15dd7047312fcaaa1f3c8cc364060da651fd9b3d38d64bf``.
+* E 1-2.1.4, ``usb-observe-20261018T035722.298050Z``,
+  ``3cc57514412f8b1f7c6ac0c4e906201aa0c741e7185357acb1d28337f55650a1``.
+
+Allocation, caller changes, firmware inputs, tests and inspection limitations
+are bound by ``hardware-allocation-20261018/manifest.json`` SHA-256:
+``71fbe064e0e578961ec839c05baf266bd409b08b3acf22288195fc7802ecbdc2``.

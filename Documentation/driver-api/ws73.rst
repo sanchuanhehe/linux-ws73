@@ -1034,21 +1034,35 @@ commit and hashes are retained in ``runtime-version-source-audit-20261017.json``
 USB observations and safety boundary
 ------------------------------------
 
-The allocated WS73U (user-provided model) is at physical path ``1-1.1.1``,
-ffff:3733, under GenesysLogic 05e3:0610 hub ``1-1.1``. Initial sysfs inspection
-found one unbound interface with class/subclass/protocol e0/02/02 and two
-bulk endpoints, 0x81 and 0x01, each maximum packet size 64. Its current speed
-was 12 Mbps. The local record retains serial, descriptors, sysfs ancestry,
-bus/address and capture time. No chip revision or firmware stage is inferred
-from speed or class. Boot/runtime transition remains untested in this batch.
+The original 2026-10-17 observation used the then-allocated WS73U at
+``1-1.1.1``. That port is no longer assigned to this thread. Historical trial
+records and their serial/firmware/epoch qualifications remain unchanged.
 
-Before any future device assignment, recheck physical path, parent hub,
-VID/PID, serial and all current owners. Device address is not persistent.
-On ambiguous topology, stop hardware work and continue offline work.
-Do not pass through or reset PCI controller 0000:c5:00.3: it is shared.
-Hub 1-2.1 and devices 1-2.1.1 through 1-2.1.4 belong to the SparkLink project.
-Its worktrees, plans, qualification records, VMs and build outputs are not
-modified. All experimental kernels/drivers run in a project-private VM.
+The current 2026-10-18 allocation is U at ``1-1.1.3`` and ``1-1.1.4`` under
+GenesysLogic 05e3:0610 hub ``1-1.1``, and E at ``1-2.1.3`` and ``1-2.1.4``
+under 1a40:0101 hub ``1-2.1``. All four initially exposed the checked two-endpoint
+boot layout at 12 Mbps with unbound host interfaces. Four separate VM-only
+READM/VERSION observations returned zero for both U ports and 0x0a for both E
+ports, consistent with candidate U/USB and E/USB decoding. All reported
+BOOTVER001. This is not cold-start automatic-selection acceptance or a
+runtime GET_CHIP_TYPE check. No firmware was downloaded in this allocation
+check; each device has a new artifact and does not inherit historical PASS.
+
+Ports ``1-1.1.1``, ``1-1.1.2``, ``1-2.1.1`` and ``1-2.1.2`` are excluded.
+Both hubs share controller ``0000:c5:00.3``. Never pass through/reset/power-cycle
+hubs or that controller. An individual-port recovery needs evidence that
+other ports are unaffected; otherwise coordinate first. Recheck exact port,
+hub, serial, descriptors and ownership immediately before each device-level
+VM attachment. USB address and VID/PID alone cannot select a board. Stop on
+conflict, disappearance or ambiguity without reclaiming another thread's
+resource. Its worktrees, VMs and evidence remain separate.
+
+Existing private runners require explicit ``--device-port`` and ``--board``
+from one strict four-port allocation. Their archived manifests include that
+allocation and helper hash. U-only RAM/BLE/HCI trials reject E; E currently
+has the firmware-free observation route only. SDK110 inputs are checked and
+installed per selected board, with no combined or alternate-profile fallback.
+The local build lock resolves to the existing shared main-build.lock inode.
 
 BLE wire contract
 -----------------

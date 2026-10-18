@@ -216,13 +216,28 @@ the relevant formal series. A cold start requires evidence of actual state
 clearing. Natural and injected faults remain separate. PM paths unavailable
 in the VM are explicitly untested; do not work around VM-only restrictions.
 
-Only physical device 1-1.1.1 under hub 1-1.1 is currently assigned. Recheck
-topology, serial, IDs and ownership before every transfer of ownership.
-Never claim/reset the shared PCI controller, old hub or old four devices.
-An independently allocated E, controlled BLE peer and Wi-Fi AP are external
-test dependencies. Do not borrow the main project's hardware or results.
+The 2026-10-18 user allocation assigns U ports 1-1.1.3/1-1.1.4 and
+E ports 1-2.1.3/1-2.1.4 exclusively to this thread. Ports 1-1.1.1/1-1.1.2
+and 1-2.1.1/1-2.1.2 belong to the other thread and must not be operated.
+These are topology ports, not enclosure labels. Both hubs share PCI controller
+0000:c5:00.3; never pass through, reset or power-cycle either hub/controller.
+Recheck port, hub, exact serial, descriptors and ownership before every
+individual-device VM attachment. Stop for conflicts or ambiguous mapping;
+never select by scan order, device number or fallback to an old port.
+
+Four new per-device boot HCC observations agree with the assigned U/E groups;
+they do not qualify cold-ROM automatic selection, new-device runtime startup,
+BLE, mixed operation or recovery. Previous U PASS belongs to its original
+serial/epoch at the now-excluded port. E hardware is now allocated, but E
+qualification, controlled BLE peer and Wi-Fi AP remain outstanding.
+Keep SDK110 code/Wi-Fi/BTC files separated by explicit board profile and hash;
+U-only trial callers reject E before any VM or firmware operation.
+
 Use private VM/QMP/log/build directories and coordinated whole-machine
 budgets: at most 12 build jobs when exclusive, 8 with hardware regressions.
+The existing local build.lock now aliases the shared .dev/main-build.lock
+inode; its contention check passed. Existing four-job builders remain
+serialized, and pre-existing uncoordinated work must still be inspected.
 
 Delivery
 --------

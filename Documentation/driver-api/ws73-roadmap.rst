@@ -231,13 +231,48 @@ BLE, mixed operation or recovery. Previous U PASS belongs to its original
 serial/epoch at the now-excluded port. E hardware is now allocated, but E
 qualification, controlled BLE peer and Wi-Fi AP remain outstanding.
 Keep SDK110 code/Wi-Fi/BTC files separated by explicit board profile and hash;
-BLE/native-HCI callers still reject E before any VM or firmware operation.
+Native-HCI callers still reject E before any VM or firmware operation.
 The existing RAM/runtime-observation caller now accepts an explicit U or E
 profile with separate three-file VM images and package/DMI/HCC agreement;
 both passed empty-VM preflight. One newly allocated E subsequently passed
 three-file loading and runtime identity/version observation under controlled
-QMP handoff. E BLE, other samples, mixed operation and natural recovery remain
+QMP handoff. The separately recorded E BLE startup trial below now covers
+enable/disable. Other samples, mixed operation and natural recovery remain
 open; the preceding system-QEMU E failure is retained.
+
+Allocated E BLE startup observation (2026-10-22)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Source 95e16d0b2a0470ec468c387df2ea2e3cdd37a23c passed a fresh four-job
+hardware build and empty-VM preflight before one physical trial on the
+allocated E at 1-2.1.3. The user reported unplug/replug; host logs show the
+matching serial disconnect at 23:43:41 +08 and boot enumeration at 23:43:43.
+There was no independent power instrumentation or new explicit confirmation
+about other power sources, so this record does not qualify cold-power behavior.
+
+The VM used only the three pinned original firmware/e files. Boot READM
+returned 0x0000000a before preparation. Eleven preparation acknowledgements,
+eight file blocks carrying 192632 payload bytes and QUIT completed. Controlled
+QMP boot detach/runtime reattach produced a new owner; runtime HCC reported
+package 2 / USB and firmware 0x010a6e3c / ROM 0x00010101. Reference
+customization, BLE enable/BOOT and acknowledged disable then completed.
+
+Record load-ble-trial-20261022T154737.285550Z has manifest SHA-256
+70c85ccccd51e27b1b4f04487ccea745e2c659d79802b216889c4aa44c0a4e0a.
+Its supervisor checked 31 boot OUT transfers and 30 replies, eight runtime
+bulk OUT transfers, six complete runtime bulk replies, four notifications and
+two class commands. Three callback drains completed, QEMU exited with status
+zero and the selected device was released. Both USB objects had all four
+reset/host-detach opt-outs verified; the trace contains two opens/two closes
+on the selected device's two epochs and no usb_host_reset event.
+
+This is one E startup/disable result, not native HCI, peer/RF, address-source,
+board-calibration, natural transition/recovery or mixed-device qualification.
+The final 352 customization padding bytes were not captured by the 512-byte
+TX capture; all 140 input bytes and complete RX records were captured. The
+other thread's live VM and devices were not operated. Its shared VM-budget
+marker coexisted with this trial's marker; this trial held the selected-port
+lease and the existing global build lock. Earlier failures remain retained.
 
 Use private VM/QMP/log/build directories and coordinated whole-machine
 budgets: at most 12 build jobs when exclusive, 8 with hardware regressions.

@@ -231,7 +231,9 @@ BLE, mixed operation or recovery. Previous U PASS belongs to its original
 serial/epoch at the now-excluded port. E hardware is now allocated, but E
 qualification, controlled BLE peer and Wi-Fi AP remain outstanding.
 Keep SDK110 code/Wi-Fi/BTC files separated by explicit board profile and hash;
-Native-HCI callers still reject E before any VM or firmware operation.
+Native-HCI callers now accept an explicit U or E trial profile after the
+separate E startup/disable result. E HCI still requires its own physical
+qualification; this does not enable ordinary automatic functional binding.
 The existing RAM/runtime-observation caller now accepts an explicit U or E
 profile with separate three-file VM images and package/DMI/HCC agreement;
 both passed empty-VM preflight. One newly allocated E subsequently passed

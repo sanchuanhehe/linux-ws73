@@ -64,8 +64,12 @@ and excluding CONFIG_BT_BREDR. It leaves the previous non-HCI build
 and its evidence pointer intact. The BLE trial's default behavior still ends
 after acknowledged disable. Explicit `native_hci=1` instead publishes the BLE
 child after that disable; native open then owns the next enable. Publication
-is not an HCI initialization result. Builds without BT_WS73 and all E trial
-instances reject this mode. Native HCI remains an explicit U-only experiment.
+is not an HCI initialization result. Builds without BT_WS73 reject this mode.
+After the separately recorded E BLE startup/disable result, the explicit native
+HCI experiment accepts U or E with matching package/DMI metadata. Each caller
+must select one board, stage only its three original files and verify boot and
+runtime HCC identity. Removing the E admission restriction is not an E HCI
+hardware result; that requires a new complete physical trial.
 
 Use this option only in the tagged VM's continuous fresh-load experiment:
 identity, three-file download, new runtime owner, reference customization,
@@ -98,8 +102,11 @@ trial now requires package=0 or package=2, matching its U/E DMI tag. Fresh
 runtime HCC package/USB and the separately observed SDK110 firmware/ROM
 versions must match before reference customization or BLE enable. The empty
 VM profile test includes 140 identity/version boundary cases. Missing package,
-cross-board DMI and E native-HCI publication are rejected. The continuous
-BLE supervisor selects one board per VM; native-HCI callers remain U-only.
+cross-board DMI and native-HCI publication in a non-HCI build are rejected.
+Both continuous supervisors select one board per VM. The HCI supervisor also
+checks missing/wrong/unsupported package and invalid enumeration before an
+empty driver registration/unload. The historical E rejection-only preflight
+is retired and fails before launching a VM; its old evidence is retained.
 The admission extension itself is not an E BLE hardware result. A separate
 2026-10-22 trial on allocated E 1-2.1.3 now passed three-file loading,
 controlled handoff, runtime E/USB/version verification and real BLE

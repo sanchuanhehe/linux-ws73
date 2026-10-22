@@ -110,7 +110,7 @@ static int __init ws73_ble_trial_init(void)
 	int ret;
 
 	if (!serial || !*serial || !devnum || devnum > 127 ||
-	    (native_hci && (package != 0 || !IS_ENABLED(CONFIG_BT_WS73))) ||
+	    (native_hci && !IS_ENABLED(CONFIG_BT_WS73)) ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
 	    !ws73_trial_package_allowed(package, dmi_get_system_info(DMI_PRODUCT_NAME)))
 		return -ENODEV;

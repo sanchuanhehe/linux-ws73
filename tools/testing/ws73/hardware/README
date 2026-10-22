@@ -100,7 +100,14 @@ versions must match before reference customization or BLE enable. The empty
 VM profile test includes 140 identity/version boundary cases. Missing package,
 cross-board DMI and E native-HCI publication are rejected. The continuous
 BLE supervisor selects one board per VM; native-HCI callers remain U-only.
-This admission extension is not an E BLE hardware result.
+The admission extension itself is not an E BLE hardware result. A separate
+2026-10-22 trial on allocated E 1-2.1.3 now passed three-file loading,
+controlled handoff, runtime E/USB/version verification and real BLE
+enable/BOOT/disable. Its immutable record is
+load-ble-trial-20261022T154737.285550Z (manifest SHA-256
+70c85ccccd51e27b1b4f04487ccea745e2c659d79802b216889c4aa44c0a4e0a).
+This one-sample startup result does not qualify E native HCI, RF, address
+provenance, cold-power behavior, other devices or natural recovery.
 File integrity checks alone do not authorize a mixed-device firmware load.
 Each later VM must contain only the explicit board's SDK110 three-file set;
 new runtime HCC identity/version must agree before function startup.

@@ -24,6 +24,8 @@ Never install these kernels/modules or run driver experiments on the host.
   python3 tools/testing/ws73/run-kunit.py --jobs 4 --hci-only --kcsan
   python3 tools/testing/ws73/build-hci.py module
   python3 tools/testing/ws73/build-hci.py builtin
+  python3 tools/testing/ws73/build-hci.py bt-module
+  python3 tools/testing/ws73/build-hci.py hci-module
 
 The default KUnit mode runs protocol, firmware, startup and shared endpoint
 checks without binding the native HCI consumer. Runtime-link tests drive actual
@@ -112,7 +114,15 @@ sequence coverage, not a proof of tokenless wire-epoch identity, real callback
 scheduling, physical enable/disable or safe live-device reset.
 
 build-hci.py compiles/links the WS73 core, USB and HCI driver either built-in
-or as modules, in the separate fixed build-hci directory. It builds bzImage
+or as modules, in the separate fixed build-hci directory. The bt-module
+profile keeps USB and the shared core built-in, with Bluetooth and HCI as
+modules. The hci-module profile also keeps Bluetooth built-in, leaving the
+HCI consumer and codec as modules. Each profile checks the resolved hidden
+core/codec/I/O symbols and exact WS73/Bluetooth membership in modules.order;
+old .ko files left by earlier configurations cannot establish module linkage.
+The current BT_WS73 dependency on WS73_USB excludes built-in HCI with a
+modular USB owner; these profiles do not relax that constraint.
+It builds bzImage
 before modules so modpost has the matching kernel symbols; unresolved symbols
 are errors. Configuration requests are checked explicitly, excluding ordinary
 comments. Source, compiler candidates, configuration, build tool and output

@@ -199,3 +199,26 @@ It does not qualify unloading a modular shared core, active-device consumer
 unbind, every module ordering, physical hotplug, PM or RF communication.
 Use check-supervisor.py on the full-speed record to check module-specific
 log and build-artifact rejection controls alongside the existing HCI controls.
+
+Shared-core and USB module lifecycle
+-----------------------------------
+The same --hci-module-build option also accepts an explicit usb-module record:
+
+  python3 tools/testing/ws73/build-hci.py usb-module
+  python3 tools/testing/ws73/usb-vm/run.py --phase hci --speed full --hci-module-build /path/to/hci-build-usb-module-record
+
+Bluetooth remains built-in; the six modules are WS73 core, USB I/O, USB owner,
+synthetic startup consumer, HCI codec and HCI consumer. The first idle cycle
+loads transport before HCI. The second loads HCI before transport and runs
+the three existing HCI cases. It unloads transport before the idle HCI driver
+after all synthetic devices disconnect. Both cycles require final core unload
+and sysfs disappearance, so leaked child references cannot pass merely because
+the USB interfaces disappeared. The VM enables USB-owner debug messages through
+its module parameter to retain the existing callback-drain observations.
+
+Core, USB I/O and USB owner each reject a non-forced unload while dependents
+remain, in addition to codec protection. The supervisor checks the exact six
+module inputs and two operation orders, plus missing/early core teardown,
+missing dependency checks and wrong/missing core artifacts. This remains a
+bounded synthetic test of two legal orders; it does not prove active-device
+consumer unload, all schedules, physical reenumeration, recovery or RF behavior.

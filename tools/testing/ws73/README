@@ -26,6 +26,7 @@ Never install these kernels/modules or run driver experiments on the host.
   python3 tools/testing/ws73/build-hci.py builtin
   python3 tools/testing/ws73/build-hci.py bt-module
   python3 tools/testing/ws73/build-hci.py hci-module
+  python3 tools/testing/ws73/build-hci.py usb-module
 
 The default KUnit mode runs protocol, firmware, startup and shared endpoint
 checks without binding the native HCI consumer. Runtime-link tests drive actual
@@ -117,7 +118,9 @@ build-hci.py compiles/links the WS73 core, USB and HCI driver either built-in
 or as modules, in the separate fixed build-hci directory. The bt-module
 profile keeps USB and the shared core built-in, with Bluetooth and HCI as
 modules. The hci-module profile also keeps Bluetooth built-in, leaving the
-HCI consumer and codec as modules. Each profile checks the resolved hidden
+HCI consumer and codec as modules. The usb-module profile keeps Bluetooth
+built-in while the shared core, USB owner/I/O, HCI and test consumer are
+modules. Each profile checks the resolved hidden
 core/codec/I/O symbols and exact WS73/Bluetooth membership in modules.order;
 old .ko files left by earlier configurations cannot establish module linkage.
 The current BT_WS73 dependency on WS73_USB excludes built-in HCI with a

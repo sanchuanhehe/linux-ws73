@@ -41,6 +41,9 @@
 #ifndef WS73_TEST_MODULES
 #define WS73_TEST_MODULES 0
 #endif
+#ifndef WS73_TEST_CORE_MODULES
+#define WS73_TEST_CORE_MODULES 0
+#endif
 static int disconnected;
 static volatile sig_atomic_t alarm_seen;
 
@@ -81,7 +84,8 @@ static void module_load(const char *file, const char *name, unsigned int cycle)
 	fd = open(file, O_RDONLY);
 	if (fd < 0)
 		die("open module");
-	if (syscall(SYS_finit_module, fd, "", 0))
+	if (syscall(SYS_finit_module, fd,
+		    !strcmp(name, "ws73_usb") ? "dyndbg=+p" : "", 0))
 		die("finit_module");
 	close(fd);
 	module_state(name, 1);
@@ -98,22 +102,60 @@ static void module_unload(const char *name, unsigned int cycle)
 	printf("WS73_MODULE cycle=%u unload=%s verified\n", cycle, name);
 }
 
+static void module_busy(const char *name, const char *label, unsigned int cycle)
+{
+	/* A provider must stay pinned while modules import its symbols. */
+	if (!syscall(SYS_delete_module, name, O_NONBLOCK) ||
+	    errno != EWOULDBLOCK)
+		die("module dependency protection");
+	module_state(name, 1);
+	printf("WS73_MODULE cycle=%u %s_busy verified\n", cycle, label);
+}
+
+static void transport_load(unsigned int cycle)
+{
+	module_load("/modules/ws73-usb-io.ko", "ws73_usb_io", cycle);
+	module_load("/modules/ws73-usb.ko", "ws73_usb", cycle);
+	module_load("/modules/ws73-usb-startup-test.ko", "ws73_usb_startup_test", cycle);
+}
+
+static void transport_unload(unsigned int cycle)
+{
+	module_unload("ws73_usb_startup_test", cycle);
+	module_unload("ws73_usb", cycle);
+	module_unload("ws73_usb_io", cycle);
+}
+
 static void modules_load(unsigned int cycle)
 {
+	if (WS73_TEST_CORE_MODULES) {
+		module_load("/modules/ws73-core.ko", "ws73_core", cycle);
+		if (!cycle)
+			transport_load(cycle);
+	}
 	module_load("/modules/btws73_proto.ko", "btws73_proto", cycle);
 	module_load("/modules/btws73-hci.ko", "btws73_hci", cycle);
-	/* The consumer imports codec symbols: the provider must stay pinned. */
-	if (!syscall(SYS_delete_module, "btws73_proto", O_NONBLOCK) ||
-	    errno != EWOULDBLOCK)
-		die("codec dependency protection");
-	module_state("btws73_proto", 1);
-	printf("WS73_MODULE cycle=%u codec_busy verified\n", cycle);
+	if (WS73_TEST_CORE_MODULES && cycle)
+		transport_load(cycle);
+	module_busy("btws73_proto", "codec", cycle);
+	if (WS73_TEST_CORE_MODULES) {
+		module_busy("ws73_core", "core", cycle);
+		module_busy("ws73_usb_io", "io", cycle);
+		module_busy("ws73_usb", "owner", cycle);
+	}
 }
 
 static void modules_unload(unsigned int cycle)
 {
+	if (WS73_TEST_CORE_MODULES && cycle)
+		transport_unload(cycle);
 	module_unload("btws73_hci", cycle);
 	module_unload("btws73_proto", cycle);
+	if (WS73_TEST_CORE_MODULES) {
+		if (!cycle)
+			transport_unload(cycle);
+		module_unload("ws73_core", cycle);
+	}
 }
 
 static void directory(const char *path)

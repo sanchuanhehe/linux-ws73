@@ -14,7 +14,7 @@ proof=json.loads((p/'manifest.json').read_text())
 assert proof['status']=='PASS' and proof['speed']=='full'
 for name in ['kernel.log','fixture.log']:
  assert hashlib.sha256((p/name).read_bytes()).hexdigest()==proof['materials'][name]
-k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_hci_modules if proof.get('hci_modules') else m.validate_hci if proof.get('phase')=='hci' else m.validate_startup if proof.get('phase')=='startup' else m.validate_loader if proof.get('phase')=='loader' else m.validate_download if proof.get('phase')=='download' else m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
+k=(p/'kernel.log').read_text();s=(p/'fixture.log').read_text();validator=m.validate_hci_core_modules if proof.get('core_modules') else m.validate_hci_modules if proof.get('hci_modules') else m.validate_hci if proof.get('phase')=='hci' else m.validate_startup if proof.get('phase')=='startup' else m.validate_loader if proof.get('phase')=='loader' else m.validate_download if proof.get('phase')=='download' else m.validate_boot if proof.get('phase')=='boot' else m.validate;validator(k,s)
 builddir=pathlib.Path(proof['build_record'])
 build=json.loads((builddir/'manifest.json').read_text())
 build_validator=m.validate_hci_module_build if proof.get('hci_modules') else m.validate_build
@@ -289,6 +289,26 @@ if proof.get('hci_modules'):
   changed=copy.deepcopy(build)
   if name=='wrong_module_mode':changed['mode']='builtin'
   else:del changed['artifacts']['drivers/bluetooth/btws73-hci.ko']
+  try:build_validator(builddir,changed,proof['compiled_source'])
+  except (AssertionError,ValueError):artifact_trials[name]='REJECTED'
+  else:raise AssertionError('accepted '+name)
+
+if proof.get('core_modules'):
+ trials.update({
+  'missing_core_unload':(k,s.replace('WS73_MODULE cycle=1 unload=ws73_core verified','',1)),
+  'missing_owner_unload':(k,s.replace('WS73_MODULE cycle=1 unload=ws73_usb verified','',1)),
+  'missing_core_busy':(k,s.replace('WS73_MODULE cycle=0 core_busy verified','',1)),
+  'missing_io_busy':(k,s.replace('WS73_MODULE cycle=1 io_busy verified','',1)),
+  'missing_owner_busy':(k,s.replace('WS73_MODULE cycle=1 owner_busy verified','',1)),
+  'wrong_parent_load_order':(k,s.replace('cycle=0 load=ws73_usb_io', 'cycle=0 load=ws73_usb',1)),
+  'early_core_unload':(k,s.replace('WS73_MODULE cycle=1 unload=ws73_core verified','',1).replace(
+    'WS73_HCI_CASE 2 PASS','WS73_MODULE cycle=1 unload=ws73_core verified\nWS73_HCI_CASE 2 PASS',1)),
+ })
+ for name in ['wrong_core_mode','missing_core_module','wrong_core_hash']:
+  changed=copy.deepcopy(build)
+  if name=='wrong_core_mode':changed['mode']='hci-module'
+  elif name=='missing_core_module':del changed['artifacts']['drivers/misc/ws73/ws73-core.ko']
+  else:changed['artifacts']['drivers/misc/ws73/ws73-core.ko']='0'*64
   try:build_validator(builddir,changed,proof['compiled_source'])
   except (AssertionError,ValueError):artifact_trials[name]='REJECTED'
   else:raise AssertionError('accepted '+name)

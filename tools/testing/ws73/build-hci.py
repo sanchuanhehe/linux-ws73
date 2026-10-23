@@ -12,6 +12,7 @@ PROFILES = {
  'module': ('m', 'm', 'm'),
  'bt-module': ('y', 'm', 'm'),
  'hci-module': ('y', 'y', 'm'),
+ 'usb-module': ('m', 'y', 'm'),
 }
 # USB owner, Bluetooth stack and native consumer; selectors resolve the core.
 MODULES = {

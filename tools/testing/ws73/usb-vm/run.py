@@ -17,27 +17,36 @@ def validate_build(proofdir, proof, expected_head):
  for name,digest in proof['artifacts'].items():
   assert sha(proofdir/name)==digest,'artifact hash mismatch: '+name
 
+def hci_module_paths(core):
+ modules={'drivers/bluetooth/btws73-hci.ko','drivers/bluetooth/btws73_proto.ko'}
+ if core:
+  modules.update('drivers/misc/ws73/'+name+'.ko' for name in
+                 ['ws73-core','ws73-usb-io','ws73-usb','ws73-usb-startup-test'])
+ return modules
+
 def validate_hci_module_build(proofdir, proof, expected_head):
  assert proof['status']=='PASS' and proof['source']==expected_head, 'failed/stale module build'
  assert sha(proofdir/'build.py')==proof['builder_sha256'], 'module builder hash'
- assert proof['mode']=='hci-module', 'requires built-in USB/core/Bluetooth and modular HCI'
+ assert proof['mode'] in ('hci-module','usb-module'), 'unsupported module runtime profile'
+ core=proof['mode']=='usb-module'
  required={'.config','vmlinux','arch/x86/boot/bzImage','Module.symvers','modules.order',
-           'drivers/bluetooth/btws73.o','drivers/bluetooth/btws73_proto.o',
-           'drivers/bluetooth/btws73-hci.ko','drivers/bluetooth/btws73_proto.ko'}
+           'drivers/bluetooth/btws73.o','drivers/bluetooth/btws73_proto.o'}
+ required.update(hci_module_paths(core))
  required.update('drivers/misc/ws73/'+name+'.o' for name in
                  ['ble','ble-link','usb','usb-startup-test','usb-io','boot-loader','firmware'])
  assert set(proof['artifacts'])==required, 'module build artifact set'
  for name,digest in proof['artifacts'].items():
   assert sha(proofdir/name)==digest, 'module build artifact hash: '+name
  config=set((proofdir/'.config').read_text().splitlines())
- expected={'CONFIG_MODULES=y','CONFIG_MODULE_UNLOAD=y','CONFIG_WS73_USB=y',
-           'CONFIG_WS73_CORE=y','CONFIG_WS73_USB_IO=y','CONFIG_BT=y',
+ expected={'CONFIG_MODULES=y','CONFIG_MODULE_UNLOAD=y','CONFIG_BT=y',
            'CONFIG_BT_LE=y','CONFIG_BT_WS73=m','CONFIG_BT_WS73_PROTO=m',
-           'CONFIG_WS73_USB_STARTUP_TEST=y','CONFIG_KASAN=y','CONFIG_UBSAN=y',
+           'CONFIG_KASAN=y','CONFIG_UBSAN=y',
            'CONFIG_PROVE_LOCKING=y','CONFIG_DEBUG_ATOMIC_SLEEP=y'}
+ expected.update('CONFIG_'+name+'='+('m' if core else 'y') for name in
+                 ['WS73_CORE','WS73_USB','WS73_USB_IO','WS73_USB_STARTUP_TEST'])
  assert expected<=config, 'module runtime configuration'
  assert set((proofdir/'modules.order').read_text().splitlines())=={
-  'drivers/bluetooth/btws73-hci.o','drivers/bluetooth/btws73_proto.o'}, 'unexpected modules'
+  name[:-3]+'.o' for name in hci_module_paths(core)}, 'unexpected modules'
 
 
 def validate(kernel, log, speed="full"):
@@ -160,23 +169,33 @@ def validate_hci(kernel, log, speed="full"):
  assert log.count('WS73_HCI_MGMT_INFO')==2 and log.count('WS73_HCI_AUTO_OFF_ACK')==2
  return {'cases':3,'native_initializations':2,'reset_cancellation':1,'hci_commands':27,'hci_replies':26,'hci_fragments':78,'bulk_out':57,'bulk_in':101,'class_actions':11,'mgmt_info':2,'mgmt_removed':2,'mgmt_drained':2,'auto_off_ack':2,'drains':3}
 
-def validate_hci_modules(kernel, log, speed="full"):
+def validate_hci_modules(kernel, log, speed="full", core=False):
  observed=validate_hci(kernel,log,speed)
  assert not re.search(r'Unknown symbol|module verification failed|module .*not found',kernel), 'module diagnostic'
  expected=[]
  for cycle in range(2):
-  expected += [f'cycle={cycle} load=btws73_proto verified',
-               f'cycle={cycle} load=btws73_hci verified',
-               f'cycle={cycle} codec_busy verified',
-               f'cycle={cycle} unload=btws73_hci verified',
-               f'cycle={cycle} unload=btws73_proto verified']
+  transport=['ws73_usb_io','ws73_usb','ws73_usb_startup_test']
+  consumer=['btws73_proto','btws73_hci']
+  load=(['ws73_core']+transport+consumer if cycle==0 else
+        ['ws73_core']+consumer+transport) if core else consumer
+  unload=(list(reversed(consumer))+list(reversed(transport))+['ws73_core'] if cycle==0 else
+          list(reversed(transport))+list(reversed(consumer))+['ws73_core']) if core else list(reversed(consumer))
+  expected += [f'cycle={cycle} load={name} verified' for name in load]
+  expected += [f'cycle={cycle} {name}_busy verified' for name in
+               (['codec','core','io','owner'] if core else ['codec'])]
+  expected += [f'cycle={cycle} unload={name} verified' for name in unload]
  assert re.findall(r'^WS73_MODULE ([^\r\n]+)',log,re.M)==expected, 'module lifecycle markers'
  assert log.index('cycle=1 codec_busy')<log.index('WS73_HCI_CASE 0 BEGIN')
- assert log.index('WS73_HCI_CASE 2 PASS')<log.index('cycle=1 unload=btws73_hci')
- assert log.index('cycle=1 unload=btws73_proto')<log.index('WS73_VIRTUAL_USB_PASS')
- observed.update(module_loads=4,module_unloads=4,codec_busy_rejections=2)
+ assert log.index('WS73_HCI_CASE 2 PASS')<log.index('cycle=1 unload=')
+ assert log.index('cycle=1 unload='+('ws73_core' if core else 'btws73_proto'))<log.index('WS73_VIRTUAL_USB_PASS')
+ observed.update(module_loads=12 if core else 4,module_unloads=12 if core else 4,
+                 codec_busy_rejections=2,core_module_mode=core)
+ if core:observed.update(core_busy_rejections=2,io_busy_rejections=2,owner_busy_rejections=2)
  return observed
 
+
+def validate_hci_core_modules(kernel, log, speed="full"):
+ return validate_hci_modules(kernel,log,speed,core=True)
 
 def validate_startup(kernel, log, speed="full"):
  bad=re.search(r'BUG:|WARNING:|UBSAN:|Kernel panic|possible circular|inconsistent lock state|sleeping function called|WS73_TEST_ERROR|WS73_VIRTUAL_USB_FAIL|SKIP',kernel+'\n'+log)
@@ -481,8 +500,9 @@ def main():
   proofdir=args.hci_module_build.resolve() if args.hci_module_build else pathlib.Path((WORK/'usb-vm-build-record').read_text().strip());proof=json.loads((proofdir/'manifest.json').read_text())
   before=source_identity();assert not before['status']
   (validate_hci_module_build if args.hci_module_build else validate_build)(proofdir,proof,before['head'])
+  core_modules=bool(args.hci_module_build and proof['mode']=='usb-module')
   stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ');record=WORK/'records'/('virtual-usb-'+stamp);record.mkdir();print(record,flush=True)
-  manifest={'status':'INCOMPLETE','compiled_source':proof['source'],'speed':args.speed,'phase':args.phase,'hci_modules':bool(args.hci_module_build),'scope':'FunctionFS/dummy_hcd synthetic USB integration in hardware-free VM; no physical/firmware/HCI qualification','build_record':str(proofdir),'harness_source':before,'tools':{},'materials':{}}
+  manifest={'status':'INCOMPLETE','compiled_source':proof['source'],'speed':args.speed,'phase':args.phase,'hci_modules':bool(args.hci_module_build),'core_modules':core_modules,'scope':'FunctionFS/dummy_hcd synthetic USB integration in hardware-free VM; no physical/firmware/HCI qualification','build_record':str(proofdir),'harness_source':before,'tools':{},'materials':{}}
   def save():(record/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
   save()
   try:
@@ -492,17 +512,17 @@ def main():
     manifest['tools'][tool]['path_candidates_sha256']={str(p):sha(p) for p in sorted(candidates)}
    for source,name in [(proofdir/'manifest.json','build-proof.json'),(proofdir/'arch/x86/boot/bzImage','bzImage'),(proofdir/'.config','.config'),(TOOLS/'init.c','init.c'),(TOOLS/'run.py','run.py'),(TOOLS.parent/'build-hci.py' if args.hci_module_build else TOOLS/'build.py','build.py')]:
     shutil.copyfile(source,record/name);manifest['materials'][name]=sha(record/name)
-   compile_cmd=['gcc','-DWS73_TEST_MODULES='+('1' if args.hci_module_build else '0'),'-DWS73_TEST_HCI='+('1' if args.phase=='hci' else '0'),'-DWS73_TEST_STARTUP='+('1' if args.phase=='startup' else '0'),'-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-DWS73_TEST_DOWNLOAD='+('1' if args.phase=='download' else '0'),'-DWS73_TEST_LOADER='+('1' if args.phase=='loader' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
+   compile_cmd=['gcc','-DWS73_TEST_CORE_MODULES='+('1' if core_modules else '0'),'-DWS73_TEST_MODULES='+('1' if args.hci_module_build else '0'),'-DWS73_TEST_HCI='+('1' if args.phase=='hci' else '0'),'-DWS73_TEST_STARTUP='+('1' if args.phase=='startup' else '0'),'-DWS73_TEST_BOOT='+('1' if args.phase=='boot' else '0'),'-DWS73_TEST_DOWNLOAD='+('1' if args.phase=='download' else '0'),'-DWS73_TEST_LOADER='+('1' if args.phase=='loader' else '0'),'-O2','-Wall','-Wextra','-Werror','-o',str(record/'init'),str(record/'init.c')]
    manifest['init_compile']=compile_cmd
    with (record/'init-build.log').open('w') as build_log:
     subprocess.run(compile_cmd,check=True,stdout=build_log,stderr=subprocess.STDOUT,env=dict(os.environ,CCACHE_DISABLE='1'))
    manifest['materials']['init']=sha(record/'init')
    firmware={}
    if args.hci_module_build:
-    for name in ['btws73-hci.ko','btws73_proto.ko']:
-     local='modules/'+name;dest=record/local;dest.parent.mkdir(exist_ok=True)
-     shutil.copyfile(proofdir/'drivers/bluetooth'/name,dest)
-     assert sha(dest)==proof['artifacts']['drivers/bluetooth/'+name], 'copied module hash'
+    for name in sorted(hci_module_paths(core_modules)):
+     local='modules/'+pathlib.PurePosixPath(name).name;dest=record/local;dest.parent.mkdir(exist_ok=True)
+     shutil.copyfile(proofdir/name,dest)
+     assert sha(dest)==proof['artifacts'][name], 'copied module hash'
      manifest['materials'][local]=sha(dest);firmware[local]=dest
    if args.phase=='loader':
     firmware,materials,inputs=loader_materials(record,args.firmware_root.resolve())
@@ -514,7 +534,7 @@ def main():
    with (record/'kernel.log').open('w') as log:
     result=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,timeout=45)
    manifest['exit_code']=result.returncode;assert result.returncode==0
-   manifest['observed']=(validate_hci_modules if args.hci_module_build else validate_hci if args.phase=='hci' else validate_startup if args.phase=='startup' else validate_loader if args.phase=='loader' else validate_download if args.phase=='download' else validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
+   manifest['observed']=(validate_hci_core_modules if core_modules else validate_hci_modules if args.hci_module_build else validate_hci if args.phase=='hci' else validate_startup if args.phase=='startup' else validate_loader if args.phase=='loader' else validate_download if args.phase=='download' else validate_boot if args.phase=='boot' else validate)((record/'kernel.log').read_text(errors='replace'),(record/'fixture.log').read_text(errors='replace'),args.speed)
    assert source_identity()==before,'source changed during VM test'
    manifest['status']='PASS'
   except BaseException as error:

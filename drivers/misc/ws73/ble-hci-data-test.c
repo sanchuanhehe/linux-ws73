@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Synthetic controller model ONLY for KUnit, never a USB firmware fallback. */
 #include <kunit/test.h>
+#include <linux/atomic.h>
 #include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -22,6 +23,8 @@ struct ws73_hci_model {
 	struct ws73_usb_tx tx;
 	struct auxiliary_device *adev;
 	struct hci_dev *hdev; /* Held device reference, separate from the driver. */
+	struct hci_dev *previous_hdev; /* Retired consumer held across rebind. */
+	atomic_t enables, disables;
 	struct completion published;
 	struct completion reset;
 	struct completion release;
@@ -96,7 +99,10 @@ static int ws73_model_fragment(struct ws73_hci_model *m, const u8 *h4, size_t si
 
 static int ws73_model_action(void *context, bool enabled)
 {
+	struct ws73_hci_model *m = context;
+
 	/* Synthetic action acknowledgment; it says nothing about real USB. */
+	atomic_inc(enabled ? &m->enables : &m->disables);
 	return 0;
 }
 
@@ -317,6 +323,8 @@ static void ws73_model_cleanup(void *context)
 	}
 	if (m->hdev)
 		hci_dev_put(m->hdev);
+	if (m->previous_hdev)
+		hci_dev_put(m->previous_hdev);
 	if (m->parent)
 		root_device_unregister(m->parent);
 }
@@ -337,6 +345,8 @@ static struct ws73_hci_model *ws73_model_create_path(struct kunit *test, bool bl
 	m = kunit_kzalloc(test, sizeof(*m), GFP_KERNEL);
 	if (!m)
 		return NULL;
+	atomic_set(&m->enables, 0);
+	atomic_set(&m->disables, 0);
 	init_completion(&m->published);
 	init_completion(&m->reset);
 	init_completion(&m->release);
@@ -379,6 +389,57 @@ static struct ws73_hci_model *ws73_model_create_path(struct kunit *test, bool bl
 static struct ws73_hci_model *ws73_model_create(struct kunit *test, bool block)
 {
 	return ws73_model_create_path(test, block, false, false);
+}
+
+static void ws73_hci_consumer_rebind_test(struct kunit *test)
+{
+	struct ws73_hci_model *m = ws73_model_create(test, false);
+	const u8 event[] = { HCI_EVENT_PKT, 0xff, 1, 0xa5 };
+	unsigned int previous_rx, current_rx;
+	unsigned long started, elapsed;
+	struct device *child;
+
+	KUNIT_ASSERT_NOT_NULL(test, m);
+	KUNIT_ASSERT_NOT_NULL(test, m->adev->dev.driver);
+	KUNIT_EXPECT_EQ(test, atomic_read(&m->enables), 1);
+	KUNIT_EXPECT_EQ(test, atomic_read(&m->disables), 0);
+	/* Reset is pending, but the USB owner and auxiliary device stay alive. */
+	started = jiffies;
+	device_release_driver(&m->adev->dev);
+	elapsed = jiffies - started;
+	kunit_info(test, "consumer unbind completed in %u ms\n", jiffies_to_msecs(elapsed));
+	KUNIT_EXPECT_LT(test, elapsed, HZ); /* Below HCI_CMD_TIMEOUT (two seconds). */
+	KUNIT_EXPECT_PTR_EQ(test, m->adev->dev.driver, NULL);
+	KUNIT_EXPECT_TRUE(test, device_is_registered(&m->adev->dev));
+	KUNIT_EXPECT_FALSE(test, device_is_registered(&m->hdev->dev));
+	KUNIT_EXPECT_EQ(test, atomic_read(&m->disables), 1);
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(m->adev), -ENOTCONN);
+	KUNIT_EXPECT_EQ(test, m->commands, 3);
+	KUNIT_EXPECT_EQ(test, m->wire_error, 0);
+
+	/* Keep the retired HCI allocation alive; a new client must not reuse it. */
+	m->previous_hdev = m->hdev;
+	m->hdev = NULL;
+	previous_rx = m->previous_hdev->stat.byte_rx;
+	m->commands = 0;
+	reinit_completion(&m->reset);
+	KUNIT_ASSERT_EQ(test, device_attach(&m->adev->dev), 1);
+	KUNIT_ASSERT_TRUE(test, wait_for_completion_timeout(&m->reset, 5 * HZ));
+	child = device_find_child(&m->adev->dev, NULL, ws73_model_match);
+	KUNIT_ASSERT_NOT_NULL(test, child);
+	m->hdev = to_hci_dev(child);
+	KUNIT_EXPECT_PTR_NE(test, m->hdev, m->previous_hdev);
+	KUNIT_EXPECT_GT(test, m->hdev->id, 0);
+	KUNIT_EXPECT_NE(test, m->hdev->id, m->previous_hdev->id);
+	KUNIT_EXPECT_EQ(test, atomic_read(&m->enables), 2);
+	KUNIT_EXPECT_EQ(test, atomic_read(&m->disables), 1);
+	KUNIT_EXPECT_EQ(test, m->commands, 3);
+	KUNIT_EXPECT_MEMEQ(test, &m->hdev->bdaddr, ws73_model_address, 6);
+	current_rx = m->hdev->stat.byte_rx;
+	KUNIT_ASSERT_EQ(test, ws73_model_fragment(m, event, sizeof(event)), 0);
+	KUNIT_EXPECT_EQ(test, m->hdev->stat.byte_rx, current_rx + sizeof(event) - 1);
+	KUNIT_EXPECT_EQ(test, m->previous_hdev->stat.byte_rx, previous_rx);
+	KUNIT_EXPECT_EQ(test, m->wire_error, 0);
 }
 
 static struct sk_buff *ws73_model_packet(void)
@@ -859,6 +920,7 @@ static void ws73_hci_link_abort_test(struct kunit *test)
 }
 
 static struct kunit_case ws73_hci_data_cases[] = {
+	KUNIT_CASE(ws73_hci_consumer_rebind_test),
 	KUNIT_CASE(ws73_hci_data_test),
 	KUNIT_CASE(ws73_hci_queue_limit_test),
 	KUNIT_CASE(ws73_hci_byte_limit_test),

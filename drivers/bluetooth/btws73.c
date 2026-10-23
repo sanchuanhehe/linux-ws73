@@ -369,10 +369,10 @@ static int btws73_probe(struct auxiliary_device *adev,
 		goto free;
 	}
 	ret = hci_register_dev(bt->hdev);
-	if (!ret)
+	if (ret >= 0)
 		bt->registered = true;
 	mutex_unlock(&bt->registration);
-	if (!ret)
+	if (ret >= 0)
 		return 0;
 	ws73_ble_unbind(adev);
 	cancel_work_sync(&bt->fault_work);

@@ -39,7 +39,7 @@ with (work/'build.lock').open('a') as lock:
  for symbol in ('WS73_USB', 'BT', 'BT_WS73', 'WS73_USB_STARTUP_TEST'):
   text = text.replace(f'CONFIG_{symbol}=y', f'CONFIG_{symbol}={expected[symbol]}')
  has_modules = 'm' in expected.values()
- text += 'CONFIG_MODULES=y\n' if has_modules else '# CONFIG_MODULES is not set\n'
+ text += 'CONFIG_MODULES=y\nCONFIG_MODULE_UNLOAD=y\n' if has_modules else '# CONFIG_MODULES is not set\n'
  expected_lines = {f'CONFIG_{symbol}={value}' for symbol, value in expected.items()}
  expected_modules = {MODULES[symbol] for symbol, value in expected.items() if value == 'm'}
  (record/'config').write_text(text);shutil.copyfile(__file__,record/'build.py')

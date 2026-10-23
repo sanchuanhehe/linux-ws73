@@ -14,6 +14,7 @@
 #include <sys/mount.h>
 #include <sys/reboot.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
@@ -37,6 +38,9 @@
 #ifndef WS73_TEST_HCI
 #define WS73_TEST_HCI 0
 #endif
+#ifndef WS73_TEST_MODULES
+#define WS73_TEST_MODULES 0
+#endif
 static int disconnected;
 static volatile sig_atomic_t alarm_seen;
 
@@ -58,6 +62,58 @@ static void die(const char *what)
 {
 	fprintf(stderr, "WS73_TEST_ERROR %s: %s\n", what, strerror(errno));
 	stop(1);
+}
+
+static void module_state(const char *name, int present)
+{
+	char path[128];
+
+	snprintf(path, sizeof(path), "/sys/module/%s", name);
+	if (access(path, F_OK) ? present || errno != ENOENT : !present)
+		die("module presence");
+}
+
+static void module_load(const char *file, const char *name, unsigned int cycle)
+{
+	int fd;
+
+	module_state(name, 0);
+	fd = open(file, O_RDONLY);
+	if (fd < 0)
+		die("open module");
+	if (syscall(SYS_finit_module, fd, "", 0))
+		die("finit_module");
+	close(fd);
+	module_state(name, 1);
+	printf("WS73_MODULE cycle=%u load=%s verified\n", cycle, name);
+}
+
+static void module_unload(const char *name, unsigned int cycle)
+{
+	module_state(name, 1);
+	/* No force-unload flag, even if a test leaves the module busy. */
+	if (syscall(SYS_delete_module, name, O_NONBLOCK))
+		die("delete_module");
+	module_state(name, 0);
+	printf("WS73_MODULE cycle=%u unload=%s verified\n", cycle, name);
+}
+
+static void modules_load(unsigned int cycle)
+{
+	module_load("/modules/btws73_proto.ko", "btws73_proto", cycle);
+	module_load("/modules/btws73-hci.ko", "btws73_hci", cycle);
+	/* The consumer imports codec symbols: the provider must stay pinned. */
+	if (!syscall(SYS_delete_module, "btws73_proto", O_NONBLOCK) ||
+	    errno != EWOULDBLOCK)
+		die("codec dependency protection");
+	module_state("btws73_proto", 1);
+	printf("WS73_MODULE cycle=%u codec_busy verified\n", cycle);
+}
+
+static void modules_unload(unsigned int cycle)
+{
+	module_unload("btws73_hci", cycle);
+	module_unload("btws73_proto", cycle);
 }
 
 static void directory(const char *path)
@@ -1307,6 +1363,11 @@ int main(void)
 
 	if (log < 0)
 		die("open kmsg");
+	if (WS73_TEST_MODULES) {
+		modules_load(0);
+		modules_unload(0);
+		modules_load(1);
+	}
 	char udc[128] = { 0 };
 	DIR *dir = opendir("/sys/class/udc");
 	struct dirent *entry;
@@ -1478,5 +1539,7 @@ int main(void)
 	for (unsigned int i = 0; i < endpoints; i++)
 		close(eps[i]);
 	close(control);
+	if (WS73_TEST_MODULES)
+		modules_unload(1);
 	stop(0);
 }

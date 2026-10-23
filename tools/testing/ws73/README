@@ -128,6 +128,8 @@ are errors. Configuration requests are checked explicitly, excluding ordinary
 comments. Source, compiler candidates, configuration, build tool and output
 hashes are recorded. Do not run with Python optimization. Compile/link success
 does not prove module loading/unloading, suspend/resume or hardware behavior.
+The usb-vm HCI consumer module mode separately exercises codec/consumer reload
+and unload in a hardware-free VM using the hci-module build record.
 
   python3 tools/testing/ws73/build-cross.py all
 

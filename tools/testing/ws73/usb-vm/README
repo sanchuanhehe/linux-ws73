@@ -175,3 +175,27 @@ an explicit zero fixture (sleep disabled, no physical wiring claim). Startup
 has 52 bulk OUT per speed; HCI has 57. The PM message has no synthetic ACK.
 Missing, short and reordered PM records fail supervision. These counts and
 byte checks do not establish physical device PM behavior.
+
+HCI consumer module lifecycle
+-----------------------------
+Build the existing mixed profile, then pass its timestamped record explicitly:
+
+  python3 tools/testing/ws73/build-hci.py hci-module
+  python3 tools/testing/ws73/usb-vm/run.py --phase hci --speed full --hci-module-build /path/to/hci-build-hci-module-record
+
+This path requires USB, shared WS73 core and Bluetooth built-in, with exactly
+the codec and native HCI consumer as modules and CONFIG_MODULE_UNLOAD=y.
+The runner verifies configuration and both module hashes, then packages them
+in the private initramfs. The same PID-1-only fixture uses finit_module and
+non-forced delete_module inside the VM; it never executes host module tools.
+It checks sysfs presence after each successful load/unload, rejects unloading
+the codec while the consumer imports it, unloads both before creating a device,
+then reloads them for the three existing HCI cases. After all USB instances and
+HCI callbacks are drained, both modules must unload again. Failed syscalls,
+missing or reordered markers, unexpected modules and diagnostics fail the run.
+
+This proves those consumer/codec module cycles in the synthetic fixture only.
+It does not qualify unloading a modular shared core, active-device consumer
+unbind, every module ordering, physical hotplug, PM or RF communication.
+Use check-supervisor.py on the full-speed record to check module-specific
+log and build-artifact rejection controls alongside the existing HCI controls.

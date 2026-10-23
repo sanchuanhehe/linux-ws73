@@ -61,6 +61,9 @@ with (work/'build.lock').open('a') as lock:
    # Old .ko files may survive a configuration switch. modules.order, not
    # file existence, determines which outputs belong to this invocation.
    order = set((build/'modules.order').read_text().splitlines())
+   # The kernel's internal modules.order lists .o; modfinal emits .ko.
+   assert all(name.endswith('.o') for name in order), 'unexpected module-order format'
+   order = {name[:-2] + '.ko' for name in order}
    assert order & set(MODULES.values()) == expected_modules, 'wrong module membership'
    names += ['Module.symvers', 'modules.order'] + sorted(expected_modules)
   for name in names:

@@ -81,6 +81,18 @@ def digest(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def archive_previous_test_log(build, record):
+    """Keep the old log as history, never as this invocation's execution."""
+    previous = build / "test.log"
+    if not previous.exists():
+        return None
+    archived = record / "previous-test.log"
+    shutil.copyfile(previous, archived)
+    summary = {"path": archived.name, "sha256": digest(archived)}
+    previous.unlink()
+    return summary
+
+
 def git(*args):
     return subprocess.check_output(["git", "-C", str(SOURCE), *args])
 
@@ -195,6 +207,10 @@ def main():
                f"-qmp unix:{work / 'kunit.qmp'},server=on,wait=off",
                f"--json={record / 'results.json'}", "*ws73*"]
         manifest["command"] = cmd
+        # kunit.py only replaces test.log after a successful build. Without
+        # this separation, a failed build can inherit old PASS counters.
+        # The existing global build lock covers both archive and invocation.
+        manifest["previous_test_log"] = archive_previous_test_log(build, record)
         manifest_path = record / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
         print(record, flush=True)
@@ -203,6 +219,10 @@ def main():
             run = subprocess.run(cmd, cwd=SOURCE, env=env, stdout=log,
                                  stderr=subprocess.STDOUT, check=False)
         manifest["exit_code"] = run.returncode
+        manifest["artifact_scope"] = (
+            "candidate outputs of successful KUnit invocation; validation pending"
+            if run.returncode == 0 else
+            "diagnostic build-directory contents; may contain earlier objects/images")
         # Preserve the pre-build patch, then compare the post-build identity.
         after_dir = record / "after"
         after_dir.mkdir()
@@ -399,6 +419,8 @@ def main():
             manifest["validation_error"] = str(error)
             passed = False
         manifest["status"] = "PASS" if passed else "FAIL"
+        if passed:
+            manifest["artifact_scope"] = "validated outputs of this invocation"
         manifest["evidence_sha256"] = {
             str(p.relative_to(record)): digest(p)
             for p in sorted(record.rglob("*")) if p.is_file() and p != manifest_path

@@ -10,6 +10,11 @@ Use a clean, committed x86-64 Linux kernel worktree with Clang/LLD, make,
 Python 3 and QEMU. Reserve the shared machine budget before starting: the
 builders below use four jobs, and KUnit uses a two-CPU hardware-free VM.
 All outputs are under ../.dev/ws73-upstream, with a shared build.lock.
+Before each KUnit invocation, an existing build/test.log is archived as
+previous-test.log and removed from the build directory under that lock.
+A build failure therefore cannot contribute an earlier run's test counters.
+Artifacts retained after a nonzero invocation are diagnostic build-directory
+contents, possibly including older objects/images, and are labelled accordingly.
 Never install these kernels/modules or run driver experiments on the host.
 
   python3 tools/testing/ws73/run-kunit.py --jobs 4

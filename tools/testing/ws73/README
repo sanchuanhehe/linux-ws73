@@ -30,6 +30,13 @@ BT_WS73=n, including no module: both clients would otherwise claim the same
 auxiliary endpoint. Combined-HCI runs the protocol suites and actual native
 HCI suites together, with only those mock-client suites disabled. Default and
 core-only modes retain all mock-client cases; no runtime SKIP is treated as PASS.
+The endpoint suite also blocks a real backend start or send while a separate
+thread removes the auxiliary device. It requires immediate terminal admission
+and RX gating, checks that removal does not return during a bounded hold, then
+releases the backend and checks drain completion and rejection through a held
+device reference. A successful local TX is distinct from enabling a function:
+an in-flight start must return the removal error instead of enabling afterward.
+These controlled interleavings do not prove all schedules or hardware recovery.
 Core-only disables NET and
 Bluetooth. HCI-only binds the production auxiliary/HCI consumer to synthetic backends.
 It verifies failed enable, terminal rebind, two setup queries, packet ownership

@@ -268,6 +268,7 @@ def main():
                 "ws73-ble-endpoint": {
                     "ws73_ble_lifecycle_test", "ws73_ble_failure_release_test",
                     "ws73_ble_send_failure_test",
+                    "ws73_ble_remove_send_test", "ws73_ble_remove_start_test",
                 },
                 "ws73-boot-loader": {"ws73_loader_preflight_test",
                                      "ws73_loader_identity_mismatch_test",

@@ -46,7 +46,7 @@ def main():
             config = config.replace("# CONFIG_NET is not set",
                                     "CONFIG_NET=y\nCONFIG_BT=y\nCONFIG_BT_LE=y\n"
                                     "# CONFIG_BT_BREDR is not set\nCONFIG_BT_WS73=y\n"
-                                    "CONFIG_VIRTIO=y\nCONFIG_VIRTIO_PCI=y\n"
+                                    "CONFIG_VIRTIO_MENU=y\nCONFIG_VIRTIO=y\nCONFIG_VIRTIO_PCI=y\n"
                                     "CONFIG_VIRTIO_CONSOLE=y")
         (record / "hardware.config").write_text(config)
         shutil.copyfile(__file__, record / "build.py")

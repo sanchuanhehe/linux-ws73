@@ -5456,3 +5456,124 @@ does not isolate why nonconnectable/random-type advertising was rejected;
 that failure remains open. Cold automatic selection, board/address provenance,
 natural recovery/PM, sustained business/coexistence, Wi-Fi STA, firmware
 delivery and formal joint U/E/upstream acceptance also remain open.
+
+
+Native GATT attempts and retained timing failures (2026-10-25 SGT)
+-----------------------------------------------------------------
+
+The existing per-device VM runner now invokes the unmodified, pinned BlueZ
+GATT tools described above, with U as server and E as client. It requires the
+previous exact bilateral discovery record, fresh controller addresses and a
+new session UUID before connecting only the allocated peer. The fixed client
+sequence would discover the actual GAP Device Name characteristic, write a
+64-byte random hex token, read it back, then disconnect. The server is a
+bounded RAM-only development service. This is low-security development;
+role exchange, pairing, encryption and independent interoperability are not
+established. Helper implementations and synthetic vectors are not application
+communication evidence.
+
+Five actual paired attempts used allocated U 1-1.1.3 and E 1-2.1.4, each with
+its own SDK110 original three-file image and boot/runtime HCC checks. All ten
+physical records remain FAIL. The kernel/module source is exactly
+``09720a346471ab848671ee00fc4ae6c81f4c4197``; execution worktree HEAD is
+``025fc834b7c7e07dfe73167a1c5e0f215e5ff73d`` with only documentation changes
+since that build. No new production driver quirk or fabricated capability,
+completion or wireless ACK was introduced.
+
+The attempts establish distinct observations, not a combined success:
+
+* Initial short discovery: E did not receive the new U session advertisement;
+  no client connection was started.
+* Overlong discovery: the test's 12-second scan exceeded the native
+  ``DISCOV_LE_TIMEOUT`` of 10240 ms. Stock BlueZ exits when discovery ends;
+  both guests therefore stopped before GATT. The test window was corrected
+  to eight seconds, without changing the Bluetooth stack timer.
+* Eight-second discovery: E submitted Extended Create Connection (0x2043),
+  received successful Command Status, and sent Create Connection Cancel
+  (0x200e) 20544641 microseconds later. Successful Cancel Complete preceded
+  an Enhanced Connection Complete with status 0x02. This is a cancellation
+  result, not an immediate unsupported-opcode response. The restarted U
+  advertisement was not independently confirmed during this initiation.
+* Fresh rediscovery: E received the first U advertisement, but its second
+  scan did not receive the restarted U session advertisement despite
+  successful advertising command replies. The client was not started.
+* First advertisement retained: U listened before enabling its first
+  advertising set and kept it active; E received that exact session and
+  submitted 0x2043 with successful Command Status. Native connection setup
+  included an additional roughly ten-second scan. The test's 22-second
+  output deadline ended before the full subsequent initiation timeout;
+  no Cancel command or successful connection event was captured.
+
+No successful LE connection or ACL packet is observed in these captures.
+In particular, the last experiment cannot establish failure after a complete
+native initiation window. Its corrected pending test uses a 42-second client
+wait and 55-second server listen wait, with bounded child and VM lifetimes.
+Those changes pass the pure guest state/control checks, but their new image
+preparation and empty-VM/physical execution have not completed. A first
+preparation was rejected by the nonblocking global build lock before creating
+an artifact or VM; its retry was not executed because automatic approval
+review was unavailable due to an account usage limit. Neither event is a
+firmware or hardware result.
+
+All ten original manifest/material hashes were replayed. The explicit boot
+stage checks pass, and each captured successful runtime RX record is complete
+and matches its text counterpart. This is narrower than clean full-session
+capture: some failure exits lack final runtime URB cancellation records, and
+none of these failed runs establishes the required clean capture finish/reap.
+An initial whole-stream boot replay rejected the undrained runtime records;
+that rejection is retained. Subsequent boot-only replay is explicitly scoped
+to device 2 and cannot erase that session limitation. Kernel owner drains and
+QEMU exit zero are recorded separately. Fresh stop-only VMs obtained actual
+BLE close ACKs before any subsequent fixed chip reset; those independent
+operations do not turn the failed GATT sessions into orderly disconnects or
+natural recovery passes.
+
+.. list-table:: Retained physical GATT attempts
+   :header-rows: 1
+
+   * - Model and record
+     - Manifest SHA-256
+   * - US ``load-hci-trial-20261024T155118.131457Z``
+     - ``0cc64dc5e6aaec6ae39eca7e4466059118833c7ae891672d228cf96790f3ef7e``
+   * - E ``load-hci-trial-20261024T155118.129356Z``
+     - ``b933fa6c5ee50c4f797eab092a5fe6a0f3b091e8ab508a27580d77cb60502bfe``
+   * - US ``load-hci-trial-20261024T160252.805805Z``
+     - ``3a5d41e04686d0eed9fff8268d2d59ee462fdd8fb30ccf9c7b8e85fad780d088``
+   * - E ``load-hci-trial-20261024T160252.805280Z``
+     - ``8046abfe9a0014949467e2c319d163991eee8afaa9a0093fe8d61a589c9200d5``
+   * - US ``load-hci-trial-20261024T161415.300136Z``
+     - ``5645cd56208287156be6438714c29651ab668272537fa3acbd469be38e78bd61``
+   * - E ``load-hci-trial-20261024T161415.306654Z``
+     - ``ec444dadd6dc5384a9e498942eb4ed3a1b97db70c39e1ea7cfe5bd62c1de9607``
+   * - US ``load-hci-trial-20261024T164229.800314Z``
+     - ``512b57ec94b078954d76cb65a9847cf4f23786709ef75c805ec6a79a50ae2c11``
+   * - E ``load-hci-trial-20261024T164229.804550Z``
+     - ``64573ca9a4e3a065bfe26020422e9f136acb9d9c0b86638f038118ddbd97c061``
+   * - US ``load-hci-trial-20261024T165328.042864Z``
+     - ``0eab011efe2069a3339584ba795f5f6ce04dcbc4353b4247cec535cdb02ddc23``
+   * - E ``load-hci-trial-20261024T165328.043785Z``
+     - ``e9b8a64cd310cc631019de3531ede070e9a1f8f1f6af106f73bf16feaf606170``
+
+The private checkpoint ``gatt-native-20261024T152056.581201Z/checkpoint.json``
+has SHA-256 ``480e0df4fee946b19c31aedc39ba9b42cae971fc1357ed42228ba38520c2474a``.
+It binds 220 current materials and 75 referenced manifests, including all
+failed hardware attempts, setup failures, source/tool provenance, negative
+controls and the corrected pending test. It is a checkpoint of an open
+experiment, not a final qualification seal. Firmware, calibration/profile
+bytes, raw captures, peer addresses and device serials remain private.
+
+The expanded BlueZ guard checks 38 actual parser/state scenarios; the GATT
+child checks two admitted file-open traps, three fixed stdin commands and
+17 rejection cases under Clang UBSAN. Existing peer/management/power checks
+also pass. ACL reassembly and application-sequence helpers have bounded
+synthetic tests, but no actual ACL/ATT sequence exists to qualify. The final
+state requires new per-board preparation, empty-VM checks and a complete
+native connection window before evaluating a compatibility quirk or claiming
+GATT progress. No new manual replug was requested. The other two allocated
+samples gain no qualification from these trials.
+
+The prior controlled bilateral discovery result remains valid only in its
+original scope. The nonconnectable/random-type U 0x2039 rejection, advertising
+restart behavior, address/board provenance, cold automatic selection, natural
+recovery, PM, sustained traffic/coexistence, mac80211 STA, firmware delivery
+and joint U/E maintainer/mainline gates remain open.

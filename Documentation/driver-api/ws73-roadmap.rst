@@ -503,3 +503,27 @@ checks and state provenance. Board/address, Wi-Fi, natural recovery, frozen
 RFC hardware qualification and upstream acceptance remain independent open
 items. Exact source, artifacts and preserved failures are recorded in
 ws73-qualification-20261017.rst and issues 7/10/12.
+
+
+Standard-tool discovery/advertising control (2026-10-24)
+--------------------------------------------------------
+
+The existing runner now drives pinned BlueZ btmgmt with bounded child/output
+lifetimes and actual native HCI/management/capture checks. Allocated E
+1-2.1.4 completed LE discovery start/stop and non-connectable advertising
+start/stop, 61 successful command/reply pairs, actual final BLE close and
+three drains. Thirty-five valid report entries are ambient observations,
+not distinct devices or controlled independent-peer interoperability.
+E's original NRPA-checker FAIL stays unchanged; complete replay after
+checking native random-address behavior establishes only the reported scope.
+
+U's earlier trial stopped at the BlueZ tool timeout before RF requests and
+has no final close ACK. The tool lifecycle has been corrected, but U must
+first gain actual VM-only BLE quiescence evidence; do not reuse a closed-state
+admission, fake BSP/disabled state or assume USB drain stopped firmware.
+Then perform a fresh reviewed reset/boot/three-file/native/BlueZ trial.
+No device/hub was manually replugged or reset through USB. The normal parent
+remains observation-only. Controlled peer, connection/GATT/security, board/
+address, long-duration, cold/natural recovery, Wi-Fi and formal acceptance
+remain open. See exact source, original failures and scope in the qualification
+record and existing issues 7/10/12.

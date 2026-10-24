@@ -4982,3 +4982,87 @@ remain unqualified. This meets the 100 native function-cycle count for these
 two samples only. Twenty starts per model, 24-hour real business, BlueZ RF/
 independent peer/GATT/security, board/address policy, Wi-Fi, cold selection,
 natural/automatic recovery and formal joint U/E support remain open.
+
+
+E actual BlueZ discovery/advertising control (2026-10-24 SGT)
+=============================================================
+
+The existing full-load runner gained an optional bounded --bluez-smoke path.
+It keeps the qualified live shared owner, uses native MGMT power and the
+installed, hash-pinned BlueZ btmgmt binary plus exact dependencies, and runs
+Read Info, LE discovery start/stop and non-connectable advertising start/stop.
+The guest permits only fixed argv and ordered actions, with at most two own
+children for concurrent discovery/stop, bounded output, parent/VM deadlines
+and explicit child reaping. A separate input UART leaves the established
+capture UART unchanged. Empty VMs validate an actual BlueZ MGMT revision
+request/callback and exit without attaching a USB device.
+
+On allocated E 1-2.1.4, the actual sequence completed both stop operations,
+a native power-off, the actual BLE_CLOSE reply, explicit final HCI removal,
+three owner drains and VM exit zero. There are 61 actual successful HCI
+command/reply pairs, six BLE class action transfers and three ordered close
+replies. Discovery was enabled for 3,130,168 microseconds and advertising
+for 3,080,992 microseconds between captured enable/disable submissions.
+The H4 stream contains 35 format-valid advertising report entries; these
+are not 35 distinct devices or a controlled peer result. BlueZ discovery
+and advertising settings events agree with the successful HCI operations.
+No connection, pairing or GATT request was sent to a discovered address.
+Raw discovered addresses and advertising contents remain private.
+
+The image/module source remains 7aa4105b4de9, with clean trial worktree
+3792da36e06d (only documentation differences). The pinned installed binary
+is btmgmt 5.87, package bluez-5.87+1.git8750129efca8-1.fc44.x86_64,
+SHA-256 d878b1f0fad64006de98125cbce33331942d70899f42af110320d63c686c85be.
+E used its own SDK110 three originals, fresh boot E/USB and runtime
+package/USB/version verification and genuine startup, with the explicitly
+unqualified reference board profile. No other-model or combined input was
+present. Two explicit boot/runtime QEMU opens and closes, eight false
+per-object reset/detach options and no usb_host_reset were verified.
+
+E's original final supervisor FAIL is retained. Its old radio checker
+accepted resolvable/static random addresses but omitted the non-resolvable
+private address that the native kernel generates for active scanning.
+The corrected checker accepts top bits 00, still rejects reserved 10 and
+zero/ones values, and verifies every command/event, management/tool output,
+complete text/binary capture, actual close, loader and trace independently.
+No physical trial was repeated for this replay. Synthetic U/E radio tests,
+parameter/report mutations, existing native-cycle guards, fixed-child guard
+checks and fragmented-line checks are offline evidence, not extra RF runs.
+
+An earlier U 1-1.1.3 trial completed native power-on and BlueZ Read Info but
+stopped before any scanning/advertising command. Its original timeout FAIL
+is retained. BlueZ's positive --timeout keeps a noninteractive command alive
+until that timer; the supervisor used the same wait interval. Removing that
+option while retaining the independent parent/VM deadline fixed the tool
+lifecycle, as verified in the later empty VM and actual E trial. U has no
+proven final BLE_CLOSE ACK after that abort. It is unowned at USB level but
+must not receive another reset/load admission or fabricated disabled/startup
+state. The next U step needs a narrowly scoped, VM-only actual BLE quiescence
+operation and reply, then a new reviewed reset/boot/load and radio trial.
+
+E original capture: load-hci-trial-20261024T090635.660906Z/manifest.json,
+original FAIL retained, separately replay-verified; SHA-256::
+
+  241e41f5439e6b7a0a003b2b59fae44413e65907531fc155767ad20418e68a7c
+
+U pre-radio capture: load-hci-trial-20261024T085900.327087Z/manifest.json,
+original FAIL retained; SHA-256::
+
+  fe6ea12ce3c08abfdf6f7fcc0db9e049a378ed9250574f723907111cced60652
+
+Separate assessment: bluez-radio-smoke-20261024/completion.json,
+SHA-256::
+
+  e808baafeaef13d196a8658b47f28b740ebbf45071a5cf37905d9389e55f42c7
+
+After exit all four allocated USB nodes were unowned, no VM remained and
+port leases were available. Only intended U/E enumerations changed; the
+other six known device ports and both hubs retained cached descriptors and
+numbers. That does not attest active peer-business isolation or U functional
+closure. Firmware-bearing raw records remain private. Established boot TX
+prefix/exact-length/ACK and final 352 customization TX padding limits remain;
+runtime RX/HCI is complete. Controller command acknowledgments and ambient
+reports do not independently verify transmitted advertising, controlled peer
+interop, connection/GATT/security, address/board provenance, cold/natural
+recovery, Wi-Fi, long-duration business, frozen RFC hardware qualification
+or formal U/E support. Those gates remain open.

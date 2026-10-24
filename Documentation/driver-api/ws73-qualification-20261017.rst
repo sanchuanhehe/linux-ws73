@@ -5956,3 +5956,41 @@ in :doc:`ws73`; no heartbeat or vendor-address command was added. All twelve
 GATT pairs remain unsuccessful. Successful link/ACL/GATT, security,
 independent interoperability, address/board provenance, cold automatic
 selection, natural recovery, PM, STA and formal upstream gates remain open.
+
+Discovery evidence parser accepts all-zero AD padding (2026-10-25 SGT)
+----------------------------------------------------------------------
+
+The private guest C parser and host Python verifier previously rejected every
+zero AD length, including an all-zero nonsignificant tail. New regression
+cases first reproduced that rejection in both actual implementations. They
+now stop at the first zero and require every remaining octet to be zero.
+Nonzero data after a terminator, truncation and duplicate session fields
+remain rejected; there is no byte-scan resynchronization. Empty significant
+data is unrelated, never a matching peer.
+
+This follows the significant/nonsignificant distinction in Bluetooth Core
+5.4, Vol 3, Part C, section 11, `Advertising and Scan Response data format
+<https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-54/out/en/host/generic-access-profile.html>`_.
+It is a parser acceptance rule, not certification that the observed
+controller reports represent conforming over-air padding or a firmware fix.
+
+The actual C helper passed its 28 event/state cases plus 64 padded/empty
+inputs and 465 nonzero-tail rejection cases under UBSAN. Python passed the
+same padding matrix, the existing transcript/length/corruption tests and
+2080 bounded random AD inputs. Exact replay of six retained U/E physical
+artifacts supplied 105 AD inputs to both implementations. Seven all-zero
+reports changed from invalid to unrelated; none became a matching peer.
+The two previously successful bilateral-discovery verifier outputs remained
+exactly equal. The four failed connection artifacts retained FAIL, and all
+six manifests/material sets were hash-verified without modification.
+
+This increment operated no device or VM and changes no kernel driver,
+firmware, physical state or hardware qualification. Old prepared VM images
+must be revalidated against the changed parser hashes before use. No
+previous connection failure is explained or upgraded by this correction.
+The raw replay report SHA-256 is
+``86fec5ab3243cedea85535b772d38de4a51975e60a7a3a017cffd2e0b0b51a34``.
+The private checkpoint binds 29 local files and six exact physical manifests,
+SHA-256 ``6bd074378f1f3d75cea8f6c62cfad0e83156943e11a16dcf3fccbbca7712b52c``.
+Connection, ACL/GATT, independent interoperability and the broader upstream
+requirements remain open.

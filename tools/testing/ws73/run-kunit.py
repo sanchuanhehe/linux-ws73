@@ -363,7 +363,7 @@ def main():
                     del expected_groups["ws73-ble-link"]
                 expected_groups.update({"btws73-proto": expected,
                                    "ws73-hci-lifecycle": {"ws73_hci_failed_enable_test"},
-                                   "ws73-hci-data": {"ws73_hci_consumer_rebind_test", "ws73_hci_data_test", "ws73_hci_queue_limit_test",
+                                   "ws73-hci-data": {"ws73_hci_two_devices_test", "ws73_hci_consumer_rebind_test", "ws73_hci_data_test", "ws73_hci_queue_limit_test",
                                                      "ws73_hci_byte_limit_test", "ws73_hci_rejected_acl_test",
                                                      "ws73_hci_acl_rx_test", "ws73_hci_active_flush_test",
                                                      "ws73_hci_rx_fault_test", "ws73_hci_tx_nomem_test",

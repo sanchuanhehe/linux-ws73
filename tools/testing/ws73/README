@@ -68,6 +68,13 @@ the retired HCI allocation through the new registration and checks that RX
 reaches only the new consumer. This tests synchronous synthetic backend disable
 and native device lifetime, not stale-controller-data flushing or physical
 consumer rebind.
+The two-device case registers two native HCI consumers at once. It checks
+separate HCI/auxiliary identities and RX accounting, faults one endpoint and
+requires its HCI withdrawal while the sibling still receives and sends ACL.
+Both synthetic controllers stop before full HCI initialization; their fixed
+test addresses do not establish hardware address uniqueness. This is endpoint
+and consumer isolation, not multiple physical USB devices, RF coexistence,
+full Bluetooth connections or long-term mixed-model qualification.
 Reset is deliberately left unanswered, so full HCI initialization, Bluetooth
 connections, BlueZ and peer behavior remain unqualified. Codec tests also run.
 The checked-in KUnit configuration enables SMP, KASAN, UBSAN, lockdep and

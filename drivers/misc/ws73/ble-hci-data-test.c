@@ -335,8 +335,9 @@ static int ws73_model_match(struct device *dev, const void *unused)
 	       dev->type && !strcmp(dev->type->name, "host");
 }
 
-static struct ws73_hci_model *ws73_model_create_path(struct kunit *test, bool block,
-						     bool through_link, bool short_action)
+static struct ws73_hci_model *ws73_model_create_named(struct kunit *test, bool block,
+						      bool through_link, bool short_action,
+						      const char *name)
 {
 	struct ws73_hci_model *m;
 	struct device *child;
@@ -358,7 +359,7 @@ static struct ws73_hci_model *ws73_model_create_path(struct kunit *test, bool bl
 	m->short_action = short_action;
 	if (kunit_add_action_or_reset(test, ws73_model_cleanup, m))
 		return NULL;
-	m->parent = root_device_register(test->name);
+	m->parent = root_device_register(name);
 	if (IS_ERR(m->parent)) {
 		m->parent = NULL;
 		return NULL;
@@ -384,6 +385,12 @@ static struct ws73_hci_model *ws73_model_create_path(struct kunit *test, bool bl
 		return NULL;
 	m->hdev = to_hci_dev(child);
 	return m;
+}
+
+static struct ws73_hci_model *ws73_model_create_path(struct kunit *test, bool block,
+						     bool through_link, bool short_action)
+{
+	return ws73_model_create_named(test, block, through_link, short_action, test->name);
 }
 
 static struct ws73_hci_model *ws73_model_create(struct kunit *test, bool block)
@@ -475,6 +482,54 @@ static void ws73_model_withdrawn(struct kunit *test, struct ws73_hci_model *m)
 	} while (time_before(jiffies, deadline));
 	KUNIT_EXPECT_EQ(test, children, 0);
 	KUNIT_EXPECT_EQ(test, m->wire_error, 0);
+}
+
+static void ws73_hci_two_devices_test(struct kunit *test)
+{
+	struct ws73_hci_model *first = ws73_model_create(test, false);
+	struct ws73_hci_model *second;
+	const u8 event[] = { HCI_EVENT_PKT, 0xff, 1, 0x5a };
+	unsigned int first_rx, second_rx;
+	struct sk_buff *skb;
+	char *name;
+	int ret;
+
+	KUNIT_ASSERT_NOT_NULL(test, first);
+	name = kunit_kasprintf(test, GFP_KERNEL, "%s-second", test->name);
+	KUNIT_ASSERT_NOT_NULL(test, name);
+	second = ws73_model_create_named(test, false, false, false, name);
+	KUNIT_ASSERT_NOT_NULL(test, second);
+	KUNIT_EXPECT_NE(test, first->hdev->id, second->hdev->id);
+	KUNIT_EXPECT_GT(test, second->hdev->id, 0);
+	KUNIT_EXPECT_PTR_NE(test, first->adev, second->adev);
+	first_rx = first->hdev->stat.byte_rx;
+	second_rx = second->hdev->stat.byte_rx;
+	KUNIT_ASSERT_EQ(test, ws73_model_fragment(first, event, sizeof(event)), 0);
+	KUNIT_EXPECT_EQ(test, first->hdev->stat.byte_rx, first_rx + sizeof(event) - 1);
+	KUNIT_EXPECT_EQ(test, second->hdev->stat.byte_rx, second_rx);
+
+	ws73_ble_fault(first->adev, -EIO);
+	ws73_model_withdrawn(test, first);
+	KUNIT_EXPECT_TRUE(test, device_is_registered(&second->hdev->dev));
+	KUNIT_EXPECT_EQ(test, ws73_ble_start(first->adev), -EIO);
+	KUNIT_EXPECT_EQ(test, atomic_read(&second->enables), 1);
+	KUNIT_EXPECT_EQ(test, atomic_read(&second->disables), 0);
+	KUNIT_ASSERT_EQ(test, ws73_model_fragment(second, event, sizeof(event)), 0);
+	KUNIT_EXPECT_EQ(test, second->hdev->stat.byte_rx, second_rx + sizeof(event) - 1);
+	KUNIT_EXPECT_EQ(test, first->hdev->stat.byte_rx, first_rx + sizeof(event) - 1);
+
+	skb = ws73_model_packet();
+	KUNIT_ASSERT_NOT_NULL(test, skb);
+	ret = second->hdev->send(second->hdev, skb);
+	if (ret)
+		kfree_skb(skb);
+	KUNIT_ASSERT_EQ(test, ret, 0);
+	KUNIT_ASSERT_TRUE(test, wait_for_completion_timeout(&second->acl, HZ));
+	KUNIT_ASSERT_EQ(test, second->hdev->flush(second->hdev), 0);
+	KUNIT_EXPECT_EQ(test, first->acls, 0);
+	KUNIT_EXPECT_EQ(test, second->acls, 1);
+	KUNIT_EXPECT_EQ(test, first->wire_error, 0);
+	KUNIT_EXPECT_EQ(test, second->wire_error, 0);
 }
 
 static void ws73_hci_data_test(struct kunit *test)
@@ -921,6 +976,7 @@ static void ws73_hci_link_abort_test(struct kunit *test)
 
 static struct kunit_case ws73_hci_data_cases[] = {
 	KUNIT_CASE(ws73_hci_consumer_rebind_test),
+	KUNIT_CASE(ws73_hci_two_devices_test),
 	KUNIT_CASE(ws73_hci_data_test),
 	KUNIT_CASE(ws73_hci_queue_limit_test),
 	KUNIT_CASE(ws73_hci_byte_limit_test),

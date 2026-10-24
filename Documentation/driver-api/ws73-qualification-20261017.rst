@@ -5577,3 +5577,88 @@ original scope. The nonconnectable/random-type U 0x2039 rejection, advertising
 restart behavior, address/board provenance, cold automatic selection, natural
 recovery, PM, sustained traffic/coexistence, mac80211 STA, firmware delivery
 and joint U/E maintainer/mainline gates remain open.
+
+Full native connection window and reversed roles (2026-10-25 SGT)
+----------------------------------------------------------------
+
+The pending full-window experiment above was subsequently prepared and
+executed, followed by an explicitly reversed U-client/E-server comparison.
+Both retained failures. The production kernel/modules still come from
+``09720a346471ab848671ee00fc4ae6c81f4c4197`` and the same pinned build;
+the worktree documentation HEAD was
+``cf94027f21a29a425e40ed1adf3324d3f17b7d99``. Changes are confined to the
+existing private runner and qualification documents. The official BlueZ
+GATT executables remain unchanged. No controller capability rewrite,
+compatibility quirk, generated HCI reply or substitute firmware was used.
+
+Each comparison used separate U and E images, SDK110's three corresponding
+original files, fresh reviewed fixed-device-reset/boot observations,
+runtime identity checks and fresh bilateral session discovery before
+connection. No manual replug, hub/controller operation or other-thread
+device operation occurred. The fixed device resets do not establish cold
+startup, cleared RAM or natural recovery.
+
+.. list-table:: Additional physical attempts (UTC record names)
+   :header-rows: 1
+
+   * - Record
+     - Role and result
+     - Manifest SHA-256
+   * - load-hci-trial-20261024T172743.438519Z
+     - U server; no connection
+     - 5ce3ed003e0b3f70c12107ff2f301f6c658e93c4b42f0ec920f484c46a9286ee
+   * - load-hci-trial-20261024T172743.437604Z
+     - E client; native initiation cancelled
+     - c4b198d8c5713af2a05e453142c11e280820db47332a69c5c63e60ddb78976a3
+   * - load-hci-trial-20261024T174252.428952Z
+     - U client; native initiation cancelled
+     - f7754579f2cd718613c08ed2afdbaaf7a31769179505f08e298054282c8f09b1
+   * - load-hci-trial-20261024T174252.433190Z
+     - E server; no connection
+     - 741850c200550f8540eb3f9b60c7789b2d6645003bc3a42088673ec45bca1e07
+
+In both directions, actual HCI captured one Extended Create Connection
+command (0x2043) and its successful Command Status, then the Host's cancel
+(0x200e), successful cancel completion and Enhanced Connection Complete
+with status 0x02, invalid handle and zero address. Initiation-to-cancel was
+21,962,535 microseconds for E and 21,981,629 microseconds for U. The failure
+event followed cancellation; it is not evidence of immediate unsupported
+opcode rejection. MGMT reported connection failure (status 8). Neither
+server accepted a connection. No successful link or TX/RX ACL packet was
+observed, so no ATT read/write, GATT payload, security or successful role
+exchange qualification follows.
+
+The server retained its first advertising set while the client attempted
+connection. The runner allowed 55 seconds for the server's accept and
+42 seconds for client discovery, inside the existing absolute VM deadline.
+The reversed comparison requires an explicit server-model argument; role
+selection is independent of board identity, firmware and session payload.
+Prepared images bind the role as well as peer addresses and random payload.
+Each image passed two baseline admission checks, 42 rejected mutations and
+an empty-VM preflight. Guest admission tests covered both device identities:
+48 GATT cases and 76 BlueZ cases, with file/process effects trapped.
+Management, power and peer guards also passed. A sandbox socketpair failure
+was retained before the pure management test passed outside that sandbox.
+One shared-build-lock conflict exited before preparation/VM creation; the
+subsequent preparation used the available lock without taking over work.
+
+Offline replay verified all four manifest/material sets, boot-stage file
+transactions, 88/116/102/103 complete runtime replies respectively, matching
+binary/text capture, HCI ordering and eight false QOM reset/detach policy
+reads per trial. Each trace has three callback drains, two USB closes and
+no unmatched runtime submission. However, the failed guest paths still
+lack the independent collector's clean-finish and joined markers. These
+are retained FAIL records, not complete clean-capture qualifications; the
+absence of ACL applies only to observed traffic. Both owned VMs exited 0,
+and the subsequent host census found no owned VM or allocated-device
+occupancy. Current runtime device numbers are observations, not selectors.
+
+Private ``gatt-native-20261024T152056.581201Z`` now additionally contains
+``full-window-and-role-audit.json``, SHA-256
+``1b4a4eb714104e580f8988fdf165a62411f29171737504a4fe9c03040fe80cd5``.
+The earlier checkpoint and all five earlier pairs remain unchanged.
+The new attempts consumed their own boot admissions; another load needs
+fresh independently validated device state, not reuse of a previous token.
+Controller-address/board provenance, the connection cause, failed-capture
+cleanup, independent-peer interoperability and all broader gates remain
+open. No formal upstream submission or issue closure is implied.

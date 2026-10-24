@@ -443,3 +443,56 @@ fields do not establish an ordinary-data completion identifier or actual
 retry/rate reporting. Those semantic and device-consumer contracts remain
 required before wiring mac80211 TX, crypto, rate or ACK behavior. The probe
 adds no Wi-Fi adapter, physical commands, firmware compatibility or STA claim.
+
+Device credit is separate from Host queue space (2026-10-25 SGT)
+---------------------------------------------------------------
+
+Fourteen SDK110 files were compared byte for byte with commit
+``d5e68a58fe38c2b04a16769c69de1e8a80e86d74``. The private static record
+``wifi-credit-audit-20261024T174154.853870Z/manifest.json`` has SHA-256
+``7b14f1e8f032105af1e0e31fc91842c43b6d09ad7584763c508e50289bf59960``.
+No register or credit request was sent during this audit.
+
+The previously identified ``hcc_get_tx_sched_num`` is Host queue headroom:
+the UDP data queue high watermark less the lengths of three Host queues,
+floored at zero. ``TX_COMP_SCHEDULE`` carries only an AC number and invokes
+Host scheduling. Neither establishes remaining device buffers or air ACK.
+Two other paths must be distinguished from this local admission budget:
+
+* For DATA flow control, the WS73 traffic-control algorithm registers
+  ``hal_gp_get_mpdu_count`` with ``hcc_flow_ctrl_credit_register``. Its
+  candidate runtime source is register ``0x40019380``. The declared fields
+  include an eight-bit reserved count and an eight-bit free-large-buffer
+  count; the callback returns their nonnegative difference. Outside the
+  BSLE gateway configuration, ``hal_reg_read`` routes this address through
+  ``hcc_read_reg``. This is a runtime resource register, distinct from the
+  boot identity word at ``0x40019000``.
+* ``hcc_flow_ctrl_credit_update`` caches that callback result in a function
+  static variable and uses a global callback. The USB branch additionally
+  reserves one control buffer before limiting and consuming the candidate
+  budget. These objects must not be copied into a multi-device driver:
+  ownership, invalidation after stop/reset and synchronization must belong
+  to the actual device and firmware instance.
+* Separately, the bus CREDIT operation ``hcc_usb_get_credit`` uses an
+  interface/class IN request: request type ``0xa1``, request ``5``, value
+  and index zero, requested size four. Its wrapper converts any nonnegative
+  USB control return to success, including a short reply. The default table
+  declares CREDIT mode for internal and SDIO-test queues with flow control
+  disabled, whereas relevant data queues use DATA mode. A declared USB
+  operation alone does not prove that the selected firmware/configuration
+  uses it for Wi-Fi traffic.
+
+The register read wrapper reports some failures with an all-ones data
+sentinel; interpreting its declared free/reserved fields can yield zero
+without preserving the error. The Linux implementation needs an explicit
+error result separate from a genuine zero budget, exact transfer lengths,
+established byte order and a bounded refresh policy. A successful local
+transfer must not replenish credits or report an acknowledged MPDU.
+
+Before enabling Wi-Fi TX, establish the counter producer and version, units,
+aggregation debit, update ordering, pool sharing across control/BLE/Wi-Fi,
+and reservation/return rules. Confirm which configured flow-control path is
+active on each model, including failure and teardown behavior. Ordinary
+data completion correlation, ACK/retry/rate and security dependencies remain
+open. This audit narrows the device-credit questions; it adds no STA or
+physical flow-control qualification.

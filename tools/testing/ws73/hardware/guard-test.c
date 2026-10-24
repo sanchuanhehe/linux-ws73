@@ -35,6 +35,7 @@ static int __init ws73_trial_guard_test_init(void)
 		{ 0, NULL, false }, { 2, "WS73-trial", false },
 	};
 	unsigned int i;
+	int ret;
 
 	if (!dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
 	    (!dmi_match(DMI_PRODUCT_NAME, "WS73-U-trial") &&
@@ -56,7 +57,8 @@ static int __init ws73_trial_guard_test_init(void)
 	}
 	pr_info("RAM trial profile checks passed: %zu\n", ARRAY_SIZE(profiles));
 	pr_info("RAM trial admission checks passed: %zu\n", ARRAY_SIZE(cases));
-	return ws73_reset_probe_checks();
+	ret = ws73_reset_probe_checks();
+	return ret ? ret : ws73_reset_attempt_checks();
 }
 module_init(ws73_trial_guard_test_init);
 

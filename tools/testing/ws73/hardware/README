@@ -23,6 +23,20 @@ there is no retry or fallback value. The existing pure guard-test module
 also checks this transaction with injected transport failures, no USB I/O.
 This read does not qualify a reset, cleared device state or warm recovery.
 
+The disjoint device_reset=1 mode additionally permits one preserved-value
+bit 4 update of the same fixed register, after successful live identity and
+register reads. The host must verify prior controller-close evidence and
+exclusive target ownership. This mode never starts or publishes a function;
+it rejects an already-set reset bit, keeps one deadline across all stages,
+records whether the data write was attempted and preserves its raw result.
+Once attempted, a failed or short write can have an ambiguous device outcome.
+The old owner becomes terminal; neither USB completion nor that terminal
+state is reset/recovery success. No retry, general write API, hub/controller
+reset, GPIO, power switch or firmware input exists in this mode. The caller
+must independently observe a new boot device, check HCC identity and perform
+the complete original startup path before using functions again. This is a
+controlled software reset experiment, not cold boot or natural recovery.
+
 Build from a clean committed tree with four allocated jobs:
 
   python3 tools/testing/ws73/hardware/build.py

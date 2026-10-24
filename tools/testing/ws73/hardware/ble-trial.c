@@ -22,6 +22,9 @@ module_param(native_hci, bool, 0400);
 /* Fixed register READ only; mutually exclusive with any function startup. */
 static bool inspect_reset;
 module_param(inspect_reset, bool, 0400);
+/* Explicit controller-closed experiment, not automatic fault recovery. */
+static bool device_reset;
+module_param(device_reset, bool, 0400);
 static atomic_t available = ATOMIC_INIT(1);
 static struct ws73_customization parameters;
 
@@ -70,6 +73,7 @@ static int ws73_reset_observe(struct ws73_usb *ws)
 		.receive = ws73_reset_receive,
 	};
 	u32 value;
+	struct ws73_trial_reset_progress progress;
 	int ret;
 
 	if (!ws->runtime || alt->desc.bNumEndpoints != 5 ||
@@ -78,6 +82,21 @@ static int ws73_reset_observe(struct ws73_usb *ws)
 		return -ENODEV;
 	probe.io.out = 0x02;
 	probe.io.in = 0x82;
+	if (device_reset) {
+		/* This initializer never starts or publishes a function. The host
+		 * must separately verify the previous controller's close evidence.
+		 */
+		if (READ_ONCE(ws->startup.state) != WS73_STARTUP_UNUSED || ws->ble.child)
+			return -EBUSY;
+		ret = ws73_trial_reset_attempt(&io, ws73_reset_now(&probe) + 6000, &progress);
+		dev_info(&ws->interface->dev,
+			 "RESET attempt result=%d stage=%u read=%u before=%08x data_attempted=%u transfer=%d; outcome unverified\n",
+			 ret, progress.stage, progress.read_valid, progress.before,
+			 progress.data_attempted, progress.transfer_result);
+		/* The old instance cannot resume, even if the USB write succeeded. */
+		ws73_usb_fail(ws, ret ? ret : -ESHUTDOWN);
+		return ret;
+	}
 	ret = ws73_trial_reset_read(&io, ws73_reset_now(&probe) + 4000, &value);
 	if (!ret)
 		dev_info(&ws->interface->dev,
@@ -96,7 +115,7 @@ static void ws73_ble_trial_start(struct work_struct *work)
 	u64 now = ws->runtime_io.now_ms(ws);
 	int ret;
 
-	ret = inspect_reset ? 0 : ws73_startup_arm(&ws->startup, now, now + 12000);
+	ret = inspect_reset || device_reset ? 0 : ws73_startup_arm(&ws->startup, now, now + 12000);
 	if (!ret)
 		ret = ws73_usb_start_rx(ws);
 	if (!ret)
@@ -109,8 +128,8 @@ static void ws73_ble_trial_start(struct work_struct *work)
 		ret = -ENODEV;
 	if (ret)
 		goto done;
-	if (inspect_reset) {
-		stage = "reset-read";
+	if (inspect_reset || device_reset) {
+		stage = device_reset ? "device-reset" : "reset-read";
 		ret = ws73_reset_observe(ws);
 		goto done;
 	}
@@ -135,7 +154,11 @@ static void ws73_ble_trial_start(struct work_struct *work)
 done:
 	if (ret)
 		ws73_usb_fail(ws, ret);
-	if (inspect_reset)
+	if (device_reset)
+		dev_info(&ws->interface->dev,
+			 "RESET device trial result=%d stage=%s; boot verification required\n",
+			 ret, stage);
+	else if (inspect_reset)
 		dev_info(&ws->interface->dev,
 			 "RESET read-only trial result=%d stage=%s\n", ret, stage);
 	else if (native_hci)
@@ -182,12 +205,12 @@ static int __init ws73_ble_trial_init(void)
 	int ret;
 
 	if (!serial || !*serial || !devnum || devnum > 127 ||
-	    (inspect_reset && native_hci) ||
+	    (inspect_reset + native_hci + device_reset > 1) ||
 	    (native_hci && !IS_ENABLED(CONFIG_BT_WS73)) ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
 	    !ws73_trial_package_allowed(package, dmi_get_system_info(DMI_PRODUCT_NAME)))
 		return -ENODEV;
-	if (inspect_reset)
+	if (inspect_reset || device_reset)
 		return usb_register(&ws73_ble_trial_driver);
 	ret = request_firmware_direct(&fw, WS73_BLE_TRIAL_PROFILE, NULL);
 	if (ret)

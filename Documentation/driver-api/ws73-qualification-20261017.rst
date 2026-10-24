@@ -5662,6 +5662,7 @@ fresh independently validated device state, not reuse of a previous token.
 Controller-address/board provenance, the connection cause, failed-capture
 cleanup, independent-peer interoperability and all broader gates remain
 open. No formal upstream submission or issue closure is implied.
+
 Retired mixed-command diagnostic and fixed radio roles (2026-10-25 SGT)
 ---------------------------------------------------------------------
 

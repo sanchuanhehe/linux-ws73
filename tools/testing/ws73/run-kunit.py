@@ -148,7 +148,7 @@ def main():
 
     work = SOURCE.parent / ".dev/ws73-upstream"
     work.mkdir(parents=True, exist_ok=True)
-    with (work / "build.lock").open("w") as lock:
+    with (work / "build.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         record = work / "records" / stamp

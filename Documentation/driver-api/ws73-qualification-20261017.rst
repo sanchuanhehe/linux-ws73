@@ -4816,3 +4816,83 @@ use, each target still needs the full selected-board three-original-file
 load, new runtime identity/version and genuine startup acknowledgments.
 No board/address, RF/peer, repeated-start/long-run, formal U/E or frozen RFC
 review-source qualification is inherited. Raw evidence remains private.
+
+
+U/E post-reset three-file load and native HCI (2026-10-24 SGT)
+==============================================================
+
+The existing full-load VM supervisor now has a disjoint --post-reset
+admission for the two specifically reviewed boot samples. It does not reuse
+an initial-ROM admission or a user power-cycle confirmation. It rechecks
+all pinned reset/boot manifests and original materials, the actual wire
+parsers, same serial/topology/boot epoch and later physical-use history.
+Both host preparation and the immediate pre-attachment check must succeed.
+Any later unreviewed use or consumed trial rejects admission, including an
+old boot snapshot. No new reset is performed by this loading mode.
+
+The U route retains both original reset/boot verifier FAILs and independently
+validates only their actual established subsets. It never promotes them to
+one continuous successful reset trial. E uses its direct complete controlled
+reset/new-boot evidence. Neither route attests power removal, pristine RAM,
+cold automatic selection or natural recovery. Twenty-two offline admission
+cases and seven pre-VM CLI rejections passed; the previous allocation/reset
+checks remained at 22/20. U/E empty VMs passed the original loader/profile/
+native-HCI caller checks. The physical image excludes KUnit, dummy_hcd,
+gadget and synthetic HCI/USB test configurations.
+
+Both actual full trials use image source
+7aa4105b4de91f07b82d1c6f0328ae6bb9ccb1d1. Their clean worktree head was
+df83956f8afb, with only the documented RST delta since that build. No kernel
+change or rebuild was needed. U 1-1.1.3 and E 1-2.1.4 each freshly reported
+the expected boot HCC identity before all three exact SDK110 inputs were
+validated and the existing preparation/download path ran. U used only the
+US ws73.bin, wifi_cali.bin and btc_cali.bin; E used its separate E originals.
+No combined image, shared global firmware fallback or cross-model retry was
+used. Each new runtime owner again matched package/USB and SDK110 versions,
+then completed real platform/customization/BLE startup and disable before
+publishing the actual native HCI consumer. No BSP_READY or Complete was
+invented from the previous instance.
+
+U loaded 172580 payload bytes in seven FILES blocks after 11 acknowledged
+preparation writes; its boot checks cover 29 OUTs and 28 replies. Native HCI
+completed 23 real command/reply pairs, management Read Info, acknowledged
+native auto-off, commanded removal and three callback drains. E loaded
+192632 payload bytes in eight blocks, with 11 preparation acknowledgments,
+31 boot OUTs and 30 replies; its native sequence has 24 real command/reply
+pairs and the same completion/removal/drain checks. Both VMs exited zero.
+Each controller's management address matched its earlier initial sample
+result and the two samples' addresses remain different. This is observed
+stability across these software-reset experiments, not factory provisioning,
+public-address origin or global uniqueness proof. No raw address is public.
+
+Each run used only its explicit hostport, two boot/runtime epochs, eight
+false per-object QOM reset/detach options, two QEMU opens/two closes and no
+usb_host_reset. Only the two intended targets' cached USB identities changed
+to runtime; the other six known device ports and both hubs retained their
+cached enumeration/descriptors. All four allocated ports were unowned after
+exit and no project VM remained. This is not active peer-business isolation.
+Both post-reset loading admissions are consumed; their old boot snapshots
+now reject. The earlier U reset/boot FAILs remain unchanged.
+
+U actual full load: load-hci-trial-20261024T073347.664989Z/manifest.json,
+SHA-256::
+
+  b55f95883f96b6c10751b477ef788afa5840c97acd2adf8ef6957bd36b3efc1f
+
+E actual full load: load-hci-trial-20261024T073645.989617Z/manifest.json,
+SHA-256::
+
+  48a4448f8c8a773b1fab2d8836eb40ac9905b9f9cef38ab21f4f4b5e4b3aa383
+
+The established capture limits remain: boot TX prefixes plus exact actual
+lengths/ACKs, not every on-wire firmware byte; original full inputs are
+hash-pinned. Runtime RX/HCI is complete, while the final 352 customization
+TX padding bytes are uncaptured. Firmware-bearing records remain private.
+This proves one per-model complete native initialization after accurately
+identified post-software-reset boot, under the explicit reference profile.
+It does not qualify cold/natural recovery, normal-parent automatic loading,
+RF/peer/GATT, board/address policy, repeated starts/function cycles/long-run,
+formal joint support or the separate frozen RFC review tree. Repeated native
+power cycles should retain a live qualified owner where possible; later
+whole-device resets need new actual closed-controller evidence, not reuse
+of these consumed admissions.

@@ -447,3 +447,30 @@ step must use freshly verified post-reset boot state and the complete
 selected-board three-original-file/runtime/startup path; it cannot reuse an
 old power confirmation, old owner or a fabricated BSP_READY. See the exact
 U/E artifacts and failures in ws73-qualification-20261017.rst and issues 10/12.
+
+
+Post-software-reset full initialization (2026-10-24)
+----------------------------------------------------
+
+A separate --post-reset gate in the existing full-load supervisor now binds
+exact reset/boot captures to the current allocated boot device, rechecks the
+actual parsers and immutable inputs, and rejects unknown later use or replay.
+It does not reuse initial-ROM/power confirmations or promote U's earlier
+FAILs. Twenty-two new admission checks, seven CLI rejections and U/E empty
+VM preflights passed. No kernel behavior changed in this increment.
+
+Both U 1-1.1.3 and E 1-2.1.4 directly passed the complete selected-board SDK110
+three-original-file load, new runtime package/USB/version verification,
+genuine startup/disable and native HCI on source 7aa4105b4de9. U has 23 real
+command/reply pairs and E 24; both have wire-confirmed native close, three
+drains and exit zero. No reset or physical replug occurred during these loads.
+Addresses matched each sample's earlier observation without proving origin.
+
+Only the intended boot/runtime targets changed, with no QEMU reset and no
+hub/controller or other-thread operations. Their load gates are consumed.
+Cold selection, natural/automatic recovery, RF/peer/board/address policy,
+repetition/long-duration and formal U/E qualification remain open. The next
+native-function-cycle work must preserve a qualified live owner or establish
+a new accurately closed/reset/boot state; no old BSP or power state can be
+fabricated. Exact artifacts, capture limits and retained FAILs are in
+ws73-qualification-20261017.rst and issues 7/10/12.

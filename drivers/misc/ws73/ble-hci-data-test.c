@@ -491,13 +491,11 @@ static void ws73_hci_two_devices_test(struct kunit *test)
 	const u8 event[] = { HCI_EVENT_PKT, 0xff, 1, 0x5a };
 	unsigned int first_rx, second_rx;
 	struct sk_buff *skb;
-	char *name;
 	int ret;
 
 	KUNIT_ASSERT_NOT_NULL(test, first);
-	name = kunit_kasprintf(test, GFP_KERNEL, "%s-second", test->name);
-	KUNIT_ASSERT_NOT_NULL(test, name);
-	second = ws73_model_create_named(test, false, false, false, name);
+	second = ws73_model_create_named(test, false, false, false,
+					 "ws73-hci-isolation-second");
 	KUNIT_ASSERT_NOT_NULL(test, second);
 	KUNIT_EXPECT_NE(test, first->hdev->id, second->hdev->id);
 	KUNIT_EXPECT_GT(test, second->hdev->id, 0);

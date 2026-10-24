@@ -25,6 +25,9 @@ module_param(inspect_reset, bool, 0400);
 /* Explicit controller-closed experiment, not automatic fault recovery. */
 static bool device_reset;
 module_param(device_reset, bool, 0400);
+/* Stop-only on a fresh owner; no startup, reset or consumer publication. */
+static bool quiesce_ble;
+module_param(quiesce_ble, bool, 0400);
 static atomic_t available = ATOMIC_INIT(1);
 static struct ws73_customization parameters;
 
@@ -115,7 +118,8 @@ static void ws73_ble_trial_start(struct work_struct *work)
 	u64 now = ws->runtime_io.now_ms(ws);
 	int ret;
 
-	ret = inspect_reset || device_reset ? 0 : ws73_startup_arm(&ws->startup, now, now + 12000);
+	ret = inspect_reset || device_reset || quiesce_ble ?
+		0 : ws73_startup_arm(&ws->startup, now, now + 12000);
 	if (!ret)
 		ret = ws73_usb_start_rx(ws);
 	if (!ret)
@@ -128,6 +132,17 @@ static void ws73_ble_trial_start(struct work_struct *work)
 		ret = -ENODEV;
 	if (ret)
 		goto done;
+	if (quiesce_ble) {
+		stage = "quiesce";
+		if (READ_ONCE(ws->startup.state) != WS73_STARTUP_UNUSED || ws->ble.child)
+			ret = -EBUSY;
+		else
+			ret = ws73_ble_control_quiesce(&ws->startup.ble, &ws->ble_io,
+						      ws->runtime_io.now_ms(ws) + 2000);
+		/* Even an acknowledged stop cannot make this owner usable. */
+		ws73_usb_fail(ws, ret ? ret : -ESHUTDOWN);
+		goto done;
+	}
 	if (inspect_reset || device_reset) {
 		stage = device_reset ? "device-reset" : "reset-read";
 		ret = ws73_reset_observe(ws);
@@ -154,7 +169,11 @@ static void ws73_ble_trial_start(struct work_struct *work)
 done:
 	if (ret)
 		ws73_usb_fail(ws, ret);
-	if (device_reset)
+	if (quiesce_ble)
+		dev_info(&ws->interface->dev,
+			 "QUIESCE trial result=%d stage=%s; stop ACK only, owner terminal\n",
+			 ret, stage);
+	else if (device_reset)
 		dev_info(&ws->interface->dev,
 			 "RESET device trial result=%d stage=%s; boot verification required\n",
 			 ret, stage);
@@ -205,12 +224,12 @@ static int __init ws73_ble_trial_init(void)
 	int ret;
 
 	if (!serial || !*serial || !devnum || devnum > 127 ||
-	    (inspect_reset + native_hci + device_reset > 1) ||
+	    (inspect_reset + native_hci + device_reset + quiesce_ble > 1) ||
 	    (native_hci && !IS_ENABLED(CONFIG_BT_WS73)) ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
 	    !ws73_trial_package_allowed(package, dmi_get_system_info(DMI_PRODUCT_NAME)))
 		return -ENODEV;
-	if (inspect_reset || device_reset)
+	if (inspect_reset || device_reset || quiesce_ble)
 		return usb_register(&ws73_ble_trial_driver);
 	ret = request_firmware_direct(&fw, WS73_BLE_TRIAL_PROFILE, NULL);
 	if (ret)

@@ -48,6 +48,8 @@ int ws73_ble_control_receive(struct ws73_ble_control *control,
 	spin_lock_irqsave(&control->lock, flags);
 	if (control->state == WS73_BLE_FAILED) {
 		ret = control->error;
+	} else if (control->state == WS73_BLE_QUIESCED) {
+		ret = -ESHUTDOWN;
 	} else if (control->state == WS73_BLE_UNKNOWN) {
 		ret = -ENOENT; /* An unarmed observation is not an action completion. */
 	} else if (control->state != WS73_BLE_WAITING ||
@@ -80,9 +82,9 @@ static int ws73_ble_control_error(struct ws73_ble_control *control,
 	return ret;
 }
 
-int ws73_ble_control_set(struct ws73_ble_control *control,
-			 const struct ws73_ble_control_io *io, bool enabled,
-			 u64 deadline_ms)
+static int ws73_ble_control_request(struct ws73_ble_control *control,
+				    const struct ws73_ble_control_io *io,
+				    bool enabled, bool quiesce, u64 deadline_ms)
 {
 	unsigned long flags;
 	u8 command[4];
@@ -96,7 +98,11 @@ int ws73_ble_control_set(struct ws73_ble_control *control,
 	spin_lock_irqsave(&control->lock, flags);
 	if (control->state == WS73_BLE_FAILED)
 		ret = control->error;
-	else if (control->state == WS73_BLE_UNKNOWN && !enabled)
+	else if (control->state == WS73_BLE_QUIESCED)
+		ret = -ESHUTDOWN;
+	else if (quiesce && control->state != WS73_BLE_UNKNOWN)
+		ret = -EBUSY;
+	else if (control->state == WS73_BLE_UNKNOWN && !enabled && !quiesce)
 		ret = -EAGAIN;
 	else if ((control->state == WS73_BLE_ENABLED && enabled) ||
 		 (control->state == WS73_BLE_DISABLED && !enabled))
@@ -155,7 +161,8 @@ int ws73_ble_control_set(struct ws73_ble_control *control,
 	}
 	spin_lock_irqsave(&control->lock, flags);
 	if (control->state == WS73_BLE_REPLIED) {
-		control->state = enabled ? WS73_BLE_ENABLED : WS73_BLE_DISABLED;
+		control->state = quiesce ? WS73_BLE_QUIESCED :
+				 enabled ? WS73_BLE_ENABLED : WS73_BLE_DISABLED;
 		ret = 0;
 	} else {
 		ret = control->state == WS73_BLE_FAILED ? control->error : -EPROTO;
@@ -171,4 +178,18 @@ unlock:
 	mutex_unlock(&control->command_lock);
 	return ret;
 }
+
+int ws73_ble_control_set(struct ws73_ble_control *control,
+			 const struct ws73_ble_control_io *io, bool enabled,
+			 u64 deadline_ms)
+{
+	return ws73_ble_control_request(control, io, enabled, false, deadline_ms);
+}
 EXPORT_SYMBOL_NS_GPL(ws73_ble_control_set, "WS73");
+
+int ws73_ble_control_quiesce(struct ws73_ble_control *control,
+			     const struct ws73_ble_control_io *io, u64 deadline_ms)
+{
+	return ws73_ble_control_request(control, io, false, true, deadline_ms);
+}
+EXPORT_SYMBOL_NS_GPL(ws73_ble_control_quiesce, "WS73");

@@ -11,6 +11,18 @@ install or load it on the host. The normal physical driver remains an observer.
 The test does not enable BLE, Wi-Fi or RF functions, change eFuse/flash, reset
 a hub/controller or provide a general register interface.
 
+The existing BLE trial module also has a separate quiesce_ble=1 mode.
+It first checks the live package/USB and SDK110 firmware/ROM versions, then
+issues one fixed BLE stop request and requires its actual reply. It requests
+no firmware/profile file, startup, function enable, register write or reset.
+The host must establish exclusive ownership and that no earlier stop request
+has an ambiguous pending reply. UNKNOWN is never promoted to ready: the
+control object becomes terminal QUIESCED after the ACK, then the entire
+experimental owner is made terminal and drained. This does not publish HCI
+or qualify a new startup, and it cannot share an invocation with native_hci,
+inspect_reset or device_reset. Later reset/loading needs a new source-bound
+admission; USB cancellation alone is not a firmware stop acknowledgment.
+
 The existing BLE trial module also has a separate inspect_reset=1 mode.
 It requires the same tagged VM, explicit package, serial, enumeration and
 PID 1 bind. It independently queries live runtime identity/version, then

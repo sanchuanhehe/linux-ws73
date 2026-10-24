@@ -209,7 +209,9 @@ static int ws73_ble_rx_thread(void *context)
 
 	if (wait_for_completion_timeout(&mock->sent, msecs_to_jiffies(1000)))
 		mock->receive_result =
-			ws73_ble_control_receive(&mock->control, WS73_NOTIFY_BLE_OPEN, 0);
+			ws73_ble_control_receive(&mock->control,
+				mock->command[0] == 25 ? WS73_NOTIFY_BLE_OPEN :
+				WS73_NOTIFY_BLE_CLOSE, 0);
 	wait_event_interruptible(mock->stopped, kthread_should_stop());
 	return 0;
 }
@@ -230,6 +232,124 @@ static void ws73_ble_independent_rx_test(struct kunit *test)
 	KUNIT_EXPECT_EQ(test, ret, 0);
 	KUNIT_EXPECT_EQ(test, mock.receive_result, 0);
 	KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_ENABLED);
+}
+
+static void ws73_ble_quiesce_lifecycle_test(struct kunit *test)
+{
+	struct ws73_ble_mock mock, other;
+	u8 expected[] = { 26, 0, 0, 0 };
+
+	ws73_ble_mock_init(&mock);
+	ws73_ble_mock_init(&other);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, false, 100),
+			-EAGAIN);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_receive(&mock.control, WS73_NOTIFY_BLE_CLOSE, 0),
+			-ENOENT);
+	KUNIT_EXPECT_EQ(test, mock.calls, 0);
+	KUNIT_ASSERT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100), 0);
+	KUNIT_EXPECT_MEMEQ(test, mock.command, expected, sizeof(expected));
+	KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_QUIESCED);
+	KUNIT_EXPECT_EQ(test, mock.control.error, 0);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100), -ESHUTDOWN);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, true, 100), -ESHUTDOWN);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, false, 100),
+			-ESHUTDOWN);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_receive(&mock.control, WS73_NOTIFY_BLE_CLOSE, 0),
+			-ESHUTDOWN);
+	KUNIT_EXPECT_EQ(test, mock.calls, 1);
+	KUNIT_EXPECT_EQ(test, other.control.state, WS73_BLE_UNKNOWN);
+}
+
+static void ws73_ble_quiesce_failure_test(struct kunit *test)
+{
+	static const int tx[] = { -EPIPE, 0, 1, 2, 3, 5, 4096 };
+	static const unsigned int modes[] = { 1, 2, 3, 4, 5, 9, 10 };
+	static const int errors[] = {
+		-ETIMEDOUT, -EPROTO, -EPROTO, -ETIMEDOUT, -ENODEV, -ENODEV, -ETIMEDOUT,
+	};
+	struct ws73_ble_mock mock;
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(tx) + ARRAY_SIZE(modes); i++) {
+		int error;
+
+		ws73_ble_mock_init(&mock);
+		if (i < ARRAY_SIZE(tx)) {
+			mock.tx_result = tx[i];
+			error = tx[i] < 0 ? tx[i] : -EMSGSIZE;
+		} else {
+			mock.mode = modes[i - ARRAY_SIZE(tx)];
+			error = errors[i - ARRAY_SIZE(tx)];
+		}
+		KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 1), error);
+		KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_FAILED);
+		KUNIT_EXPECT_EQ(test,
+				ws73_ble_control_receive(&mock.control, WS73_NOTIFY_BLE_CLOSE, 0),
+				error);
+		KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100),
+				error);
+		KUNIT_EXPECT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, true, 100),
+				error);
+		KUNIT_EXPECT_EQ(test, mock.calls, 1);
+	}
+}
+
+static void ws73_ble_quiesce_admission_test(struct kunit *test)
+{
+	struct ws73_ble_mock mock;
+
+	ws73_ble_mock_init(&mock);
+	KUNIT_ASSERT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, true, 100), 0);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100), -EBUSY);
+	KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_ENABLED);
+	KUNIT_EXPECT_EQ(test, mock.calls, 1);
+	KUNIT_ASSERT_EQ(test, ws73_ble_control_set(&mock.control, &mock.io, false, 100), 0);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100), -EBUSY);
+	KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_DISABLED);
+	KUNIT_EXPECT_EQ(test, mock.calls, 2);
+	ws73_ble_mock_init(&mock);
+	mutex_lock(&mock.control.command_lock);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100), -EBUSY);
+	mutex_unlock(&mock.control.command_lock);
+	KUNIT_EXPECT_EQ(test, mock.calls, 0);
+	mock.mode = 6;
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, U64_MAX), 0);
+	KUNIT_EXPECT_EQ(test, mock.busy_result, -EBUSY);
+	KUNIT_EXPECT_EQ(test, mock.timeout, 2000);
+	ws73_ble_mock_init(&mock);
+	mock.now = U64_MAX - 1;
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, U64_MAX), 0);
+	KUNIT_EXPECT_EQ(test, mock.timeout, 1);
+	ws73_ble_mock_init(&mock);
+	mock.cancelled = true;
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100), -ENODEV);
+	KUNIT_EXPECT_EQ(test, mock.calls, 0);
+	ws73_ble_mock_init(&mock);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 0), -ETIMEDOUT);
+	KUNIT_EXPECT_EQ(test, mock.calls, 0);
+	ws73_ble_mock_init(&mock);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(NULL, &mock.io, 100), -EINVAL);
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, NULL, 100), -EINVAL);
+	mock.io.send = NULL;
+	KUNIT_EXPECT_EQ(test, ws73_ble_control_quiesce(&mock.control, &mock.io, 100), -EINVAL);
+}
+
+static void ws73_ble_quiesce_independent_rx_test(struct kunit *test)
+{
+	struct ws73_ble_mock mock;
+	struct task_struct *thread;
+	int ret;
+
+	ws73_ble_mock_init(&mock);
+	mock.mode = 7;
+	mock.receive_result = -EINPROGRESS;
+	thread = kthread_run(ws73_ble_rx_thread, &mock, "ws73-stop-test");
+	KUNIT_ASSERT_FALSE(test, IS_ERR(thread));
+	ret = ws73_ble_control_quiesce(&mock.control, &mock.io, 1000);
+	kthread_stop(thread);
+	KUNIT_EXPECT_EQ(test, ret, 0);
+	KUNIT_EXPECT_EQ(test, mock.receive_result, 0);
+	KUNIT_EXPECT_EQ(test, mock.control.state, WS73_BLE_QUIESCED);
 }
 
 /* Operation-level oracle: known on/off state and the first terminal error.
@@ -339,6 +459,10 @@ static struct kunit_case ws73_ble_control_cases[] = {
 	KUNIT_CASE(ws73_ble_admission_test),
 	KUNIT_CASE(ws73_ble_independent_rx_test),
 	KUNIT_CASE(ws73_ble_state_sequence_test),
+	KUNIT_CASE(ws73_ble_quiesce_lifecycle_test),
+	KUNIT_CASE(ws73_ble_quiesce_failure_test),
+	KUNIT_CASE(ws73_ble_quiesce_admission_test),
+	KUNIT_CASE(ws73_ble_quiesce_independent_rx_test),
 	{}
 };
 

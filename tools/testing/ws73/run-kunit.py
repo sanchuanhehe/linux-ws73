@@ -338,6 +338,8 @@ def main():
                     "ws73_ble_lifecycle_test", "ws73_ble_tx_failure_test",
                     "ws73_ble_reply_failure_test", "ws73_ble_admission_test",
                     "ws73_ble_independent_rx_test", "ws73_ble_state_sequence_test",
+                    "ws73_ble_quiesce_lifecycle_test", "ws73_ble_quiesce_failure_test",
+                    "ws73_ble_quiesce_admission_test", "ws73_ble_quiesce_independent_rx_test",
                 },
                 "ws73-service": {
                     "ws73_interrupt_wire_test", "ws73_interrupt_invalid_test",

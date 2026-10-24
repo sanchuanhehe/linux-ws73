@@ -14,6 +14,7 @@ enum ws73_ble_control_state {
 	WS73_BLE_REPLIED,
 	WS73_BLE_ENABLED,
 	WS73_BLE_DISABLED,
+	WS73_BLE_QUIESCED, /* Stop acknowledged; terminal, never consumer-ready. */
 	WS73_BLE_FAILED,
 };
 
@@ -64,5 +65,17 @@ void ws73_ble_control_abort(struct ws73_ble_control *control, int error);
 int ws73_ble_control_set(struct ws73_ble_control *control,
 			 const struct ws73_ble_control_io *io, bool enabled,
 			 u64 deadline_ms);
+
+/*
+ * One stop-only transaction on a fresh UNKNOWN object. The exclusive owner
+ * must verify the firmware identity and absence of live consumers first, and
+ * establish that no earlier stop request remains ambiguous. This operation
+ * neither arms startup nor authorizes a consumer. Success is QUIESCED, not
+ * DISABLED: no subsequent action can reuse this object. The owner must retire
+ * it and drain callbacks even after success. A new physical-state admission
+ * is required before reset, loading or functional initialization.
+ */
+int ws73_ble_control_quiesce(struct ws73_ble_control *control,
+			     const struct ws73_ble_control_io *io, u64 deadline_ms);
 
 #endif

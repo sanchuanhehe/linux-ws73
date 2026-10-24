@@ -557,3 +557,35 @@ interop still needs a known independent peer. Normal automatic loading,
 board/address, cold/natural recovery, Wi-Fi, long-run and formal maintainer/
 mainline gates remain open. See exact artifacts and limits in the qualification
 record and existing issues 7/10/12; no new duplicate project route is created.
+
+
+Independent U/E VM execution before controlled peers (2026-10-24)
+-----------------------------------------------------------------
+
+The existing per-device runner now has an exclusive preparation phase and
+an explicitly hash-pinned, no-compilation runtime phase under the shared
+global lock. Per-invocation sockets and internal per-port leases permit two
+independent model-specific VMs without weakening live attachment checks or
+sharing a global firmware path. Actual empty-VM overlap, exclusive-build
+rejection, per-model input mutations and CLI/lease conflicts were checked.
+
+Allocated U 1-1.1.3 and E 1-2.1.4 then directly passed overlapping actual
+three-file startup/native HCI/BlueZ scan and non-connectable advertising
+control on source c2f291611a2f: 59/61 successful command/reply pairs, actual
+final close replies, HCI removal, drains and VM exit. U/E runtime overlap
+was 16.541 seconds with four total own vCPUs and no compilation. New per-model
+images were independently checked for exact firmware membership. No other
+port was operated. E's preceding reset-time IRQ -EPROTO verifier FAIL is
+retained and separately replay-verified only within its fixed-write/new-boot
+scope; no natural recovery claim is added.
+
+This establishes the existing runner isolation needed for subsequent
+controlled-peer work. It does not establish mutual discovery, connection,
+ACL/GATT/security, verified RF emission or independent interoperability.
+Next use a session-bound allocated-peer identity, retain both qualified
+owners, verify bilateral random payloads, credits and teardown, then exchange
+roles. Same-family development and the formal independent-peer gate stay
+separate. Current-source support is not inherited by the other two samples.
+All board/address, Wi-Fi, cold/natural recovery, PM, long-run, frozen RFC and
+formal maintainer/mainline gates remain open; exact artifacts are recorded
+in the qualification document and existing issues 7/10/12.

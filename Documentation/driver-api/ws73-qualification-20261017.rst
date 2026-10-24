@@ -5172,3 +5172,90 @@ frozen RFC hardware qualification and formal joint support remain open.
 The normal parent is still observation-only. Next development should use
 controlled allocated peers with actual bilateral payload checks, while
 keeping same-family development evidence distinct from independent interop.
+
+
+Parallel U/E native BlueZ VM isolation (2026-10-24 SGT)
+=======================================================
+
+The existing private single-device supervisor now separates exclusive-lock
+image preparation from shared-lock execution of immutable per-port inputs.
+A prepared execution requires an explicit reviewed manifest SHA-256, exact
+source/build/tool contracts, allocation/port/serial/board and mode, and the
+selected SDK110 three originals. It performs no compilation. Each invocation
+has its own private QMP/control socket directory, shared hardware lease and
+exclusive per-port lease. Both boot and runtime attachments still recheck
+live identity, descriptors, topology, ownership and all four reset/detach
+options. No enumerated-number selector or global mixed-board image is used.
+The default prepare-and-run route retains exclusive global locking.
+
+Twenty-five production admission mutations per model reject changed inputs,
+including rehashed executable, firmware-role, serial/board and build-proof
+changes; eight actual CLI/lock conflicts reject before VM/USB access or trial
+record creation. Two actual empty VMs overlapped for 2.209 seconds, with
+separate sockets and no physical attachment. An exclusive build-lock probe
+was rejected while their shared runtime locks were held. These checks do
+not constitute hardware or concurrency-freedom qualification.
+
+Fresh reviewed close epochs admitted one fixed per-device internal reset
+for each selected sample. U's reset/new boot observation directly passed.
+E's original final verifier result remains FAIL: one matched empty runtime
+IRQ completion returned -EPROTO after the fixed reset data submission. Its
+new boot HCC identity/version and complete transfer record were already
+captured. A separately recorded full replay accepts this one disappearing
+runtime IRQ error only after the validated fixed write and with independent
+new-boot proof. Other errors, earlier completions, wrong endpoints, nonempty
+payloads and missing capture/boot remain rejected; ordinary observation
+retains its strict error policy. Ninety parser controls pass. This is a
+bounded explanation of that actual reset, not natural recovery or a rewrite
+of the failed attempt. An earlier E invocation was rejected by the global
+nonblocking build lock before any physical attempt; it is retained too.
+
+Both selected devices then directly passed a simultaneous real trial on
+source c2f291611a2f4ca83519c17f65a1bda2005c8214. Each separate VM used its
+own explicit U/E SDK110 code and two calibration originals, fresh boot HCC,
+complete load/controlled runtime handoff, runtime identity/version and genuine
+BLE startup/disable before native HCI. Their QMP lifetimes overlapped for
+16.541 seconds. Two VMs used four total vCPUs and zero compilation jobs.
+Actual pinned BlueZ discovery and non-connectable advertising control passed:
+
+* U 1-1.1.3: 59 successful HCI command/reply pairs, 24 valid report entries.
+* E 1-2.1.4: 61 successful HCI command/reply pairs, 30 valid report entries.
+
+Each full trial has six class actions, three matching close replies, final
+HCI removal, three owner drains and exit zero. Each has two intended physical
+boot/runtime opens/closes, eight actual false QOM reset/detach settings and
+no usb_host_reset. The archived initramfs was independently parsed: its only
+firmware inputs are the selected model's three originals and the separately
+recorded reference customization body. Original hashes and the full existing
+boot, runtime binary/text, HCI/BlueZ and close verifiers were replayed.
+
+U: load-hci-trial-20261024T110030.491730Z/manifest.json, SHA-256::
+
+  3567afb03074c7c0d72caa434c9c870a1255d7ac0a37f8d619a29acc0c3f2de0
+
+E: load-hci-trial-20261024T110030.491253Z/manifest.json, SHA-256::
+
+  657870bd35bb152c0142a4e7a5c86703e0b819efbb4320121bce5d53e4a59fa5
+
+Assessment: peer-runner-preparation-20261024T105204.887731Z/completion.json,
+SHA-256::
+
+  2b347b6ec4bad96ab0c76be1bd25bc0b4e5ae5d6cc82810857679274cc66935e
+
+All four allocated nodes were unowned after exit and all five hardware
+leases available. Only the intended U/E enumeration numbers changed; the
+other six device ports and both hubs retained cached identities/descriptors.
+An unrelated WS53 virtual test with no USB passthrough was observed and left
+running. Active other-device business isolation is not established by this
+snapshot. Firmware-bearing records and discovered addresses remain private.
+
+These are separate-model overlapping VM and real controller-control results,
+not controlled peer discovery, verified advertising emission, connection,
+ACL/GATT/security, role exchange or independent interoperability. No ambient
+discovered device was connected. Normal automatic loading, cold automatic
+selection, board/address provenance, natural/automatic recovery, PM, long-run
+business, Wi-Fi and formal U/E/upstream gates remain open. Prior KUnit and
+100-cycle results keep their own source/scope; no new kernel behavior was
+introduced by this supervisor increment. Next peer work must establish fresh
+admissions and retain genuine qualified owners, identify only the allocated
+peer by a controlled session, and verify real bilateral payload and teardown.

@@ -5994,3 +5994,76 @@ The private checkpoint binds 29 local files and six exact physical manifests,
 SHA-256 ``6bd074378f1f3d75cea8f6c62cfad0e83156943e11a16dcf3fccbbca7712b52c``.
 Connection, ACL/GATT, independent interoperability and the broader upstream
 requirements remain open.
+
+
+Second allocated U: independent native HCI and BlueZ control (2026-10-25 SGT)
+-----------------------------------------------------------------------------
+
+The second allocated U on topology port ``1-1.1.4`` now has its own full
+startup evidence. Before this trial its only subject-device experiment was
+``usb-observe-20261018T035635.522623Z``: successful four-byte zero READM and
+BOOTVER001 replies, explicitly not cold-start evidence. The fresh port,
+serial, boot descriptors and enumeration snapshot exactly matched that
+observation. Earlier census records mention this sample only as another
+device; their power confirmation belongs to a different sample.
+
+The existing initial-boot admission was extended with this one exact
+observation and its pinned history hashes. It still checks the entire
+history and rejects consumed or unknown physical use. The existing guard
+fixture, adapted to three independently pinned samples, passed 69 function
+checks and five CLI rejections. Its immutable-image checker accepted two
+baselines and rejected 34 altered inputs. No generic port selection,
+firmware fallback, reset admission or new test framework was added.
+
+Preparation ``load-hci-prepare-20261024T194417.306259Z`` has manifest SHA-256
+``0ed5870081321b40d49128aff8643c9d99c543303c0e6f7d2eefc8fdd8b4850a``.
+It binds this port/serial to the three original SDK110 US files and current
+helper hashes, including the corrected AD-padding parser. The first empty-VM
+launch was rejected before VM creation because another thread held the
+shared build lock; that failure is retained. Both observed lock holders
+were allowed to finish. Empty VM ``load-hci-trial-20261024T194654.978465Z``
+then passed, manifest SHA-256
+``537114a2c791bf7f72c05c1647e0bf97bf82e049b457369c5b77768985fdcf9c``.
+
+The one physical attempt was ``load-hci-trial-20261024T194659.093331Z``,
+manifest SHA-256
+``43e837ed3e908f838f7a7193f435c32712134559bbe706b37e78183c8d215796``.
+The experimental kernel source was ``09720a346471``; development HEAD was
+``52460db83502`` with only documented source changes since that build.
+The existing two-vCPU VM and explicit reference-board profile performed
+boot HCC identity, US three-file load, controlled runtime handoff, runtime
+U/USB identity/version verification, BLE startup/disable and native HCI.
+There was no manual power action, USB reset, hub/controller passthrough or
+host experimental driver. No kernel rebuild was performed for this trial.
+
+The result is limited to this sample and configuration:
+
+* 172580 payload bytes in the original-file boot sequence; 29 boot outputs,
+  28 replies and 26 complete boot replies checked by the existing verifier.
+* 59 native HCI commands and 59 real replies, with 23/36 commands across
+  the initial open and one subsequent management power cycle.
+* Six BlueZ btmgmt actions; scan and advertising enable intervals of
+  3100894 and 3100213 microseconds, with 20 received advertising reports.
+  These uncontrolled reports do not establish an independent test peer.
+* 91 complete runtime replies, independently captured binary/text traffic,
+  zero reported text loss, real final BLE stop acknowledgement, three device
+  drains and two USB closures. The VM exited zero without cleanup error.
+* Eight QOM reads confirmed the four reset/detach policy flags remained
+  false in both device attachments. Both attachments selected only this port.
+  Final inventory found all four allocated samples unowned and the other
+  three samples unchanged. The initial-boot admission now rejects reuse.
+
+Actual Read BD_ADDR responses on this U, the first U and the previously
+observed second E are internally consistent and distinct from one another.
+This comparison establishes neither address provenance nor universal
+uniqueness. The new trial does not establish a connection, ACL/GATT, security,
+independent interoperability, cold automatic selection or natural recovery.
+The earlier twelve failed connection pairs retain their original results.
+Capture qualifications retain the existing verifier's limits, including the
+uncaptured final customization TX padding. No retry/reset permission is
+inferred from this new success.
+
+The independent replay/audit SHA-256 is
+``31dc23db276d1800b647a8f40cb0cd6cf14887472a33eb6e03db25826182b10a``.
+The private checkpoint binds 29 local files and four exact manifest links,
+SHA-256 ``ca6da60c0fa3078d49dec52e92ecaded03d20a710ffaafa9f4df65e7bf00207d``.

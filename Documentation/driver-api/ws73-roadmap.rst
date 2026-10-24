@@ -527,3 +527,33 @@ remains observation-only. Controlled peer, connection/GATT/security, board/
 address, long-duration, cold/natural recovery, Wi-Fi and formal acceptance
 remain open. See exact source, original failures and scope in the qualification
 record and existing issues 7/10/12.
+
+
+Stop-only terminal primitive and same-source U/E radio paths (2026-10-24)
+-------------------------------------------------------------------------
+
+The shared control layer now has explicit UNKNOWN-to-quiesce semantics:
+one actual stop/ACK, terminal QUIESCED and no subsequent functional action.
+Ordinary unknown disable is still rejected. The existing tagged-VM consumer
+verifies live identity/version and retires its owner without firmware input,
+startup, reset or HCI publication; the next reset/load is separately admitted.
+U's missing close is now resolved by that actual stop evidence, with its old
+info-timeout FAIL retained. No disabled/BSP state was fabricated or reused.
+
+Clean source c2f291611a2f passed 107 KUnit cases in each KASAN/UBSAN and strict
+KCSAN/UBSAN configuration, warning-free hardware builds, U/E empty preflights
+and the actual U quiescence. Following newly reviewed controlled resets and
+complete per-model three-original-file startups, both U/E directly passed
+BlueZ scanning and non-connectable advertising control on that same source:
+59/61 real command/reply pairs, actual final closes and drains. The previous
+E result on older code is not substituted. Ambient reports remain distinct
+from controlled peer or bilateral business evidence. All consumed state
+tokens reject replay; original preflight and prior physical FAILs remain.
+
+Next is controlled peer connection and bilateral GATT/security development,
+including role exchange, actual ACL/credit/teardown and repeated business.
+The allocated same-family devices can provide development evidence; independent
+interop still needs a known independent peer. Normal automatic loading,
+board/address, cold/natural recovery, Wi-Fi, long-run and formal maintainer/
+mainline gates remain open. See exact artifacts and limits in the qualification
+record and existing issues 7/10/12; no new duplicate project route is created.

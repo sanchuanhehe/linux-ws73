@@ -5066,3 +5066,109 @@ reports do not independently verify transmitted advertising, controlled peer
 interop, connection/GATT/security, address/board provenance, cold/natural
 recovery, Wi-Fi, long-duration business, frozen RFC hardware qualification
 or formal U/E support. Those gates remain open.
+
+
+Terminal BLE quiescence and new-source U/E BlueZ (2026-10-24 SGT)
+=================================================================
+
+The shared control layer now provides an explicit stop-only quiescence
+operation for a fresh UNKNOWN object. Ordinary unknown-to-disable remains
+rejected. Quiescence issues only command 26 and requires both the complete
+four-byte local transfer and matching actual close reply within one bounded
+deadline. Success enters terminal QUIESCED, never DISABLED/ready; repeated
+quiescence, enable and disable cannot reuse it. Active/stable normal control
+objects are rejected without another transfer. TX, wrong/duplicate/late
+reply, cancellation and timeout failures retain the first terminal error.
+An RX reply may legitimately precede local EP0 status completion, but cannot
+hide a failed/short transfer. No HCI completion is synthesized.
+
+The exclusive owner must verify firmware identity, absence of live consumers
+and no earlier ambiguous stop matcher before using this operation. Its
+actual consumer is the existing tagged-VM trial's disjoint quiesce_ble=1
+mode: fresh live U/E package/USB and SDK110 firmware/ROM verification,
+no firmware/profile input or startup arm, one stop/ACK, then terminal owner
+and drains. It cannot combine with native_hci, inspect_reset or device_reset.
+It cannot publish a child or infer BSP_READY/startup DONE. Later reset/loading
+needs another independently source-bound admission; the quiesced object is
+not reused. There is no generic register/control or new user ABI.
+
+Implementation is signed commit 627795f9db19. The source actually built and
+run below is its descendant c2f291611a2f4ca83519c17f65a1bda2005c8214, which
+also fixes the KUnit runner's append-open of the shared build lock before
+nonblocking admission. The first pre-lock KUnit attempt was rejected before
+any build/test; no lock owner was interrupted or identity inferred after
+fuser found no remaining holder. The later clean-source runs passed 107/107
+each: KASAN/UBSAN/lockdep/DEBUG_ATOMIC_SLEEP and independent strict KCSAN/
+UBSAN. The KCSAN early-enable and all three selftests were verified; that is
+sampled evidence, not a race-freedom or new formal-model proof. Four new
+control cases cover terminal lifecycle, TX/reply failures, admission and
+independent-thread RX. The hardware kernel/modules build has no W=1 warning.
+
+An initial empty quiescence VM failed its DMI product guard before any
+physical attachment because the new caller omitted board tagging. That FAIL
+is retained. Corrected U/E empty VMs directly passed, with contradictory
+mode rejection, no HCI publication and no firmware input. Offline checks
+include 24 malformed/missing/duplicate stop-capture rejections, 12 immutable
+prior-state admissions, U/E separation, reply-before-local-completion and
+four pre-VM CLI rejections. All five stale quiesce/reset/load routes reject
+replay. These are not additional hardware successes.
+
+Allocated U 1-1.1.3 actually passed the stop-only trial: two independently
+queried matching live identities/versions, eight complete platform bulk OUTs
+(656 bytes), four platform replies plus one complete close notification,
+one successful class stop and two owner drains. No function enable, profile,
+register operation, reset or HCI publication occurred. This replaces the
+unconfirmed physical close after the earlier BlueZ info timeout with new
+actual evidence; the original FAIL itself remains unchanged.
+
+That actual U close and E's separately verified previous radio-close evidence
+then admitted one controlled per-device software reset each, fresh boot HCC
+and a new complete same-model SDK110 three-original-file startup. Both models
+now directly pass the corrected BlueZ supervisor on the same new source:
+
+* U 1-1.1.3: 59 real successful HCI command/reply pairs, 20 valid report entries.
+* E 1-2.1.4: 61 real successful HCI command/reply pairs, 32 valid report entries.
+
+Both pass native initialization, actual BlueZ Read Info and bounded LE
+discovery/advertising start/stop, management settings, six class actions,
+three ordered close replies, explicit final HCI removal, three owner drains
+and VM exit zero. Advertising remains non-connectable. Report entries are
+ambient observations, not distinct-device counts or controlled-peer tests.
+No prior-source E result is inherited for these new-source assertions.
+Each full trial has two explicit same-target boot/runtime QEMU opens and
+closes, eight false reset/detach options and no usb_host_reset. No device or
+hub was manually replugged, port-powered or passed through as a controller.
+
+Actual U quiescence: runtime-observe-20261024T095207.589165Z/manifest.json,
+SHA-256::
+
+  7f573858167b402eb82893c6281e59258447c7ef4a23a6a20fd0f216ff1fc139
+
+New-source U BlueZ: load-hci-trial-20261024T095934.441113Z/manifest.json,
+SHA-256::
+
+  623ff0d1a5859030394e1b864b0dd0697fabce8224f93c56204eabf122fefd4f
+
+New-source E BlueZ: load-hci-trial-20261024T100418.319095Z/manifest.json,
+SHA-256::
+
+  a9a9a4aca3abc790b99f0fc54c0d34389c2334cd220195ad5f1d2baec80b2f23
+
+Independent exact-source assessment: ble-quiesce-20261024/completion.json,
+SHA-256::
+
+  339da99bd0237e20d73ccda5764e39b0accaf16d02fdd22fa3557ca4ce51ddc3
+
+After the hardware VMs exited, all four allocated nodes were unowned, port
+leases/build lock were available, and only the intended U/E enumeration
+numbers changed. The other six known device ports and both hubs retained
+cached identities/descriptors; continuing peer-business isolation is not
+inferred. Firmware-bearing and discovered-address/data captures stay private.
+The same boot TX prefix/exact-length/ACK and final 352 customization TX
+padding limits remain; runtime RX/HCI is complete. Board/address provenance,
+cold automatic selection, controlled independent-peer connection/GATT/
+security, Wi-Fi, 20 starts/24-hour business, PM, natural/automatic recovery,
+frozen RFC hardware qualification and formal joint support remain open.
+The normal parent is still observation-only. Next development should use
+controlled allocated peers with actual bilateral payload checks, while
+keeping same-family development evidence distinct from independent interop.

@@ -1451,16 +1451,12 @@ static u8 hci_cc_le_set_adv_set_random_addr(struct hci_dev *hdev, void *data,
 		return rp->status;
 
 	cp = hci_sent_cmd_data(hdev, HCI_OP_LE_SET_ADV_SET_RAND_ADDR);
-	/* Update only in case the adv instance since handle 0x00 shall be using
-	 * HCI_OP_LE_SET_RANDOM_ADDR since that allows both extended and
-	 * non-extended adverting.
-	 */
-	if (!cp || !cp->handle)
+	if (!cp)
 		return rp->status;
 
 	hci_dev_lock(hdev);
 
-	adv = hci_find_adv_instance(hdev, cp->handle);
+	adv = hci_find_adv_instance_by_handle(hdev, cp->handle);
 	if (adv) {
 		bacpy(&adv->random_addr, &cp->bdaddr);
 		if (!bacmp(&hdev->rpa, &cp->bdaddr)) {
@@ -1480,7 +1476,8 @@ static u8 hci_cc_le_remove_adv_set(struct hci_dev *hdev, void *data,
 				   struct sk_buff *skb)
 {
 	struct hci_ev_status *rp = data;
-	u8 *instance;
+	struct adv_info *adv;
+	u8 *handle;
 	int err;
 
 	bt_dev_dbg(hdev, "status 0x%2.2x", rp->status);
@@ -1488,16 +1485,21 @@ static u8 hci_cc_le_remove_adv_set(struct hci_dev *hdev, void *data,
 	if (rp->status)
 		return rp->status;
 
-	instance = hci_sent_cmd_data(hdev, HCI_OP_LE_REMOVE_ADV_SET);
-	if (!instance)
+	handle = hci_sent_cmd_data(hdev, HCI_OP_LE_REMOVE_ADV_SET);
+	if (!handle)
 		return rp->status;
 
 	hci_dev_lock(hdev);
 
-	err = hci_remove_adv_instance(hdev, *instance);
-	if (!err)
-		mgmt_advertising_removed(hci_skb_sk(hdev->sent_cmd), hdev,
-					 *instance);
+	adv = hci_find_adv_instance_by_handle(hdev, *handle);
+	if (adv) {
+		u8 instance = adv->instance;
+
+		err = hci_remove_adv_instance(hdev, instance);
+		if (!err)
+			mgmt_advertising_removed(hci_skb_sk(hdev->sent_cmd),
+						 hdev, instance);
+	}
 
 	hci_dev_unlock(hdev);
 
@@ -1639,7 +1641,7 @@ static u8 hci_cc_le_set_ext_adv_enable(struct hci_dev *hdev, void *data,
 	hci_dev_lock(hdev);
 
 	if (cp->num_of_sets)
-		adv = hci_find_adv_instance(hdev, set->handle);
+		adv = hci_find_adv_instance_by_handle(hdev, set->handle);
 
 	if (cp->enable) {
 		struct hci_conn *conn;
@@ -4051,7 +4053,7 @@ static u8 hci_cc_le_set_per_adv_enable(struct hci_dev *hdev, void *data,
 
 	hci_dev_lock(hdev);
 
-	adv = hci_find_adv_instance(hdev, cp->handle);
+	adv = hci_find_adv_instance_by_handle(hdev, cp->handle);
 
 	if (cp->enable) {
 		hci_dev_set_flag(hdev, HCI_LE_PER_ADV);
@@ -5998,15 +6000,18 @@ static void hci_le_ext_adv_term_evt(struct hci_dev *hdev, void *data,
 
 	hci_dev_lock(hdev);
 
-	adv = hci_find_adv_instance(hdev, ev->handle);
+	adv = hci_find_adv_instance_by_handle(hdev, ev->handle);
 
 	if (ev->status) {
+		u8 instance;
+
 		if (!adv)
 			goto unlock;
 
 		/* Remove advertising as it has been terminated */
-		hci_remove_adv_instance(hdev, ev->handle);
-		mgmt_advertising_removed(NULL, hdev, ev->handle);
+		instance = adv->instance;
+		hci_remove_adv_instance(hdev, instance);
+		mgmt_advertising_removed(NULL, hdev, instance);
 
 		list_for_each_entry_safe(adv, n, &hdev->adv_instances, list) {
 			if (adv->enabled)
@@ -6026,13 +6031,13 @@ static void hci_le_ext_adv_term_evt(struct hci_dev *hdev, void *data,
 		/* Store handle in the connection so the correct advertising
 		 * instance can be re-enabled when disconnected.
 		 */
-		conn->adv_instance = ev->handle;
+		conn->adv_instance = adv ? adv->instance : ev->handle;
 
 		if (hdev->adv_addr_type != ADDR_LE_DEV_RANDOM ||
 		    bacmp(&conn->resp_addr, BDADDR_ANY))
 			goto unlock;
 
-		if (!ev->handle) {
+		if (!adv && !ev->handle) {
 			bacpy(&conn->resp_addr, &hdev->random_addr);
 			goto unlock;
 		}

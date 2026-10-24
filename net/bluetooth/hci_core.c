@@ -1574,6 +1574,19 @@ struct adv_info *hci_find_adv_instance(struct hci_dev *hdev, u8 instance)
 }
 
 /* This function requires the caller holds hdev->lock */
+struct adv_info *hci_find_adv_instance_by_handle(struct hci_dev *hdev, u8 handle)
+{
+	struct adv_info *adv;
+
+	list_for_each_entry(adv, &hdev->adv_instances, list) {
+		if (adv->handle == handle)
+			return adv;
+	}
+
+	return NULL;
+}
+
+/* This function requires the caller holds hdev->lock */
 struct adv_info *hci_find_adv_sid(struct hci_dev *hdev, u8 sid)
 {
 	struct adv_info *adv;

@@ -397,3 +397,26 @@ The two initial supervisor false failures and later direct passes are all
 retained; 41 negative verifier controls passed. See the source-bound runtime
 observations in ws73-qualification-20261017.rst and issues 10/12. Cold, natural
 recovery, board/address and peer qualification remain open.
+
+
+Fixed register read before reset investigation (2026-10-24)
+-----------------------------------------------------------
+
+The existing tagged-VM trial has an explicit inspect_reset=1 mode, mutually
+exclusive with native HCI startup. It independently verifies runtime HCC
+identity/version, then performs only the fixed register-endpoint read of
+0x4001f118. There is no generic address or register-data-write interface,
+no fallback value, no reset and no firmware/profile request in this mode.
+
+Source 4e0a63b50155 passed the hardware build. Both allocated U 1-1.1.3 and
+E 1-2.1.4 returned actual successful four-byte zero values, with complete
+TX/RX capture checks, two owner drains, VM exit zero and zero QEMU resets.
+Twenty-four pure transaction checks passed in each U/E empty VM; 59 negative
+capture checks passed. The first U supervisor false failure and its separate
+replay assessment remain recorded alongside the later direct U/E passes.
+
+The next recovery step still needs an explicit bounded per-device reset
+operation, its quiescence/ambiguous-write/disconnect handling, target-isolated
+boot recognition and a fresh full startup. This read is not a reset or proof
+of cleared firmware state, cold startup, natural recovery or RF operation.
+See the independently source-bound qualification and issues 10/12.

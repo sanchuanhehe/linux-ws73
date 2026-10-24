@@ -4642,3 +4642,85 @@ Raw captures remain private. This work qualifies runtime identity transport
 and clean detach for these separate samples only. It does not close cold
 selection, firmware/address/board policy, functional warm recovery, natural
 recovery, simultaneous isolation, peer/RF, repetition or formal U/E gates.
+
+
+Fixed runtime reset-register read on allocated U/E (2026-10-24 SGT)
+===================================================================
+
+Source 4e0a63b50155da4576ade6c4d5b3575df3d1de2c adds a separate
+inspect_reset=1 mode to the existing tagged-VM BLE trial module. It reads
+only 0x4001f118 through the runtime register endpoints. It has no arbitrary
+address, register-data-write or reset operation and rejects native_hci=1.
+This prepares the register transport investigation; it is not recovery.
+
+The mode retains explicit DMI/package/serial/enumeration/PID 1 admission.
+It verifies live chip and SDK110 firmware/ROM identity before accessing the
+fixed register, requests no firmware or customization profile and publishes
+no function child. Each read is one fixed 16-byte setup on endpoint 0x02,
+then one exact four-byte reply on 0x82. An absolute deadline spans both calls,
+each I/O is capped at two seconds, and errors/cancellation/short or oversized
+results leave the output unchanged. There is no retry or fallback value.
+The existing owner/URB cleanup handles the two independently bound objects.
+
+The existing pure guard-test module executes 24 cases without USB access:
+fixed wire/order, valid nonzero and zero replies, actual lengths and errors
+at both stages, initial and post-I/O deadline/cancellation, bounded timeout
+and invalid callbacks/output. Both U/E empty VMs passed these checks and
+mutual-exclusion/registration/unload checks without profile inputs. The
+current Clang W=1 hardware build passed, including the updated external
+modules; no module-build warnings were reported. The generic new-file
+MAINTAINERS warning is covered by the existing tools/testing/ws73/ entry.
+
+Actual allocated U 1-1.1.3 and E 1-2.1.4 each passed the supervisor directly.
+An ordinary observation owner first queried identity/version; PID 1 then
+unbound that guest owner and explicitly bound the read-only trial. Its new
+owner independently queried identity/version again and completed the fixed
+register read. Both returned an actual successful four-byte zero response.
+Zero is the observed register value, not a substituted value after an error.
+Each run checked nine bulk OUTs, five complete successful bulk INs, two
+owner drains and VM exit zero. Complete binary/text capture cross-checks
+cover all 672 TX bytes and all reply bytes, including the second owner's
+identity/version and the fixed register response. No register data was
+written, no reset or BLE enable was sent and no firmware was downloaded.
+
+The two IRQ reads per run were cancelled cleanly at guest unbind/final
+removal; no successful notification appeared during these bounded trials.
+The same selected device was released unowned in runtime. Only its explicit
+hostport was attached; four QOM reset/detach options were false and the QEMU
+trace had one successful open, one close and no usb_host_reset. No hub,
+physical controller or other thread device was operated on.
+
+The first U capture remains FAIL because the supervisor's broad functional
+log rejection also matched the pure guard-test messages. Its complete wire
+was separately replayed after permitting only the exact three expected pure
+check markers; missing/duplicate checks and real startup logs still reject.
+The later U trial and E trial below passed directly. Fifty-nine negative
+verifier cases passed, including fixed-address/READ-bit/reserved-byte changes,
+extra register traffic, short/error/altered captures, second-owner chip/version
+mismatches, absent guard evidence and unexpected functional startup.
+
+U: runtime-observe-20261024T062112.588566Z/manifest.json, SHA-256::
+
+  bf3802f44e0e9972063645f440a4a517a8303d1ca145881dd9e4c95646161dc3
+
+E: runtime-observe-20261024T062035.324821Z/manifest.json, SHA-256::
+
+  3a510c8dbec76121f552bb7ebd5cf63c28fedd56f1ce7df643921f6837e00ee4
+
+Build: hardware-hci-build-20261024T061336.600967Z. Empty observation VMs:
+runtime-observe-20261024T061636.117762Z (U), and
+runtime-observe-20261024T061809.813668Z (E). Raw records remain private.
+This proves the fixed read path on these two SDK110 runtime samples only.
+A reset write, its completion/disconnect semantics, state clearing and a new
+boot/runtime startup have not been implemented or qualified by this result.
+No cold, natural recovery, functional warm recovery, RF/peer, address/board,
+multi-device or formal upstream gate is closed. This separate test increment
+does not grant hardware qualification to the frozen RFC review source.
+
+The unchanged default U/E native-HCI callers also passed separate empty-VM
+compatibility checks on this build. A prior no-hardware compatibility attempt
+remains FAIL: this agent edited RST while its VM was live, and the final
+clean-worktree guard correctly rejected the run. The sections were retained
+privately and temporarily removed; sequential reruns then passed on clean
+4e0a63b50155. This was a supervisor/source-integrity rejection, not a device
+or HCI initialization failure, and no physical device was attached.

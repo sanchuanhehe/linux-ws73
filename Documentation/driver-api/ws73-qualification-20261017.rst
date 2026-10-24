@@ -5662,3 +5662,86 @@ fresh independently validated device state, not reuse of a previous token.
 Controller-address/board provenance, the connection cause, failed-capture
 cleanup, independent-peer interoperability and all broader gates remain
 open. No formal upstream submission or issue closure is implied.
+Retired mixed-command diagnostic and fixed radio roles (2026-10-25 SGT)
+---------------------------------------------------------------------
+
+A private diagnostic switched the native initiator to legacy Create
+Connection only after extended advertising/scanning had already occurred
+since HCI Reset. The actual legacy command (0x200d) received Command
+Disallowed (0x0c), with no successful connection or ACL traffic. This is
+an invalid compatibility comparison: Bluetooth Core, Vol 4, Part E,
+section 3.1.1 and Table 3.2 prohibit mixing the listed legacy and extended
+command families since reset. The table includes scanning and connection
+creation. The result therefore does not establish broken legacy support.
+
+The late-switch diagnostic entry was retired; its private module, failed
+build attempt, successful build, empty-VM checks, actual attempts and raw
+captures remain archived. No production driver quirk or capability edit
+was introduced. The U/E failure manifests are respectively
+``375b92d73c85b863cdafa3138b2eae0a78e5847c4a49455a1d6583cc3d216d2b``
+and ``2d6d420ffc8d4fdddfa964985e0950d7fd09689f6ccc6fc9c8b574e3f1d85e65``.
+The private retired-diagnostic checkpoint covers 53 files, SHA-256
+``635a99c5ce71987104494a83fff284278b5ec442d29234d9ea4d3cb06b534129``.
+See the `HCI command-family rule
+<https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-60/out/en/host-controller-interface/host-controller-interface-functional-specification.html>`_.
+
+A subsequent native extended-command comparison removed the earlier radio
+role transitions. E only advertised and listened for GATT; U only scanned
+and initiated. The existing runner requires an explicit fixed-radio-role
+option, binds it into each prepared image, and rejects disagreement between
+the manifest and guest input. The client still requires fresh session-bound
+HCI/MGMT discovery and the pinned peer address. The server's admission
+does not claim prior discovery: any actual connection must match the
+allocated peer address before application qualification.
+
+Actual guest admission tests passed 104 GATT cases, 108 BlueZ control
+cases and 26 peer-parser cases under UBSAN. Each model's prepared image
+passed two baseline admissions and 44 corrupt-input rejections, followed
+by an empty-VM preflight. Two earlier preparations were retained unused
+after correcting when the server's absolute listener deadline begins.
+These checks are preparation evidence, not connection qualification.
+
+After separately acknowledged stops, the selected U/E devices underwent
+the existing VM-only fixed chip-reset and new boot-HCC observation. This
+was not a USB reset, power cycle, pristine-memory claim or natural-recovery
+test. SDK110 model-specific original three-file inputs and runtime HCC
+checks were unchanged. Production source remained
+``09720a346471ab848671ee00fc4ae6c81f4c4197``; the trial records bind the
+documentation-only worktree head ``ccd877f5e3c2`` separately.
+
+Both actual fixed-role trials failed:
+
+* U client: ``load-hci-trial-20261024T182156.778310Z``, manifest SHA-256
+  ``a084a193ea9ea9fb0bb27fd8f5e7647604a04ae2d9dccd7e75333c630088ca09``.
+* E server: ``load-hci-trial-20261024T182156.778491Z``, manifest SHA-256
+  ``9dd5a2e0066249b010ea059fff8f3f54fefe0fc0ea4c006e6956209b0e6b5731``.
+
+Complete binary/text RX correlation covered 92 U and 61 E records. The
+actual HCI stream confirmed no U advertising enable and no E scanning
+enable. U received the new E session reports, submitted one 0x2043 and
+received successful Command Status. After 20,461,612 microseconds, the
+Host cancelled it; the acknowledged cancel preceded an unsuccessful
+Enhanced Connection Complete with status 0x02. Neither side observed a
+successful connection or TX/RX ACL. Removing the role transitions did
+not resolve the failure; it does not identify a firmware or RF root cause.
+
+The fixed-role audit SHA-256 is
+``b87e3bc8bd33c251f5eda0b8c81e7c1abdcdcbf89f8b0625934b82f17369114e``.
+Both failed trials had three callback drains and two USB closes, but lacked
+the independent collector's clean-finish/joined markers. They remain
+FAIL, not clean-capture or GATT PASS. Subsequent stop-only VMs obtained
+actual BLE stop acknowledgements and exited normally; no further reset
+or download followed. Their U/E manifests are
+``4887f5c6ecbff25b3753b6820bc74d2dbb0bbf79c814fe962352161e42c0b353``
+and ``793de6b12772a236d1d2d08d31e72137f2e831ac87f8a230788b4b7fad7ad4e0``.
+Final read-only checks found the four allocated devices unoccupied and
+all owned VMs terminal; the other two allocated samples were unchanged.
+
+The private fixed-role checkpoint covers 54 local files and ten linked
+records, SHA-256
+``2ab51831840bdfe37130652cdb0052fb34f630241c4f1dcc17a91543ae562e1a``.
+All nine attempted GATT pairs, including the invalid legacy diagnostic,
+remain unsuccessful. No hand replug, hub/controller operation, other-thread
+device operation or firmware substitution was used. Connection, ACL/ATT,
+security, independent interoperability, cold automatic selection, natural
+recovery, PM, sustained traffic, STA and formal U/E support remain open.

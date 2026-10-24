@@ -1224,9 +1224,21 @@ static int hci_set_adv_set_random_addr_sync(struct hci_dev *hdev, u8 instance,
 					    bdaddr_t *random_addr)
 {
 	struct hci_cp_le_set_adv_set_rand_addr cp;
+	struct adv_info *adv;
 	int err;
 
-	if (!instance) {
+	memset(&cp, 0, sizeof(cp));
+
+	if (instance) {
+		hci_dev_lock(hdev);
+		adv = hci_find_adv_instance(hdev, instance);
+		if (!adv) {
+			hci_dev_unlock(hdev);
+			return -EINVAL;
+		}
+		cp.handle = adv->handle;
+		hci_dev_unlock(hdev);
+	} else {
 		/* Instance 0x00 doesn't have an adv_info, instead it uses
 		 * hdev->random_addr to track its address so whenever it needs
 		 * to be updated this also set the random address since
@@ -1237,9 +1249,6 @@ static int hci_set_adv_set_random_addr_sync(struct hci_dev *hdev, u8 instance,
 			return err;
 	}
 
-	memset(&cp, 0, sizeof(cp));
-
-	cp.handle = instance;
 	bacpy(&cp.bdaddr, random_addr);
 
 	return __hci_cmd_sync_status(hdev, HCI_OP_LE_SET_ADV_SET_RAND_ADDR,

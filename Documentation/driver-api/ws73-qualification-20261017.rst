@@ -5817,3 +5817,76 @@ SHA-256 ``c661416473ef595b67e092f734857405a5a2d63c404bbac3c96aa27c9ba791c0``.
 Historical incomplete captures retain their original scope. Native
 connection root cause, ACL/GATT, security, independent interoperability,
 natural recovery and all broader upstream gates remain open.
+
+SDK110 Host timing comparison on allocated U/E (2026-10-25 SGT)
+---------------------------------------------------------------
+
+The pinned SDK110 Linux BLE adapter sets seven Host defaults: advertising
+minimum/maximum 0x80, generic scan interval/window 0x60/0x30, connection
+minimum/maximum 0x38 and supervision timeout 0x8a. The source is
+``driver/bsle/ble_driver/linux/ble_host_hcc.c`` at SDK commit
+``d5e68a58fe38c2b04a16769c69de1e8a80e86d74``, SHA-256
+``a1876ab13de179032918debd8349e4bef4e603ae88a1396fea19e1803ab6783e``.
+This is evidence for a bounded comparison, not a requirement to add a
+production quirk. Modern Linux's separate connection-scan defaults are not
+assigned by this SDK code and were left unchanged.
+
+An explicit private fixed-role experiment sets those seven fields through
+native MGMT Set Default System Configuration (0x004c), then requires a
+successful native Read Default System Configuration (0x004b) with exact
+values before managed power-on. It changes neither controller capability
+bits nor the production driver and sends no arbitrary vendor command.
+The actual helper passed five positive and thirty rejection cases under
+UBSAN; existing management, power, BlueZ, GATT and capture checks passed.
+Each prepared image passed two baseline admissions, 48 corrupt-input
+rejections and an empty-VM preflight. An initial GCC misleading-indentation
+build failure was retained and corrected before either device was attached.
+
+Fresh individually validated post-reset boot observations preceded one
+real U-client/E-server trial. Both used the original model-specific SDK110
+three-file inputs and production source ``09720a346471ab848671ee00fc4ae6c81f4c4197``;
+the documentation-only worktree head was ``f0d31ff1abe8``. Both remain FAIL:
+
+* U: ``load-hci-trial-20261024T185941.255171Z``, manifest SHA-256
+  ``618456bcf09e127121ff7d9f5338d67766dddbf3bb548aedb36f8ec6893e9493``.
+* E: ``load-hci-trial-20261024T185941.256506Z``, manifest SHA-256
+  ``1c32962ea3ac1d5b1dc9029970096f1487f8f83a663e6dfbe6c0f1340e1957b0``.
+
+Independent replay correlated both native management readbacks with actual
+HCI TX: E's 0x2036 advertising interval was 0x80/0x80 (80 ms), and U's
+0x2043 connection interval was 0x38/0x38 (70 ms), supervision timeout 0x8a
+(1.38 s), with connection scan interval/window still 0x60/0x60. U observed
+two reports matching the exact E session and address. The controller
+accepted 0x2043; the Host cancelled it after 22,011,985 microseconds and the
+unsuccessful connection event followed the cancel ACK. Neither side
+observed a successful link or ACL data. Applying these SDK Host defaults
+alone therefore did not establish a connection; this does not identify
+the underlying failure or exclude other timing/RF dependencies.
+
+Complete binary/text RX correlation covered 93 U and 61 E records. Both
+collectors finished cleanly and were joined with zero loss, all observed
+runtime URBs were paired, and each guest recorded three callback drains
+and two USB closes. Both VMs exited with code zero and no host cleanup
+error. This provides the first actual-device regression of the redundant
+QMP-quit fix described above; earlier failures retain their original scope.
+Subsequent independent stop-only VMs obtained real BLE stop ACKs, with
+manifest hashes
+``66bc1318de9e3176499aba34d872e79e7c58993c29fe8334e9ca19fcd414205e``
+and ``88808e7f2a48f775127924decbda582ebeb25427391745eadcc81093ea0fbe26``.
+Final read-only checks found all four allocated samples unoccupied, the
+other two unchanged and all owned VMs terminal. No hand replug, hub or
+controller operation, other-thread device operation or firmware replacement
+was used. Fixed chip reset is not cold boot or natural recovery.
+
+The physical replay audit SHA-256 is
+``7fffd0c10c3e8050eb8a650d6680af1656477a223300b5493897e731ebf503db``;
+the timing correlation audit SHA-256 is
+``a2f71c2d4da978ec2b470327bc846bed39479d3e86b741d38693d70c391146df``.
+The corrected private checkpoint indexes 70 local files and eleven linked
+records, SHA-256
+``dddbc41da13eecfc0931ba2052550eba145131caf28a2ac7a4503b580c7db41b``;
+its earlier incomplete link index is retained. All eleven GATT pairs,
+including the retired mixed-command diagnostic, remain unsuccessful.
+Connection, ACL/GATT, security, independent interoperability, board/address
+provenance, cold automatic selection, natural recovery, PM, STA and formal
+U/E support remain open.

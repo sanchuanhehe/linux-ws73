@@ -845,8 +845,19 @@ below remains subject to identity, board and runtime qualification:
    boot endpoints from five runtime endpoints; the new driver must also
    validate types/directions and physical identity across re-enumeration.
 #. Apply platform PM parameters and XO temperature compensation, initialize
-   device addresses, then start/enable heartbeat. BLE enable/action-status
-   exchange is a further step before HCI traffic, not implied by download.
+   device addresses, then call the conditional heartbeat start/enable helpers.
+   BLE enable/action-status exchange is a further step before HCI traffic,
+   not implied by download.
+
+Heartbeat calls are not an unconditional wire requirement. At the pinned
+SDK110 revision, ``CONFIG_HCC_SUPPORT_HEARTBEAT`` is explicitly unset in
+the default, light and Android configurations and absent from the inspected
+USB-light configuration. The disabled branch of ``hcc_heartbeat.c`` supplies
+successful no-op start/enable and stop/disable helpers. Its enabled branch
+uses a 1000 ms timer and a four-check threshold, H2D enable 9/heartbeat 28
+and D2H ACK 27. These are conditional Host source facts; they do not prove
+the shipped firmware's default watchdog state or require enabling it in the
+upstream driver. No heartbeat or recovery policy is inferred from call sites.
 
 USB details are in ``driver/platform/hcc/host/hcc_usb_host.c`` and
 ``hcc_usb_host_ops.c``. ``build/config/ws73_usb_light.config`` enables BTC

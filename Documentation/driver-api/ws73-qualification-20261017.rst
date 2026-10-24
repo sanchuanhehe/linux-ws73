@@ -5890,3 +5890,69 @@ including the retired mixed-command diagnostic, remain unsuccessful.
 Connection, ACL/GATT, security, independent interoperability, board/address
 provenance, cold automatic selection, natural recovery, PM, STA and formal
 U/E support remain open.
+
+Explicit native scan-response comparison (2026-10-25 SGT)
+---------------------------------------------------------
+
+Replay of the preceding native fixed-role experiment found no E-side
+0x2038 (LE Set Extended Scan Response Data). U reported a matching-address
+scan response containing 28 zero bytes. That observation alone is not
+classified as malformed or as the connection failure's cause. Linux skips
+the per-instance update when scan-response data has not changed.
+
+The existing private runner now has an explicit fixed-role-only comparison
+using BlueZ ``add-adv -s 03190000``: a four-byte Unknown Appearance AD field.
+The CLI contract was checked against BlueZ commit
+``8750129efca858ff7e88e0d3166851fdd4590d8e``, ``client/mgmt.c`` blob
+``cd2ef80221ad92b20c6c3d9f5d72985265abb5f6``. It preserves the native HCI
+command family, production driver, original firmware and native timing
+defaults; it rejects combination with the preceding SDK timing override.
+Two actual argv paths and six scope rejections passed, alongside the
+existing 108 BlueZ guard cases and management, power, GATT and capture
+UBSAN checks. Three incompatible CLI modes failed before device access.
+Each prepared image passed two baseline admissions, 49 corruption
+rejections and an empty-VM preflight. The initial preparation correctly
+failed on the other thread's global build lock; its live task was observed
+to finish before preparation resumed, without preemption.
+
+Fresh boot observations and model-specific SDK110 three-file loads preceded
+one real U-client/E-server comparison on production source
+``09720a346471ab848671ee00fc4ae6c81f4c4197`` and documentation-only head
+``bb2ef986c013``. Both functional results remain FAIL:
+
+* U: ``load-hci-trial-20261024T191431.687430Z``, manifest SHA-256
+  ``b469a50ee0af18a05a8b4f3e1dc42bbf5053a574bdbc095875c738922b08e25c``.
+* E: ``load-hci-trial-20261024T191431.687805Z``, manifest SHA-256
+  ``eaac526f4d26965666327c5bb2713b7bf11a18c0938edfca46a5c16783008304``.
+
+E received exactly one 0x2038 containing the requested four bytes and
+returned successful Command Complete before advertising enable. U received
+the exact four-byte scan response from that allocated E address, plus two
+session-matched advertisements. Thus the explicit control/receive path
+worked. Nevertheless, U's accepted 0x2043 was cancelled by the Host after
+20,482,626 microseconds; neither side observed a successful connection or
+ACL data. This input change did not establish a link and does not prove a
+controller scan-response defect or its relationship to the connection gap.
+
+Complete binary/text correlation covered 91 U and 62 E runtime RX records;
+both collectors finished/joined with zero loss and no unmatched observed
+runtime URBs. Each guest drained three times and closed USB twice. Both
+VMs exited with code zero without host cleanup errors. Subsequent separate
+stop-only VMs obtained actual ACKs, manifest hashes
+``b4af41a393d2923fc2e5e66693de88180dc2fbfaded8ba87a8742f63c5fc851f``
+and ``60a07a0968a0ad03758d31ea162dab96e989ead1f0d43fbd7254bee577bc37bc``.
+All four allocated samples were finally unoccupied, the other two unchanged
+and owned VMs terminal. No hand replug, hub/controller operation or
+other-thread device operation occurred. Software reset remains non-cold.
+
+The replay audit SHA-256 is
+``e4c1947d887544b5da7421ba6af8275b446fdef99bdadd2d8602d9c1b6fd784b``;
+scan-response correlation is
+``7cf6db1605ce874fee331312c599105cfbeeedbdc321e1c8d8edaed9703621bc``.
+The private checkpoint binds 81 files and twelve linked records, SHA-256
+``8da9f45f14b7adfcdf0e1ebcc59dc339df8df960a45692ac7f70403976df5c5a``.
+It also binds eight SDK files for the conditional heartbeat audit described
+in :doc:`ws73`; no heartbeat or vendor-address command was added. All twelve
+GATT pairs remain unsuccessful. Successful link/ACL/GATT, security,
+independent interoperability, address/board provenance, cold automatic
+selection, natural recovery, PM, STA and formal upstream gates remain open.

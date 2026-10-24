@@ -5370,3 +5370,89 @@ are not passed. Independent-peer interoperability, cold automatic selection,
 board/address provenance, natural recovery/PM, sustained business, coexistence,
 Wi-Fi STA, firmware delivery and formal joint U/E/upstream gates remain open.
 The existing roadmap and issues remain authoritative; no RFC mail was sent.
+
+Allocated U/E bilateral connectable discovery (2026-10-24 SGT)
+------------------------------------------------------------
+
+The existing private runner now has an explicit ``--peer-connectable`` mode.
+It uses stock BlueZ ``btmgmt add-adv -c`` with the allocated session payload,
+and verifies legacy connectable/scannable undirected properties, 1M PHY and
+public address type on the wire. This is a different declared experiment from
+the retained nonconnectable U 0x2039 failure, not a workaround claimed to fix
+that failure. The SDK110 example uses public-type connectable undirected
+advertising, but its fixed example address was not copied into this test.
+The actual native controller address is used and its provenance remains
+unqualified. The ordinary/nonconnectable checker continues rejecting
+connectable parameters unless this explicit mode is selected.
+
+Two new, independently recorded per-device fixed resets and new boot HCC
+observations established fresh admissions; the previous boot tokens were
+consumed and not reused. Per-port SDK110 original three-file images and
+runtime U/E identity/version checks remain unchanged. No manual power cycle,
+hub/controller operation, ambient-device connection or alternate firmware
+was used. Both actual VMs run the existing hardware image from
+``09720a346471ab848671ee00fc4ae6c81f4c4197``; the worktree at execution is
+``cd81c985e93544e14406cb544f12dd4a7c6b4e18`` with only documented changes
+since that build.
+
+The allocated U advertises first while E scans; E then advertises while U
+scans. Both independently finish all six BlueZ actions, native power off,
+three actual close replies, three owner drains and clean independent capture
+finish/reap. Each side receives the other side's session UUID and name in
+management discovery and in a complete actual HCI advertising report. The
+final correlation compares each received peer address/type with the other
+side's actual transmitted address/type, and each expected payload hash with
+the other's session payload hash. The two observed addresses are distinct
+within this trial. This correlation does not establish address provenance,
+authentication or general uniqueness.
+
+* U ``load-hci-trial-20261024T144217.325276Z``: 57 successful actual HCI
+  command/reply pairs and 95 complete runtime RX records; manifest SHA-256
+  ``ae9a479932136f0a818c73b9579c4ad5b3bfb886496d81c9af0199815f4a4106``.
+* E ``load-hci-trial-20261024T144217.325534Z``: 59 successful actual HCI
+  command/reply pairs and 109 complete runtime RX records; manifest SHA-256
+  ``b10d835a60bb604377c4cb62b0922c2c112703794bc94a2858b0487b90f7ef49``.
+
+Both original single-side statuses explicitly required bilateral correlation.
+The final result is
+``ALLOCATED_CONNECTABLE_BILATERAL_DISCOVERY_CORRELATED`` after the correlation
+above, exact replay with each archived verifier and another exact replay with
+the current verifier. Twenty correlation mutations are rejected without
+editing any original artifact. Both independent collectors record zero
+binary/text loss, and all actual runtime RX records match their text
+counterparts. No KASAN/UBSAN/lockdep diagnostic is observed. The VMs exit zero;
+all allocated ports are unowned in the current-user-visible check, and the
+forbidden ports retain their exact identities and enumeration numbers.
+
+For the next native ATT/GATT step, official unmodified BlueZ GATT client/server
+sources were obtained at ``8750129efca858ff7e88e0d3166851fdd4590d8e``. Direct
+Git and codeload TLS failures are retained. A read-only GitHub file retrieval
+at that exact commit obtained the required subset; all 43 Git blob hashes
+were checked before building under the existing global lock. No host package,
+driver or kernel was installed. A tagged empty VM successfully runs only the
+two tools' help paths with their real dynamic libraries. This is dependency
+and execution preparation, not an ATT/GATT or physical connection result.
+Its record ``load-hci-trial-20261024T150055.177608Z`` has no physical attach;
+the original negative-invocation diagnostic mismatch is retained, and five
+isolated checks trap all process/device/QEMU entry points while verifying
+that the help-probe flag rejects hardware and radio modes. The direct
+hardware-flag diagnostic blocked by automatic review was not executed.
+
+The private aggregate ``connectable-peer-20261024T143706.052491Z`` completion
+SHA-256 is
+``093806db855f53a7d10236731b50726d6d86f6601af0e7ac7b0dda26638c8b55``.
+It binds both physical records, bilateral correlation, all setup failures,
+standard tool source/build provenance, empty VM evidence and next-step
+contract. Raw addresses, configuration and firmware remain private.
+
+Only controlled bilateral discovery is newly established. A connection must
+still be proven by actual native connection events, correct roles/addresses
+and controlled socket peers; real ACL/L2CAP/ATT payload and GATT readback must
+be verified in both directions, followed by orderly disconnect and role
+exchange. Local transport/NOCP completion is not remote application receipt.
+Pairing, encryption, bond and independent interoperability remain untested.
+Both devices use the same firmware family. Connectable/public-type success
+does not isolate why nonconnectable/random-type advertising was rejected;
+that failure remains open. Cold automatic selection, board/address provenance,
+natural recovery/PM, sustained business/coexistence, Wi-Fi STA, firmware
+delivery and formal joint U/E/upstream acceptance also remain open.

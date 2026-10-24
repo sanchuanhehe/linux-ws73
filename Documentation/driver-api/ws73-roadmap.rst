@@ -332,3 +332,27 @@ The SDK exec_quit_type_cmd and libws73 send_cmd both append a space: the
 wire command is five bytes, ``QUIT ``. The initial synthetic transcript
 incorrectly used four bytes. It has been corrected together with production
 code; earlier test passes did not establish this wire-format property.
+
+
+Allocated E native HCI initial experiment (2026-10-24)
+------------------------------------------------------
+
+The second allocated E sample, 1-2.1.4, now has a separate physical native
+HCI result on source e5a4274d2f20. An explicitly non-cold initial-boot entry
+accepted only its pinned read-only observation and unchanged/unowned boot
+interface, rejecting prior mutating/unknown attempts. The full existing
+SDK110 E three-file load and controlled handoff were retained: fresh boot
+HCC identity, all-input validation, runtime E/USB/version verification,
+reference customization, BLE startup/disable, then native HCI.
+
+Twenty-four real HCI command/reply pairs, management Read Info, acknowledged
+native auto-off, three drains and VM exit zero passed. Reset/detach opt-outs
+were false for both individual device epochs, with no QEMU reset recorded.
+The entry is consumed by this attempt and cannot be reused without a new
+qualified state. This is not a cold-start, board/address, peer/RF, mixed-device
+or natural-recovery result; both-model formal qualification remains open.
+
+See the separately dated physical result in ws73-qualification-20261017.rst
+and issues 7/12. Raw firmware-bearing captures remain private. The current
+RFC review packet and external-mail authorization request are separate from
+this later physical experiment.

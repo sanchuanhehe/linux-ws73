@@ -4442,3 +4442,74 @@ Its empty preflight ``20261018T053454.784667Z`` passed (manifest
 The VM exited without physical attachment. The selected E remained in the
 previous runtime enumeration during this work; device/time clarification is
 still pending and no new power report was consumed for a hardware trial.
+
+
+Allocated E native HCI from an initial boot observation (2026-10-24 SGT)
+========================================================================
+
+This is a new physical result for allocated E port 1-2.1.4, independent of
+both the earlier E startup-only sample and the historical U HCI result.
+Kernel/module source is clean e5a4274d2f203d8e128d1c5da4b6b7a790c344a3.
+The run did not require manual replug and is explicitly NON-COLD: power
+history is unknown, and pristine memory is not established.
+
+The private supervisor's new initial-boot entry is restricted to this one
+sample. Its pinned earlier observation contained only complete READM and
+VERSION exchanges. Current serial, topology, boot descriptors, enumeration
+consistency and lack of ownership matched that observation, and no other
+recorded mutating or unknown sample use was allowed. The guard rechecked
+these conditions before attachment. It preserves the original power-confirmed
+route for other devices and later attempts; this is not an attestation of
+all past activity outside this project's records or proof of cold-ROM validity.
+Twenty-three function checks and five CLI rejection cases passed, including
+changed identity/epoch, corrupted evidence, prior physical use, malformed
+history and false no-hardware records. An empty VM then passed without any
+physical device_add before the single physical experiment.
+
+The actual flow reused the complete qualified experimental path: fresh HCC
+READM returned four bytes representing 0x0000000a, the ROM version matched,
+and only SDK110 E original ws73.bin, wifi_cali.bin and btc_cali.bin were
+installed in the VM. All input hashes/roles passed before 11 preparation
+writes, eight FILES blocks carrying 192632 payload bytes and QUIT. The
+controlled boot/runtime QMP handoff created a new runtime owner, which
+queried E/USB, firmware 0x010a6e3c and ROM 0x00010101 before customization.
+BLE enable/BOOT and acknowledged disable preceded native HCI publication.
+
+Native Bluetooth completed 24 actual HCI commands and matching successful
+replies, including setup and kernel initialization. Management Read Info
+agreed with the returned controller address; native auto-off received its
+second wire BLE_CLOSE acknowledgment before the commanded removal. The
+raw HCI version is 13 and manufacturer field is 0x0c7a; these observations
+do not qualify additional PHY, ISO/audio, pairing or RF features. Address
+origin/provisioning remains unqualified. The VM exited zero, all three
+callback drains completed and the same allocated device was released in
+runtime. There was no second HCI controller or physical mixed-device test.
+
+Only hostport 2.1.4 was attached, once for each boot/runtime epoch. Eight
+QOM checks confirmed the four reset/host-detach opt-outs were false. QEMU
+trace contains two successful opens, two closes and no usb_host_reset.
+The guest xHCI was emulated; no physical hub or controller was passed through,
+reset or power-cycled, and the other thread's ports were not operated.
+A replay with the original boot snapshot is now rejected because this
+sample has a recorded physical loading attempt; there is no automatic retry.
+
+The boot transcript checks command/payload prefixes and exact successful
+OUT lengths/ACKs, not every firmware byte on the wire. Full original inputs
+are independently hash-pinned. Runtime RX/HCI records are checked completely;
+the existing final 352 customization TX padding bytes remain uncaptured.
+All raw records remain private, including firmware-bearing captures.
+
+Actual run: load-hci-trial-20261024T044509.241995Z/manifest.json, SHA-256::
+
+  164d8a6cd791cda90f26e2e0d02fdd4f7393bc1423133cdaef399521991279ce
+
+Current-source HCI image: hardware-hci-build-20261024T044121.069366Z.
+Empty VM: load-hci-trial-20261024T044306.606984Z, manifest SHA-256::
+
+  e57ac2e5763db6e8b25ea74fd80920e0dc9ce365e557fa5d78ad3fcf7baea105
+
+This proves one E sample's initial-ROM-to-native-HCI experiment under the
+recorded reference profile. It does not establish cold automatic selection,
+production board/address policy, scan/advertise/connect/GATT or peer traffic,
+natural transition/recovery, repetition or formal U/E support. No firmware,
+board profile, peer requirement or upstream acceptance gate is closed by it.

@@ -420,3 +420,30 @@ operation, its quiescence/ambiguous-write/disconnect handling, target-isolated
 boot recognition and a fresh full startup. This read is not a reset or proof
 of cleared firmware state, cold startup, natural recovery or RF operation.
 See the independently source-bound qualification and issues 10/12.
+
+
+Controlled software reset investigation (2026-10-24)
+----------------------------------------------------
+
+The existing VM trial now has a one-attempt, controller-closed device-reset
+mode after fresh HCC identity and a valid fixed-register read. It preserves
+the original value while setting bit 4, rejects already-set bits, records
+ambiguous write outcomes and leaves the old owner terminal. There is no
+retry, fallback, generic register write or hub/controller operation.
+
+U had one actual update followed by new boot descriptors and a separate
+verified boot HCC exchange. Its two original FAILs remain: missing explicit
+driver probing in the first VM and duplicate version-log counting in the
+second. Separate complete-wire replay establishes only the reported subset.
+E directly passed the corrected controlled attempt/new-boot supervisor with
+fresh E/USB and ROM replies, three drains and exit zero. No second U reset
+or automatic retry was performed; both initial reset routes are consumed.
+
+The build, U/E empty-VM 24+32 pure checks, 20 admission cases and 80 capture
+negative controls passed. The six other cached device entries and both hubs
+were unchanged. These are controlled software experiments, not cold boot,
+natural recovery or continuing peer-business isolation. The next function
+step must use freshly verified post-reset boot state and the complete
+selected-board three-original-file/runtime/startup path; it cannot reuse an
+old power confirmation, old owner or a fabricated BSP_READY. See the exact
+U/E artifacts and failures in ws73-qualification-20261017.rst and issues 10/12.

@@ -4724,3 +4724,95 @@ clean-worktree guard correctly rejected the run. The sections were retained
 privately and temporarily removed; sequential reruns then passed on clean
 4e0a63b50155. This was a supervisor/source-integrity rejection, not a device
 or HCI initialization failure, and no physical device was attached.
+
+
+Controlled per-device reset and separate U/E boot evidence (2026-10-24 SGT)
+===========================================================================
+
+Source 7aa4105b4de91f07b82d1c6f0328ae6bb9ccb1d1 introduces an explicit device_reset=1 mode in the
+existing tagged-VM trial. This mode is mutually exclusive with read-only inspection and native HCI startup.
+It retains exact DMI/package/serial/enumeration/PID 1 admission, never starts
+or publishes a function and requires host-side actual controller-close
+provenance plus hash-pinned subsequent physical uses of that same target.
+Unknown later use or a consumed reset route rejects admission, including
+replayed old runtime snapshots. It is not an automatic fault-recovery path.
+
+Fresh HCC package/USB and SDK110 firmware/ROM checks precede a successful
+fixed-register read. Only then can one preserved-value bit 4 update of
+0x4001f118 be attempted through the device's register endpoints. An already
+set reset bit rejects further writes. All stages share an absolute deadline,
+each transfer is bounded, and no retry, fallback value or generic address/
+write interface is added. Progress separately records valid READ, attempted
+data write, raw USB result and returned status. The old owner becomes
+terminal even after a local successful write. USB completion never proves
+reset, state clearing or a new usable function instance.
+
+The current hardware build passed Clang W=1. U/E empty VMs executed the
+existing 24 read cases and 32 additional attempt cases without USB access.
+These cover value preservation, no write after failed reads, each stage's
+length/error/deadline/cancellation, already-set bits, invalid input and the
+ambiguous data-write/disconnect boundary. Twenty closed-state admission
+checks, 22 existing allocation checks and six CLI rejections passed.
+Eighty capture negative controls passed, with U/E positive transcripts and
+an explicitly ambiguous write followed by independent new boot evidence.
+They are offline verifier tests, not extra physical resets.
+
+Allocated U 1-1.1.3 had exactly one physical fixed update, from observed zero
+to submitted 0x10, with a successful four-byte USB completion. Its runtime
+identity/version replies, all 692 submitted TX bytes, two old-owner drains
+and new physical boot descriptors were verified. The original run remains
+FAIL: the new guest interface was authorized but not explicitly probed, so
+no boot HCC exchange occurred in that VM. Linux interface authorization
+requires manual probing, as documented in Documentation/usb/authorization.rst.
+
+No second U reset was sent. A separate VM on its already boot-mode device
+then explicitly bound the ordinary WS73 observer and obtained actual READM
+U/USB and BOOTVER001 replies, with complete binary/text agreement, one drain
+and exit zero. That original manifest also remains FAIL: the old verifier
+counted the version twice because the capture serial contains a /dev/kmsg
+copy. Its separately attributed replay now feeds text USB events plus one
+independent kernel log and validates the complete actual query. It does not
+rewrite either U FAIL or claim one continuous successful U reset sequence.
+
+Allocated E 1-2.1.4 subsequently passed the corrected complete supervisor.
+It independently returned E/USB and the SDK110 versions, read zero, submitted
+one 0x10 update and completed that four-byte USB transfer. A new physical
+boot instance was observed on the same hostport, followed by controlled QMP
+reattachment to emulated guest port 2, explicit authorization/binding and
+fresh HCC E/USB plus BOOTVER001 replies. The two new boot queries add two
+OUTs/two complete INs to the 11 runtime OUTs/five complete runtime INs.
+Three owner drains and VM exit zero passed. The complete 692 runtime TX
+bytes and all runtime/boot reply bytes are checked; no firmware or profile
+was supplied and no BLE function was started in either reset attempt.
+
+Each attempted target used only its fixed hostport, eight false per-object
+QOM reset/detach checks, two QEMU opens/two closes and no usb_host_reset.
+Cached enumeration/descriptors for the other six device ports and two hubs
+were unchanged after both attempts. All four allocated devices were unowned
+after exit; no hub, physical controller or other-thread device was operated
+on. This cached comparison does not establish continuing peer business or
+RF isolation. Both one-attempt runtime admissions are now consumed.
+
+U reset attempt, retained FAIL: runtime-observe-20261024T065314.573290Z,
+manifest SHA-256::
+
+  bed6251b1edce23fadcf72c3d3843d04270071cedfc3205cd8bd5c4a5abed2c4
+
+U independent boot query, retained verifier FAIL with separately validated
+wire evidence: runtime-observe-20261024T065914.666068Z, manifest SHA-256::
+
+  e8d65abd6a79c1eb8d6cdb5e724645423ba2c99bf71bfba0ef3a72a15ac9cb45
+
+E complete controlled attempt/new-boot observation:
+runtime-observe-20261024T070321.488144Z, manifest SHA-256::
+
+  a8623f0ceaab7b1d49618ddce4ad0b2d73f10d265927ffacddfa8b7b1134d2a8
+
+Actual build: hardware-hci-build-20261024T063610.197407Z. These experiments
+qualify only the stated fixed attempt and bounded new-ROM observations.
+They do not prove pristine RAM, cold boot, natural recovery, normal-parent
+automatic recovery or a usable restarted BLE/Wi-Fi function. Before function
+use, each target still needs the full selected-board three-original-file
+load, new runtime identity/version and genuine startup acknowledgments.
+No board/address, RF/peer, repeated-start/long-run, formal U/E or frozen RFC
+review-source qualification is inherited. Raw evidence remains private.

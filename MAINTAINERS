@@ -11919,6 +11919,18 @@ S:	Maintained
 W:	http://www.hisilicon.com
 F:	drivers/spi/spi-hisi-sfc-v3xx.c
 
+HISILICON WS73 USB AND BLUETOOTH LE DRIVERS
+M:	sanchuanhehe <wyihe5220@gmail.com>
+L:	linux-usb@vger.kernel.org
+L:	linux-bluetooth@vger.kernel.org
+S:	Maintained
+T:	git https://github.com/sanchuanhehe/linux-ws73.git ws73-upstream
+F:	Documentation/driver-api/ws73*.rst
+F:	drivers/bluetooth/btws73*
+F:	drivers/misc/ws73/
+F:	include/linux/ws73*.h
+F:	tools/testing/ws73/
+
 HISILICON ZIP Controller DRIVER
 M:	Chenghai Huang<huangchenghai2@huawei.com>
 M:	Zhou Wang <wangzhou1@hisilicon.com>

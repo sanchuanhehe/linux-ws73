@@ -68,6 +68,7 @@ Bus-level documentation
    virtio/index
    vme
    w1
+   ws73-integration
    xillybus
 
 

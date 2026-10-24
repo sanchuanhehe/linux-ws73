@@ -11,6 +11,18 @@ install or load it on the host. The normal physical driver remains an observer.
 The test does not enable BLE, Wi-Fi or RF functions, change eFuse/flash, reset
 a hub/controller or provide a general register interface.
 
+The existing BLE trial module also has a separate inspect_reset=1 mode.
+It requires the same tagged VM, explicit package, serial, enumeration and
+PID 1 bind. It independently queries live runtime identity/version, then
+performs one fixed 16-byte register-endpoint READ setup for 0x4001f118 and
+requires an exact four-byte reply. It sends no register data write, reset,
+customization or BLE enable and cannot be combined with native_hci=1.
+No profile/firmware input is requested in this read-only mode. Errors,
+short transfers, deadlines and cancellation leave the output unpublished;
+there is no retry or fallback value. The existing pure guard-test module
+also checks this transaction with injected transport failures, no USB I/O.
+This read does not qualify a reset, cleared device state or warm recovery.
+
 Build from a clean committed tree with four allocated jobs:
 
   python3 tools/testing/ws73/hardware/build.py

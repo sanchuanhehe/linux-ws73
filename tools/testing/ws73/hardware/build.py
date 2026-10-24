@@ -88,7 +88,8 @@ def main():
                                 assert line in actual, "unresolved config: " + line
             module = WORK / ("build-hardware-hci-module" if args.hci else "build-hardware-module")
             module.mkdir(exist_ok=True)
-            for name in ("loader.c", "guard.h", "guard-test.c", "ble-trial.c", "ble-profile.h", "ble-profile-test.c", "Kbuild"):
+            for name in ("loader.c", "guard.h", "guard-test.c", "ble-trial.c", "ble-profile.h",
+                         "ble-profile-test.c", "reset-probe.h", "reset-probe-test.h", "Kbuild"):
                 original = Path(__file__).with_name(name)
                 shutil.copyfile(original, module / name)
                 shutil.copyfile(original, record / name)

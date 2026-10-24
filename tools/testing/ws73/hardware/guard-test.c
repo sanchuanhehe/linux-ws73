@@ -4,6 +4,7 @@
 #include <linux/module.h>
 
 #include "guard.h"
+#include "reset-probe-test.h"
 
 static int __init ws73_trial_guard_test_init(void)
 {
@@ -55,7 +56,7 @@ static int __init ws73_trial_guard_test_init(void)
 	}
 	pr_info("RAM trial profile checks passed: %zu\n", ARRAY_SIZE(profiles));
 	pr_info("RAM trial admission checks passed: %zu\n", ARRAY_SIZE(cases));
-	return 0;
+	return ws73_reset_probe_checks();
 }
 module_init(ws73_trial_guard_test_init);
 

@@ -8,6 +8,7 @@
 #include "usb-owner.h"
 #include "guard.h"
 #include "ble-profile.h"
+#include "reset-probe.h"
 
 static char *serial;
 module_param(serial, charp, 0400);
@@ -18,8 +19,71 @@ module_param(package, int, 0400);
 /* Only the continuous fresh-load supervisor may request this experiment. */
 static bool native_hci;
 module_param(native_hci, bool, 0400);
+/* Fixed register READ only; mutually exclusive with any function startup. */
+static bool inspect_reset;
+module_param(inspect_reset, bool, 0400);
 static atomic_t available = ATOMIC_INIT(1);
 static struct ws73_customization parameters;
+
+struct ws73_reset_probe {
+	struct ws73_usb *ws;
+	struct ws73_usb_io io;
+};
+
+static u64 ws73_reset_now(void *context)
+{
+	struct ws73_reset_probe *probe = context;
+
+	return probe->ws->runtime_io.now_ms(probe->ws);
+}
+
+static bool ws73_reset_cancelled(void *context)
+{
+	struct ws73_reset_probe *probe = context;
+
+	return probe->ws->runtime_io.cancelled(probe->ws);
+}
+
+static int ws73_reset_send(void *context, const u8 *data, size_t length, unsigned int timeout)
+{
+	struct ws73_reset_probe *probe = context;
+
+	return ws73_usb_io_transfer(&probe->io, (void *)data, length, timeout, false, false);
+}
+
+static int ws73_reset_receive(void *context, u8 *data, size_t length, unsigned int timeout)
+{
+	struct ws73_reset_probe *probe = context;
+
+	return ws73_usb_io_transfer(&probe->io, data, length, timeout, true, false);
+}
+
+static int ws73_reset_observe(struct ws73_usb *ws)
+{
+	struct usb_host_interface *alt = ws->interface->cur_altsetting;
+	struct ws73_reset_probe probe = { .ws = ws, .io = ws->io };
+	const struct ws73_boot_io io = {
+		.context = &probe,
+		.now_ms = ws73_reset_now,
+		.cancelled = ws73_reset_cancelled,
+		.send = ws73_reset_send,
+		.receive = ws73_reset_receive,
+	};
+	u32 value;
+	int ret;
+
+	if (!ws->runtime || alt->desc.bNumEndpoints != 5 ||
+	    alt->endpoint[3].desc.bEndpointAddress != 0x02 ||
+	    alt->endpoint[4].desc.bEndpointAddress != 0x82)
+		return -ENODEV;
+	probe.io.out = 0x02;
+	probe.io.in = 0x82;
+	ret = ws73_trial_reset_read(&io, ws73_reset_now(&probe) + 4000, &value);
+	if (!ret)
+		dev_info(&ws->interface->dev,
+			 "RESET register observation %#010x; read-only, not a reset\n", value);
+	return ret;
+}
 
 static void ws73_ble_trial_start(struct work_struct *work)
 {
@@ -32,7 +96,7 @@ static void ws73_ble_trial_start(struct work_struct *work)
 	u64 now = ws->runtime_io.now_ms(ws);
 	int ret;
 
-	ret = ws73_startup_arm(&ws->startup, now, now + 12000);
+	ret = inspect_reset ? 0 : ws73_startup_arm(&ws->startup, now, now + 12000);
 	if (!ret)
 		ret = ws73_usb_start_rx(ws);
 	if (!ret)
@@ -45,6 +109,11 @@ static void ws73_ble_trial_start(struct work_struct *work)
 		ret = -ENODEV;
 	if (ret)
 		goto done;
+	if (inspect_reset) {
+		stage = "reset-read";
+		ret = ws73_reset_observe(ws);
+		goto done;
+	}
 	dev_info(&ws->interface->dev, "BLE trial package %d/USB version matched; reference profile only\n",
 		 package);
 	stage = "startup";
@@ -66,7 +135,10 @@ static void ws73_ble_trial_start(struct work_struct *work)
 done:
 	if (ret)
 		ws73_usb_fail(ws, ret);
-	if (native_hci)
+	if (inspect_reset)
+		dev_info(&ws->interface->dev,
+			 "RESET read-only trial result=%d stage=%s\n", ret, stage);
+	else if (native_hci)
 		dev_info(&ws->interface->dev,
 			 "BLE trial result=%d stage=%s; native HCI experiment, address source unqualified\n",
 			 ret, stage);
@@ -110,10 +182,13 @@ static int __init ws73_ble_trial_init(void)
 	int ret;
 
 	if (!serial || !*serial || !devnum || devnum > 127 ||
+	    (inspect_reset && native_hci) ||
 	    (native_hci && !IS_ENABLED(CONFIG_BT_WS73)) ||
 	    !dmi_match(DMI_SYS_VENDOR, "WS73-VM") ||
 	    !ws73_trial_package_allowed(package, dmi_get_system_info(DMI_PRODUCT_NAME)))
 		return -ENODEV;
+	if (inspect_reset)
+		return usb_register(&ws73_ble_trial_driver);
 	ret = request_firmware_direct(&fw, WS73_BLE_TRIAL_PROFILE, NULL);
 	if (ret)
 		return ret;
@@ -134,3 +209,4 @@ MODULE_DESCRIPTION("WS73 selected-board reference BLE startup trial, tagged VM o
 MODULE_LICENSE("GPL");
 MODULE_IMPORT_NS("WS73");
 MODULE_IMPORT_NS("WS73_USB_OWNER");
+MODULE_IMPORT_NS("WS73_USB_IO");

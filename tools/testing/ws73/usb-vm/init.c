@@ -257,7 +257,7 @@ static void wait_kernel(int fd, const char *wanted)
 
 		if (n > 0) {
 			line[n] = 0;
-			int removing = strstr(line, "USB disconnect") != NULL;
+			int removing = !!strstr(line, "USB disconnect");
 
 			if (removing) {
 				disconnected = 1;
@@ -356,10 +356,11 @@ static void notifications(int in, unsigned int trial)
 		       length);
 		le16(wire + 92 + 16 + 4, 2);
 		le32(wire + 92 + 16 + 8, 2);
-	} else if (trial == 9)
+	} else if (trial == 9) {
 		le16(wire + 92 + 6, 3);
-	else
+	} else {
 		le32(wire + 92 + 16 + 8, 0xffffffff);
+	}
 	if (write(in, wire, length) != length)
 		die("notification IN");
 	printf("WS73_TEST_IN kind=notification actual=%u synthetic\n", length);
@@ -410,7 +411,7 @@ static void boot_trials(int control, int *eps, int log, const char *udc)
 					  0, 0,	   0,	 0, 0,	  0, 0x0a };
 	static const unsigned int lengths[] = { 4, 4, 4,   4, 4, 0, 1,
 						3, 5, 512, 0, 0, 4, 4 };
-	static const char *expected[] = {
+	static const char * const expected[] = {
 		"boot chip observation 0x00000000: package 0 bus 0; cold-read qualification pending",
 		"boot chip observation 0x0000000a: package 2 bus 0; cold-read qualification pending",
 		"boot chip observation 0x0000000c: package 0 bus 0; cold-read qualification pending",
@@ -443,8 +444,9 @@ static void boot_trials(int control, int *eps, int log, const char *udc)
 				die("boot IN length");
 			printf("WS73_BOOT_IN actual=%u word=%08x synthetic\n",
 			       lengths[trial], words[trial]);
-		} else
+		} else {
 			puts("WS73_BOOT_WITHHOLD_REPLY");
+		}
 		message = trial < 5   ? expected[trial] :
 			  trial < 10  ? "boot chip observation failed: -90" :
 			  trial == 10 ? "boot chip observation failed: -110" :
@@ -506,7 +508,7 @@ static void boot_trials(int control, int *eps, int log, const char *udc)
 static void download_trials(int control, int *eps, int log, const char *udc)
 {
 	struct sigaction action = { .sa_handler = quiet_alarm };
-	static const char *commands[] = {
+	static const char * const commands[] = {
 		"FILES 1 0x400000 0x8000 0x0 ",
 		"FILES 1 0x408000 0x1 0x2 ",
 		"FILES 1 0x430000 0x20 0x3 ",
@@ -705,7 +707,7 @@ static void loader_trials(int control, int *eps, int log, const char *udc)
 	static const unsigned int sizes[2][3] = { { 143956, 21044, 7772 },
 						  { 137644, 21060, 34120 } };
 	static const unsigned int address[] = { 0x400000, 0x430000, 0x440000 };
-	static const char *writes[] = {
+	static const char * const writes[] = {
 		"WRITEM 4 0x40017750 51 ",	"WRITEM 4 0x40017790 0 ",
 		"WRITEM 4 0x40017794 0 ",	"WRITEM 4 0x4001775c 4390912 ",
 		"WRITEM 4 0x40017760 4423680 ", "WRITEM 4 0x40017750 63 ",
@@ -1322,9 +1324,9 @@ static void startup_trials(int control, int *eps, int log, const char *udc)
 					startup_notification(eps[0], 2, 0);
 					startup_action(control, 26, 0);
 					startup_notification(eps[0], 3, 0);
-				} else if (scenario == 1)
+				} else if (scenario == 1) {
 					puts("WS73_STARTUP_WITHHOLD_ACTION_REPLY");
-				else if (scenario == 4) {
+				} else if (scenario == 4) {
 					puts("WS73_TEST_REMOVE");
 					setting(G "UDC", "\n");
 				}
@@ -1474,7 +1476,7 @@ int main(void)
 		for (unsigned int trial = 0; trial < 17; trial++) {
 			unsigned char reply[188] = { 0 };
 			size_t wire_size = trial == 0 ? sizeof(reply) : 124;
-			const char *expected[] = {
+			static const char * const expected[] = {
 				"runtime chip observation: package 2 bus 0; firmware compatibility unverified",
 				"runtime chip observation: package 0 bus 0; firmware compatibility unverified",
 				"runtime chip observation failed: -121",

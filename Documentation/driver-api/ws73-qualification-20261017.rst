@@ -5259,3 +5259,114 @@ business, Wi-Fi and formal U/E/upstream gates remain open. Prior KUnit and
 introduced by this supervisor increment. Next peer work must establish fresh
 admissions and retain genuine qualified owners, identify only the allocated
 peer by a controlled session, and verify real bilateral payload and teardown.
+
+Controlled peer attempts and native advertising handle mapping (2026-10-24 SGT)
+----------------------------------------------------------------------------
+
+Six allocated U/E physical attempts were retained as FAIL across three source
+epochs. They used the existing per-port SDK110 three-file preparation and
+reset-free QEMU path, with independent images, identities, port leases and
+evidence. No ambient advertiser was connected. Session UUIDs identify only the
+allocated development peer; they do not authenticate it or establish independent
+interoperability.
+
+The first pair exposed a native Bluetooth handle mapping error. A logical
+advertising instance may have controller handle zero on a one-set controller.
+Advertising parameters and data already used that mapping, but Set Advertising
+Set Random Address and Remove Advertising Set used the logical instance. The
+actual E returned status 0x42 for opcode 0x2035; the corresponding U kernel
+error was also retained, with its incomplete HCI capture explicitly unqualified.
+Signed changes ``f076f17bd49b`` and ``9c03e516105d`` map those transmit paths.
+Signed change ``6a11e11cce8b`` adds lookup by controller handle for completion
+and termination callbacks, retaining logical IDs for management notifications
+and connection restart. Mapped handle zero must update its actual instance,
+rather than the unrelated default advertising address or enabled state.
+Periodic enable receive mapping is corrected, but periodic advertising is not
+qualified; remaining periodic transmit paths require a separate audit.
+
+Pure checks compile the actual production helpers and callbacks with bounded
+operation stubs under Clang UBSAN: 496 transmit contracts and 36 callback
+contracts pass, and the pre-fix failures are reproduced. These checks do not
+prove in-kernel scheduling, locking or memory lifetime. The combined 107-case
+KASAN/UBSAN and strict KCSAN/UBSAN VM campaigns pass on clean
+``6b3d8b4dd4fa980610aadff8dd79b37bfee2d3f4``:
+
+* ``20261024T141209.090105Z``; manifest SHA-256
+  ``787bfcfa153c109e2cd354432be2241754ccc634b64d2e8cbd8845686b6307f3``.
+* ``20261024T141345.200821Z``; manifest SHA-256
+  ``3681407c59545a8d4734cfdbeca6eef5c23230b2bb27373e977540a219c233bc``.
+
+The second E attempt stopped at the complete-capture gate before native power
+on: five text RX records were absent although every binary RX was at most
+188 bytes. Thus the 512-byte capture ceiling was not the explanation. The
+original attempt did not record the text monitor loss counter, so its loss
+mechanism is not proven. PID 1 previously read usbmon while also performing
+sleepable driver initialization. The existing runner now forks a dedicated
+bounded capture process, uses a separate virtio serial port, assembles complete
+text lines, and checks the actual kernel text loss counter and binary loss
+counter. It requires clean drain, explicit finish and child reap before a new
+successful result can be produced. The finish command admits only an empty VM
+or actual management index removal; it sends no device/function command.
+
+The HCI-only fixture enables the virtio menu, PCI transport and console. A
+missing-menu configuration failure was retained before the fix; no VM or USB
+operation used that rejected configuration. Clang W=1 kernel/module builds
+pass on clean ``09720a346471ab848671ee00fc4ae6c81f4c4197``; only the test
+builder changed since the above KUnit source. Build record
+``hardware-hci-build-20261024T141557.910002Z`` has manifest SHA-256
+``2b9ea1a724aeaad2d4b14cb12eb76adba6e37abf8ef94997432a8822c8d8398f``.
+U/E empty VMs validate independent capture start, zero text loss and clean
+finish/reap. Pure tests cover framing, loss counters and finish rejection;
+the finish tests trap all host access and signal operations. Two historical
+physical captures replay exactly, without inheriting the new capture scope.
+
+No manual replug was required for the next physical work. A separately
+captured U stop ACK, then fixed per-device U/E resets and new boot HCC
+observations established fresh, non-cold admissions. These are not USB reset
+ioctls, hub/controller operations, power removal, pristine-RAM evidence or
+natural recovery. Old consumed admissions were not reused. The final pair
+uses the above ``09720a346471`` image:
+
+* U ``load-hci-trial-20261024T142339.641825Z`` remains FAIL; manifest SHA-256
+  ``35ff20d4aa000fa406b6f4c31e42dcfcdb2ef1c34588cee7e05c877d2589d66c``.
+  Opcode 0x2035 now uses handle zero and succeeds, but extended advertising
+  enable 0x2039 returns status 0x12, reported by the native stack as -22.
+  Its 60 binary/text runtime RX records match, with no recorded text loss;
+  the failed guest powers down without clean collector finish, so complete
+  capture shutdown is not qualified. A subsequent fresh stop-only VM obtains
+  a real ACK and drains the owner; it does not make the failed trial ready.
+* E ``load-hci-trial-20261024T142339.640175Z`` remains FAIL because no allocated
+  session peer is seen; manifest SHA-256
+  ``40f9a3d5ce0be233b2714ee645e7d59e0e88699292155c4c7379132bb48be0ea``.
+  All six BlueZ child actions succeed. The unmodified verifier reaches the
+  peer-presence gate after checking 60 actual successful command/reply pairs,
+  112 complete binary/text runtime RX records, six class transfers, three
+  close replies and three drains. There are 40 ambient reports, no controlled
+  peer report, and no kernel diagnostic. Remove Advertising Set uses wire
+  handle zero while BlueZ receives removal of logical instance one. The
+  independent collector records zero text loss and clean finish/reap. The
+  original FAIL was reproduced, not overridden to manufacture a peer PASS.
+
+The repeated U 0x2039 failure is unresolved. Earlier successful default
+advertising followed scanning and global random-address initialization;
+the failing session-advertising path differs. That correlation is not proof
+of a controller quirk, valid workaround or root cause. No fake completion,
+global-address workaround, legacy fallback or alternate firmware was added.
+A separately identified connectable test, suitable for later actual connection
+work, must retain this nonconnectable failure and its distinct scope.
+
+Both final trial VMs and the later U stop-only VM exit zero, and the allocated
+devices are unowned in the current-user-visible check. Forbidden ports retain
+their exact identities and enumeration numbers. The final U stop record is
+``runtime-observe-20261024T142613.930563Z``, manifest SHA-256
+``7ea102ad978639c2b8fc78a42994690a451bfe8ec511e14ef5060f6fd3a81890``.
+The private aggregate ``controlled-peer-discovery-20261024T111442.826206Z``
+completion SHA-256 is
+``da2a2a834ae854b09ac6acf8c24bedd729508087a9c81b8b0e3f009f90845529``.
+Raw firmware, configuration bytes and radio addresses remain private.
+
+Controlled bilateral discovery, connection/ACL/GATT/security and role exchange
+are not passed. Independent-peer interoperability, cold automatic selection,
+board/address provenance, natural recovery/PM, sustained business, coexistence,
+Wi-Fi STA, firmware delivery and formal joint U/E/upstream gates remain open.
+The existing roadmap and issues remain authoritative; no RFC mail was sent.

@@ -5746,3 +5746,74 @@ remain unsuccessful. No hand replug, hub/controller operation, other-thread
 device operation or firmware substitution was used. Connection, ACL/ATT,
 security, independent interoperability, cold automatic selection, natural
 recovery, PM, sustained traffic, STA and formal U/E support remain open.
+
+Bounded collector closure after native connection failure (2026-10-25 SGT)
+-------------------------------------------------------------------------
+
+The private VM runner previously powered the guest off immediately after
+a terminal test error, abandoning its independent USB collector. Its new
+terminal path freezes only its own BlueZ/GATT child processes, accepts no
+further functional commands, and waits for host-side removal of the VM's
+selected USB device. After both the guest USB device and hci0 are absent,
+it terminates/reaps those children, requests collector completion and
+joins the collector. The guest deadline is absolute and bounded; missing
+control, unexpected input, child failure and incomplete capture remain
+explicit failures. This path does not send a firmware stop or establish
+natural recovery. The original functional result cannot become PASS.
+
+Tests of the actual guest helper with owned processes and trapped sysfs
+covered five completed and sixteen incomplete/rejected paths under UBSAN.
+The existing capture, management, power, BlueZ, GATT and peer-parser checks
+also passed. Eighteen existing collector-evidence rejection cases and
+twenty-four new failure-closure corruption cases passed. The latter require
+one original error and ordered failure, absence, producer-reap, finish and
+join markers; they reject missing/duplicate/reordered evidence and a
+replacement PASS claim. Two deliberately failing empty VMs completed the
+actual collector handshake while retaining FAIL. Each U/E prepared image
+then passed two baseline admissions, 45 corrupt-input rejections and a
+normal empty-VM preflight. No synthetic reply was delivered to hardware.
+
+The same U-client/E-server fixed-role comparison was repeated on real
+devices with fresh, individually validated post-reset boot states. Original
+SDK110 inputs and production source ``09720a346471ab848671ee00fc4ae6c81f4c4197``
+were unchanged; the documentation-only trial head was ``32296efdc276``.
+Both actual connection trials still failed:
+
+* U: ``load-hci-trial-20261024T183908.429876Z``, manifest SHA-256
+  ``cf06f0532b7b8bb0773de651530421521ebc341a837f4a4c4aefbbc1d284cfcc``.
+* E: ``load-hci-trial-20261024T183908.394852Z``, manifest SHA-256
+  ``54addde10c6d449e03998cc7a71e698a2dc750d5e36909dccc9e397b3bf565ed``.
+
+U's accepted 0x2043 was cancelled by the Host after 20,403,687 microseconds;
+the unsuccessful connection event followed the cancel acknowledgement.
+Neither side observed a successful link or ACL traffic. Complete binary
+and text RX correlation covered 88 U and 61 E records. Both collectors now
+reported clean completion and were joined; loss counters were zero and
+all observed runtime URBs were paired. Each guest recorded three callback
+drains and two USB closes, and both VMs exited with code zero.
+
+These two artifacts also retain a host ``BrokenPipeError``: after the guest
+finished collecting and powered itself off, the host redundantly attempted
+QMP quit. The host now waits for guest power-off after a verified failure
+handshake. Two additional deliberately failing empty VMs verified that
+change without a cleanup error; it has not yet received a new real-device
+run. The earlier physical errors were not erased or relabelled. Closed
+capture evidence is therefore distinct from a completely error-free host
+exit, from firmware quiescence, and from successful BLE operation.
+
+Subsequent independent stop-only VMs obtained actual BLE stop ACKs. Their
+U/E manifest hashes are
+``afc4ce95b8cbb5cfdc3dc9e9001bf9f8d941c895a3fb3b1b8cc4f6a3b5515106``
+and ``7ee99e787cd8aba2321667e123ed781ddb00e8198c925a572469d4d1dbf0ebed``.
+Final checks found all four allocated devices unoccupied, the other two
+allocated samples unchanged and all owned VMs terminal. No hand replug,
+hub/controller operation, other-thread device operation or firmware
+replacement was used.
+
+The independently replayed physical audit SHA-256 is
+``733db6f953631a6d4e187cb83da9e181b9aa8f6cd3eb5768bdd4b4c40cbed277``.
+The private checkpoint covers 79 local files and fourteen linked records,
+SHA-256 ``c661416473ef595b67e092f734857405a5a2d63c404bbac3c96aa27c9ba791c0``.
+Historical incomplete captures retain their original scope. Native
+connection root cause, ACL/GATT, security, independent interoperability,
+natural recovery and all broader upstream gates remain open.

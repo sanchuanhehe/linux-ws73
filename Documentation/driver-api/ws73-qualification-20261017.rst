@@ -4896,3 +4896,89 @@ formal joint support or the separate frozen RFC review tree. Repeated native
 power cycles should retain a live qualified owner where possible; later
 whole-device resets need new actual closed-controller evidence, not reuse
 of these consumed admissions.
+
+
+U/E actual native power cycles (2026-10-24 SGT)
+=================================================
+
+The existing full-load supervisor gained bounded --power-cycles (0..100).
+It retains one genuinely initialized shared owner, uses native MGMT Set
+Powered, and requires the actual ordered BLE_CLOSE reply before each next
+power-on. MGMT powered-off alone is insufficient: native close work can
+still be pending. Each enabled interval must contain the native information/
+initialization command set, successful actual HCI replies and HCI Reset.
+There are no fabricated completions or private command-credit accounting.
+The input UART is separate from the established file-backed capture UART.
+The guest validates its input channel before any hardware attach, rejects
+wrong ordinals, repeated/pending commands and malformed settings replies,
+and has a finite absolute deadline. Unknown or missing capture data fails.
+
+Two actual allocated samples each completed 100 additional native on/off
+cycles after their own HCC-identified, same-board SDK110 three-original-file
+load and fresh runtime identity/startup. The image source remains
+7aa4105b4de91f07b82d1c6f0328ae6bb9ccb1d1; the clean trial head was
+ea19bc0647c8, whose intervening changes are documentation only. This is not
+hardware qualification of the independent frozen RFC review tree.
+
+* U 1-1.1.3: 2,423 actual HCI commands and 2,423 successful matching replies;
+  the initial open has 23 and each subsequent open 24 commands.
+* E 1-2.1.4: 2,524 actual HCI commands and 2,524 successful matching replies;
+  the initial open has 24 and each subsequent open 25 commands.
+
+Each has 204 actual class action requests, 102 ordered close replies,
+307 function notifications, 200 successful native management power command
+completions, one configured HCI index, explicit final index removal, three
+owner drains and VM exit zero. The 100 cycles are function cycles on a
+retained owner, not 100 downloads, device resets or cold starts. Native
+address resolution enable and extended advertising disable are normal
+power-on configuration; the latter's parameters are constrained to disable
+only. No discovery, advertising enable, connection or peer traffic was used.
+
+Failures are retained with their original manifests. U's final supervisor
+initially rejected standard power-on opcodes absent from its old whitelist.
+After checking their kernel definitions and restricting their parameters,
+independent replay of all complete command/reply, management, close and
+text/binary captures verifies the actual 100 cycles. This does not rewrite
+that original FAIL or represent a second physical run. E's final supervisor
+directly passed all checks. An earlier E trial stopped before any requested
+cycle because independent text/binary event counts disagreed; its missing
+HCI capture is not promoted to PASS. Only its completely paired close control
+path was used to establish the next individually reviewed reset admission.
+Earlier E reset-time old-IN EPROTO and partial-console-line verifier FAILs
+also remain. The latter reset's actual write and independent new-boot HCC
+are separate evidence; no write was retried from the consumed state.
+
+Offline checks include 22 allocation, 20 closed-state and 22 boot-admission
+cases, 83 runtime capture rejections, native management parser checks,
+100-cycle U/E transcript negative controls and six actual runner fragmented-
+line/error tests. Empty-VM input-channel preflight passed. These counts are
+not additional hardware cycles. All reset/loading admissions are consumed.
+Both full trials have two explicit same-target QEMU boot/runtime opens and
+closes, eight false per-object reset/detach options and no usb_host_reset.
+After all VMs exited, all four allocated ports were unowned, leases and the
+build lock were available, and the other six cached device ports and both
+hubs were unchanged. This is not continuing peer-business isolation.
+
+U actual capture: load-hci-trial-20261024T082151.475467Z/manifest.json,
+original FAIL retained; SHA-256::
+
+  c6ed1711e09fe8e6bcdb6bc43ea339215c0e01a90c67fc0135442503cbc7e3a5
+
+E actual capture: load-hci-trial-20261024T082921.230608Z/manifest.json,
+final supervisor PASS; SHA-256::
+
+  5ad1699c6f259a2d1f09066039d13e5919027b4ec1652baa950d5bb40a353431
+
+Separate assessment: native-power-cycles-20261024/completion.json,
+SHA-256::
+
+  73e6905abd2a7e55f67331b5ea845f057bb81c4fb7cd5e7dc1e18b9d460e856a
+
+Firmware-bearing raw evidence remains private. Boot TX has prefixes and
+exact actual lengths/ACKs with full original input hashes; runtime RX/HCI is
+complete, with the previously documented final 352 customization TX padding
+bytes uncaptured. The explicit reference board profile and address source
+remain unqualified. This meets the 100 native function-cycle count for these
+two samples only. Twenty starts per model, 24-hour real business, BlueZ RF/
+independent peer/GATT/security, board/address policy, Wi-Fi, cold selection,
+natural/automatic recovery and formal joint U/E support remain open.

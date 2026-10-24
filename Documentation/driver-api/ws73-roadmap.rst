@@ -474,3 +474,32 @@ native-function-cycle work must preserve a qualified live owner or establish
 a new accurately closed/reset/boot state; no old BSP or power state can be
 fabricated. Exact artifacts, capture limits and retained FAILs are in
 ws73-qualification-20261017.rst and issues 7/10/12.
+
+
+Native function repetition (2026-10-24)
+---------------------------------------
+
+Allocated U 1-1.1.3 and E 1-2.1.4 now each have 100 actual native MGMT on/off
+cycles on a retained, fully initialized shared owner. Complete HCI captures
+establish 2,423 U and 2,524 E command/reply pairs, 204 class requests and 102
+ordered close replies per target, final removal/drains and VM exit zero.
+The existing runner waits for each real close reply before the next open;
+management powered-off alone does not release this gate. No replug, hub/
+controller operation, USB reset or fabricated firmware/credit response was
+used. Each model used only its SDK110 three originals and new HCC identity.
+
+U's original final whitelist FAIL is retained and its 100 actual cycles are
+independently replay-verified after auditing native power-on configuration.
+E's final supervisor directly PASSes. Earlier E capture/reset-log FAILs stay
+separate, and all consumed state admissions reject reuse. No kernel behavior
+changed in this increment. Offline negative controls and final read-only
+ownership/topology checks passed; raw firmware-bearing records stay private.
+
+This closes only the 100 native function-cycle count for these two samples,
+not repeated downloads/cold starts, 24-hour peer business or a full formal
+U/E gate. Next function work is genuine discovery/advertising and connection/
+GATT/security with actual peers and standard tools, retaining per-round wire
+checks and state provenance. Board/address, Wi-Fi, natural recovery, frozen
+RFC hardware qualification and upstream acceptance remain independent open
+items. Exact source, artifacts and preserved failures are recorded in
+ws73-qualification-20261017.rst and issues 7/10/12.

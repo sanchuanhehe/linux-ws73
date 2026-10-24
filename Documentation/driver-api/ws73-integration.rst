@@ -1,7 +1,7 @@
 .. SPDX-License-Identifier: GPL-2.0-only
 
 WS73 USB owner and Bluetooth LE integration
-==========================================
+===========================================
 
 Implementation status
 ---------------------
@@ -57,8 +57,8 @@ is no combined-image or alternate-model fallback. The filenames agree
 with ``MODULE_FIRMWARE``; firmware bytes are distributed separately from
 the driver and require their own deployment and licensing evidence.
 
-The fixed boot ``READM 0x40019000 4 `` observation, including its trailing
-space, requires an actual four-byte reply. A successfully received zero
+The fixed boot command is ``READM 0x40019000 4`` followed by one ASCII space.
+It requires an actual four-byte reply. A successfully received zero
 can be a U observation; a zero-initialized or short receive buffer is not
 an identity. Observed strap decoding is not qualification of automatic
 selection across cold U/E hardware. Runtime HCC identity and version must

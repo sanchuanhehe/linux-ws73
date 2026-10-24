@@ -4581,3 +4581,64 @@ simultaneous isolation, real ACL/L2CAP/GATT traffic, BlueZ scanning or peer
 interop, cold automatic selection, board/address qualification or natural
 recovery. They do not qualify the separate char-misc-next review tree or
 close the formal joint U/E submission, repetition or long-duration gates.
+
+
+Allocated U/E runtime reattachment observation (2026-10-24 SGT)
+===============================================================
+
+After the separately recorded native HCI closes, allocated U 1-1.1.3 and E
+1-2.1.4 were each attached to a new observation-only VM without replugging.
+The ordinary USB parent used image source e5a4274d2f20; the worktree was
+clean d50cef0b7856, with only documented RST changes after the image build.
+No loader/function module or firmware input was included in either initramfs.
+These are new runtime query observations, not another HCI initialization.
+
+Each device returned its expected U/USB or E/USB identity and firmware
+0x010a6e3c / ROM 0x00010101 from fresh HCC replies. Each capture has four
+successful bulk OUT operations, two complete identity/version replies,
+one cancelled pending bulk read and one cancelled interrupt read. The four
+OUT operations are two finite queue controls and the two queries. Complete
+binary captures additionally validate all 328 OUT bytes, including command
+fields and padding beyond the text prefix, against independent expectations.
+The two replies are cross-checked with text capture and decoded identity.
+
+The interrupt read remained armed for at least 6.5 seconds after the version
+observation, longer than the existing six-second BSP startup wait. Neither
+sample returned a successful interrupt or another BSP_READY in that window.
+No notification is invented from an old owner or a successful identity query.
+This bounded absence does not prove that readiness can never recur; it also
+does not establish the startup contract needed for functional warm recovery.
+The existing BSP gate remains in place and no BLE enable was attempted.
+
+Each VM exited zero, the callback drain completed, and the same physical
+device was unowned in runtime afterward. Each attachment used only its
+explicit hostport, with all four reset/detach opt-outs false, one QEMU open,
+one close and no usb_host_reset. No hub/controller passthrough or operation
+on the other thread's devices occurred. The image has no KUnit or synthetic
+USB drivers enabled; the native HCI driver was built in but no child was
+published by this observation-only parent.
+
+The first U assessment rejected virtual-root-hub class management traffic;
+the first E assessment then exposed the old verifier's data OUT endpoint 2
+assumption, whereas the pinned runtime descriptor uses endpoint 0x01.
+Both original manifests remain FAIL. Their complete captures were separately
+replayed after correcting target filtering and endpoint checking. The two
+later bounded trials below passed the supervisor directly. Forty-one
+negative verifier controls passed, including missing/altered captures,
+class/vendor actions on the target, wrong endpoints, false BSP reports,
+interrupt faults and changes to otherwise hidden command/padding bytes.
+
+U actual run: runtime-observe-20261024T055951.956102Z/manifest.json, SHA-256::
+
+  64dd0e5ef114a9e2ba7f056c1020ebf4334ccdc515d6bca4123cfabb7d8ab061
+
+E actual run: runtime-observe-20261024T060039.603625Z/manifest.json, SHA-256::
+
+  65946168e5aa6a1194d3ac20ea91c7d532a174cf2541f3e704298437076d01de
+
+Whole-TX checking was added by explicitly attributed offline postprocessing;
+it does not rewrite either original manifest or claim another physical run.
+Raw captures remain private. This work qualifies runtime identity transport
+and clean detach for these separate samples only. It does not close cold
+selection, firmware/address/board policy, functional warm recovery, natural
+recovery, simultaneous isolation, peer/RF, repetition or formal U/E gates.

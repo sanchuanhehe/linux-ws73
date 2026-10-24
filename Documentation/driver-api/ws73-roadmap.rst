@@ -379,3 +379,21 @@ were observed to differ without establishing factory origin or uniqueness.
 RF/peer/GATT, physical simultaneous isolation, cold selection, board/address,
 natural recovery and formal U/E qualification remain separate open work.
 See the source-bound qualification records and issues 7/12.
+
+
+Runtime observation after native close (2026-10-24)
+---------------------------------------------------
+
+Allocated U 1-1.1.3 and E 1-2.1.4 independently answered fresh HCC identity
+and version queries in new observation-only VMs without replugging. Each
+had four successful finite bulk OUTs, two complete replies, clean drain and
+VM exit zero. Source is e5a4274d2f20; whole query TX and reply RX capture
+checks are attributed separately from the original trial manifests.
+
+Neither device returned BSP_READY in the 6.5-second post-query window.
+This does not establish functional warm reentry: the startup BSP gate stays
+closed, old state is not carried over, and no BLE function was enabled.
+The two initial supervisor false failures and later direct passes are all
+retained; 41 negative verifier controls passed. See the source-bound runtime
+observations in ws73-qualification-20261017.rst and issues 10/12. Cold, natural
+recovery, board/address and peer qualification remain open.

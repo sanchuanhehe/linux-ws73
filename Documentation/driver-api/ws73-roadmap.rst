@@ -356,3 +356,26 @@ See the separately dated physical result in ws73-qualification-20261017.rst
 and issues 7/12. Raw firmware-bearing captures remain private. The current
 RFC review packet and external-mail authorization request are separate from
 this later physical experiment.
+
+
+Allocated U/E native HCI sample coverage (2026-10-24)
+-----------------------------------------------------
+
+Newly allocated U 1-1.1.3 independently completed the same full experimental
+SDK110 US three-file path and runtime U/USB verification before native HCI.
+It has 23 actual command/reply pairs; E 1-2.1.4 has its own separate 24-pair
+result. Both use image source e5a4274d2f20, explicit per-board original files,
+reference profiles, reset-free individual passthrough and acknowledged
+native close/removal with three drains. Both VMs exited zero.
+
+The U admission has its own exact four-byte zero READM observation and
+reviewed read-only census hashes; an old other-device power confirmation
+is not a power report for this U. Forty-six shared admission checks and six
+CLI rejection cases passed. Each physical attempt consumes only its own
+initial route, with no automatic retry or port/profile fallback.
+
+These are independent sequential NON-COLD sample initializations. Addresses
+were observed to differ without establishing factory origin or uniqueness.
+RF/peer/GATT, physical simultaneous isolation, cold selection, board/address,
+natural recovery and formal U/E qualification remain separate open work.
+See the source-bound qualification records and issues 7/12.

@@ -4513,3 +4513,71 @@ recorded reference profile. It does not establish cold automatic selection,
 production board/address policy, scan/advertise/connect/GATT or peer traffic,
 natural transition/recovery, repetition or formal U/E support. No firmware,
 board profile, peer requirement or upstream acceptance gate is closed by it.
+
+
+Allocated U native HCI with independent initial-ROM admission (2026-10-24 SGT)
+==============================================================================
+
+Allocated U 1-1.1.3 now has its own physical result. It does not inherit the
+historical U result at the now-forbidden port or the E 1-2.1.4 result.
+The actual image source is e5a4274d2f203d8e128d1c5da4b6b7a790c344a3;
+the worktree was d2c1b39a6025, with only the two separately recorded RST
+changes after that build. No kernel/module executable changed.
+
+The host admission has separate pinned U and E observations and expected
+READM replies. U's fixed capture proves a successful four-byte zero reply,
+not an empty/error read or a zero-initialized buffer. Four older manifests
+mention this U serial only in other-device read-only inventories; their exact
+reviewed hashes are allowed as census evidence, not as power confirmations.
+Unknown records or changed census contents still reject admission. The old
+confirmation names another physical U and is never reused for this sample.
+Forty-six function checks and six CLI rejection cases passed, including U/E
+separation, evidence changes, prior use, false no-hardware records and the
+already consumed E route. The U empty VM then passed with no device_add.
+
+This was explicitly a NON-COLD experiment: power history and pristine memory
+are unknown. Immediately before individual attachment the current boot
+identity/topology/ownership and recorded history were checked again. Fresh
+in-VM HCC READM returned the complete zero word and the expected ROM version.
+Only the US original ws73.bin, wifi_cali.bin and btc_cali.bin passed complete
+input validation before 11 preparation writes, seven FILES blocks and QUIT.
+Their payload total was 172580 bytes after removing three digest headers.
+Twenty-nine boot OUT operations and 28 boot replies passed the existing
+prefix, actual-length, timing and ACK checks.
+
+The new runtime object independently returned U/USB, firmware 0x010a6e3c and
+ROM 0x00010101. Reference configuration and acknowledged BLE enable/BOOT/
+disable preceded HCI publication. Native Bluetooth completed 23 real HCI
+commands and 23 successful replies, management Read Info, actual native
+close acknowledgment and management removal. Three callback drains and
+VM exit zero passed. The raw HCI version is 13 and manufacturer is 0x0c7a;
+no additional radio capability follows from those fields. The U and E
+observed addresses differ, but their origin, provisioning and global
+uniqueness remain unestablished. No raw address is published.
+
+Only hostport 1.1.3 was attached, in two boot/runtime epochs. All eight QOM
+reset/detach checks returned false; the QEMU trace has two successful opens,
+two closes and no usb_host_reset. The same device was unowned in runtime
+after exit. Its initial route is now consumed; even a replayed old boot
+snapshot is rejected by the recorded physical attempt. There is no fallback
+to another port, firmware set or earlier U qualification.
+
+Actual run: load-hci-trial-20261024T051421.864660Z/manifest.json, SHA-256::
+
+  65fbca8bb777ccf5b1e94b039b495f9c6504f498c09eefc51ae3355cd0438ad1
+
+U empty VM: load-hci-trial-20261024T051144.379393Z, manifest SHA-256::
+
+  ab32efad4afa2d93f96ccddf53efbeb60674d42364f68dcf161fcb59d058c7a2
+
+The unchanged capture limits apply: boot command/payload prefixes and full
+completion lengths/ACKs are checked, not every firmware bus byte. Complete
+runtime RX/HCI is checked; final 352-byte customization TX padding is not
+captured. Original files and firmware-bearing raw logs remain private.
+
+Together the two runs establish independent, sequential U/E sample HCI
+initialization on the stated image and reference profiles. They are not
+simultaneous isolation, real ACL/L2CAP/GATT traffic, BlueZ scanning or peer
+interop, cold automatic selection, board/address qualification or natural
+recovery. They do not qualify the separate char-misc-next review tree or
+close the formal joint U/E submission, repetition or long-duration gates.
